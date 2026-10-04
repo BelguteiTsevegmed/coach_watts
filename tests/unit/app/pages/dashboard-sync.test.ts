@@ -2,7 +2,7 @@
 
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import { flushPromises } from '@vue/test-utils'
-import { defineComponent, nextTick, ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import DashboardPage from '../../../../app/pages/dashboard.vue'
@@ -78,17 +78,6 @@ mockNuxtImport('useTriggerMonitor', () => () => ({
   toggle: vi.fn()
 }))
 
-// The performance scores card exposes a `refresh()` that the page's ingest
-// success handler awaits via a template ref. The default shallow-stub has no
-// such method, so give it one explicitly to avoid a spurious TypeError.
-const PerformanceScoresCardStub = defineComponent({
-  name: 'DashboardPerformanceScoresCard',
-  setup(_, { expose }) {
-    expose({ refresh: vi.fn() })
-    return () => null
-  }
-})
-
 async function mountPage() {
   const wrapper = await mountSuspended(DashboardPage, {
     shallow: true,
@@ -101,8 +90,7 @@ async function mountPage() {
         UDashboardNavbar: {
           template:
             '<div><slot name="title" /><slot name="leading" /><slot name="right" /><slot /></div>'
-        },
-        DashboardPerformanceScoresCard: PerformanceScoresCardStub
+        }
       }
     }
   })
