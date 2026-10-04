@@ -97,7 +97,7 @@ test.describe('Dashboard & Daily Recommendations Suite', () => {
 
     if (await dashboard.navCalendar.isVisible()) {
       await dashboard.navCalendar.click()
-      await expect(authedPage).toHaveURL(/\/calendar/)
+      await expect(authedPage).toHaveURL(/\/activities/)
     }
   })
 })
