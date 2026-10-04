@@ -734,6 +734,7 @@
               :llm-usage-id="llmUsageId"
               :initial-feedback="initialFeedback"
               :initial-feedback-text="initialFeedbackText"
+              :hide-usage-link="!isAdmin"
             />
           </div>
         </div>
@@ -834,7 +835,7 @@
           </div>
         </div>
 
-        <div v-else class="space-y-3">
+        <div v-else-if="isAdmin" class="space-y-3">
           <pre
             class="text-xs whitespace-pre-wrap break-words max-h-[60vh] overflow-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 text-gray-800 dark:text-gray-100"
             >{{ plannedWorkoutRawJson }}</pre>
@@ -1818,6 +1819,8 @@
   }
 
   const userStore = useUserStore()
+  // Engineering details (generator internals, raw JSON, AI logs) are admin-only.
+  const isAdmin = computed(() => Boolean(userStore.user?.isAdmin))
   const nutritionEnabled = computed(
     () =>
       userStore.profile?.nutritionTrackingEnabled !== false &&
@@ -1867,10 +1870,11 @@
   const intervalsPreviewText = ref('')
   const viewPreviewError = ref('')
   const viewTab = ref('intervals')
-  const viewTabs = [
+  // The raw planned-workout JSON is an engineering view: admins only.
+  const viewTabs = computed(() => [
     { label: 'Intervals.icu', value: 'intervals' },
-    { label: 'Raw JSON', value: 'raw' }
-  ]
+    ...(isAdmin.value ? [{ label: 'Raw JSON', value: 'raw' }] : [])
+  ])
   const plannedWorkoutRawJson = computed(() => JSON.stringify(workout.value || {}, null, 2))
   const generationWarningIssues = ref<string[]>([])
   const pendingStructureAction = ref<'generate' | 'adjust' | null>(null)
@@ -2296,9 +2300,10 @@
     if (goal) details.push({ label: 'Goal', value: goal })
     if (phase) details.push({ label: 'Phase', value: phase })
     if (focus) details.push({ label: 'Focus', value: focus })
-    if (generatorMode === 'draft_json_v1') {
+    // Generator internals are engineering detail: admins only.
+    if (isAdmin.value && generatorMode === 'draft_json_v1') {
       details.push({ label: 'Build Path', value: 'Compact Draft + Compiler' })
-    } else if (generatorMode === 'legacy_json') {
+    } else if (isAdmin.value && generatorMode === 'legacy_json') {
       details.push({ label: 'Build Path', value: 'Legacy JSON Generator' })
     }
 
@@ -2329,7 +2334,7 @@
     let note = null
     if (feedback) {
       note = `Adjustment note: ${feedback}.`
-    } else if (model) {
+    } else if (model && isAdmin.value) {
       note = `Generated with ${model}.`
     } else if (
       !context &&
