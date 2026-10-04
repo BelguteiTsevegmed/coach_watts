@@ -2,6 +2,14 @@
   import { useTranslate } from '@tolgee/vue'
   import { h } from 'vue'
 
+  withDefaults(
+    defineProps<{
+      /** Keep the release modal mounted but don't render the gift button (e.g. it lives in a menu). */
+      hideTrigger?: boolean
+    }>(),
+    { hideTrigger: false }
+  )
+
   const { t } = useTranslate('dashboard')
 
   const {
@@ -34,12 +42,16 @@
   onMounted(() => {
     checkForNewRelease()
   })
+
+  // Release-note state is per component instance, so pages that open the
+  // modal from elsewhere (e.g. an overflow menu) go through this handle.
+  defineExpose({ hasNewRelease, open: openReleaseModal })
 </script>
 
 <template>
   <ClientOnly>
     <!-- Gift Icon Notification -->
-    <div v-if="hasNewRelease" class="relative">
+    <div v-if="hasNewRelease && !hideTrigger" class="relative">
       <UButton
         icon="i-heroicons-gift"
         color="neutral"
