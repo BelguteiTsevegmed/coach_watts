@@ -1,5 +1,5 @@
 {
-  "activities_title": "Performance Lab",
+  "activities_title": "Kalender",
   "controls_columns": "Spalten",
   "controls_days_fri": "Fr",
   "controls_days_mon": "Mo",
@@ -54,5 +54,5 @@
   "legend_proposed": "Vorgeschlagen",
   "legend_threshold": "Schwellenwert",
   "meta_description": "Trainingskalender einsehen, abgeschlossene Workouts analysieren und zukünftige Einheiten planen.",
-  "meta_title": "Aktivitäten"
+  "meta_title": "Kalender"
 }

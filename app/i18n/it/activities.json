@@ -1,5 +1,5 @@
 {
-  "activities_title": "Laboratorio prestazioni",
+  "activities_title": "Calendario",
   "controls_columns": "Colonne",
   "controls_days_fri": "Ven",
   "controls_days_mon": "Lun",
@@ -54,5 +54,5 @@
   "legend_proposed": "Proposto",
   "legend_threshold": "Soglia",
   "meta_description": "Visualizza il tuo calendario di allenamento, analizza i workout completati e pianifica le sessioni future.",
-  "meta_title": "Attività"
+  "meta_title": "Calendario"
 }
