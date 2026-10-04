@@ -544,7 +544,7 @@
                       {{ row.original.title }}
                     </div>
                     <UButton
-                      v-if="row.original.id"
+                      v-if="row.original.id && row.original.source === 'completed'"
                       :icon="
                         isWorkoutInComparison(row.original.id)
                           ? 'i-lucide-check'
@@ -2337,19 +2337,14 @@
         id: 'type'
       },
       {
-        accessorKey: 'date',
-        header: isTReady ? t.value('controls_table_columns_date') : 'Date',
-        id: 'date'
-      },
-      {
-        accessorKey: 'chart',
-        header: isTReady ? t.value('controls_table_columns_chart') : 'Structure',
-        id: 'chart'
-      },
-      {
         accessorKey: 'title',
         header: isTReady ? t.value('controls_table_columns_title') : 'Name',
         id: 'title'
+      },
+      {
+        accessorKey: 'date',
+        header: isTReady ? t.value('controls_table_columns_date') : 'Date',
+        id: 'date'
       },
       {
         accessorKey: 'duration',
@@ -2360,6 +2355,11 @@
         accessorKey: 'distance',
         header: isTReady ? t.value('controls_table_columns_distance') : 'Distance',
         id: 'distance'
+      },
+      {
+        accessorKey: 'chart',
+        header: isTReady ? t.value('controls_table_columns_chart') : 'Structure',
+        id: 'chart'
       },
       {
         accessorKey: 'averageHr',
