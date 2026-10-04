@@ -247,6 +247,7 @@
   "today_session_read_more": "Read more",
   "today_session_start_checkin": "Start check-in",
   "today_session_suggestion": "Suggested change",
+  "today_session_suggestion_load": "load {load}",
   "today_session_suggestion_note": "Your plan only changes if you accept.",
   "today_session_thinking": "Your coach is reviewing today…",
   "today_title": "Today",
@@ -355,7 +356,6 @@
   "upcoming_workouts_retry": "Retry",
   "upcoming_workouts_view_plans": "View Plans",
   "weekly_training_load": "Weekly Training Load",
-
   "daily_checkin_title": "Daily Coach Check-In",
   "daily_checkin_description": "Answer a few quick questions so your coach can adapt today's guidance.",
   "daily_checkin_refreshing": "Refreshing check-in...",
@@ -388,7 +388,6 @@
   "daily_checkin_delete_failed_toast": "Unable to delete check-in",
   "daily_checkin_delete_confirm": "Delete this daily check-in?",
   "daily_checkin_quota_error": "You have reached your Daily Coach Check-In quota for your current plan. Try again after your quota resets, or upgrade for more check-ins.",
-
   "data_page_title": "Data Management",
   "data_page_description": "View your training data from connected integrations.",
   "data_page_meta_description": "Manage your connected integrations, sync data, and view training summaries.",
@@ -431,5 +430,7 @@
   "notifications_mark_read": "Mark as read",
   "notifications_view_all": "View all notifications",
   "notifications_dropdown_empty": "No notifications yet",
-  "notifications_dropdown_load_error_desc": "Could not load notifications."
+  "notifications_dropdown_load_error_desc": "Could not load notifications.",
+  "today_session_plan_changed": "Your plan for today changed after this advice was written.",
+  "today_session_plan_changed_refresh": "Update advice"
 }

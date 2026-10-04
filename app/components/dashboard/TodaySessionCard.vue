@@ -183,6 +183,28 @@
               :initial-feedback-text="recommendation.feedbackText"
             />
           </div>
+          <div
+            v-if="recommendation.planChanged"
+            class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-warning/10 px-3 py-2 ring ring-warning/25"
+            data-testid="today-plan-changed"
+          >
+            <p class="text-xs text-default">{{ t('today_session_plan_changed') }}</p>
+            <UButton
+              color="warning"
+              variant="soft"
+              size="xs"
+              icon="i-heroicons-arrow-path"
+              :loading="isSyncingForAnalysis"
+              :disabled="isSyncingForAnalysis || recommendationStore.generatingAdHoc"
+              @click="
+                () => {
+                  void handleGetTake()
+                }
+              "
+            >
+              {{ t('today_session_plan_changed_refresh') }}
+            </UButton>
+          </div>
         </template>
 
         <template v-else>
@@ -234,6 +256,13 @@
           <div class="min-w-0">
             <p class="text-sm font-semibold text-highlighted">
               {{ t('today_session_suggestion') }}
+            </p>
+            <p
+              v-if="suggestionSummary"
+              class="mt-1 text-sm font-medium text-highlighted"
+              data-testid="today-suggested-change-summary"
+            >
+              {{ suggestionSummary }}
             </p>
             <p class="mt-1 text-sm text-default break-words">{{ suggestion.description }}</p>
             <p class="mt-1.5 text-xs text-muted">{{ t('today_session_suggestion_note') }}</p>
@@ -507,7 +536,36 @@
   const suggestion = computed(() => {
     const mods = recommendation.value?.analysisJson?.suggested_modifications
     if (!mods?.description) return null
-    return mods as { description: string }
+    return mods as {
+      description: string
+      new_title?: string
+      new_type?: string
+      new_duration_min?: number
+      new_tss?: number
+    }
+  })
+
+  // The structured numbers of the suggested change, so the athlete sees exactly
+  // what "Accept" will put in the plan rather than only the coach's prose.
+  const suggestionSummary = computed(() => {
+    const mods = suggestion.value
+    if (!mods) return null
+    const parts: string[] = []
+    if (mods.new_title) parts.push(mods.new_title)
+    if (mods.new_type && mods.new_type !== 'Rest' && !mods.new_title?.includes(mods.new_type)) {
+      parts.push(mods.new_type)
+    }
+    if (
+      mods.new_type !== 'Rest' &&
+      Number.isFinite(mods.new_duration_min) &&
+      mods.new_duration_min! > 0
+    ) {
+      parts.push(`${Math.round(mods.new_duration_min!)} min`)
+    }
+    if (mods.new_type !== 'Rest' && Number.isFinite(mods.new_tss) && mods.new_tss! > 0) {
+      parts.push(t.value('today_session_suggestion_load', { load: Math.round(mods.new_tss!) }))
+    }
+    return parts.length ? parts.join(' · ') : null
   })
 
   const checkinDone = computed(() => checkinStore.isCompleted)
