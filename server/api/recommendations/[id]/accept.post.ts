@@ -7,6 +7,7 @@ import {
 import { isIntervalsEventId } from '../../../utils/intervals'
 import { validateRecommendationAcceptanceTarget } from '../../../utils/recommendation-guardrails'
 import { enqueuePlannedWorkoutStructureGeneration } from '../../../utils/planned-workout-structure-trigger'
+import { getAthletePrimarySport, getDefaultWorkoutType } from '../../../utils/coaching/sport'
 
 defineRouteMeta({
   openAPI: {
@@ -80,8 +81,16 @@ export default defineEventHandler(async (event) => {
 
   // Prepare the new description (completely replacing the old one)
   const newDescription = `${modifications.description || ''}${modifications.zone_adjustments ? `\n\nZone Adjustments: ${modifications.zone_adjustments}` : ''}`
+  // A modification without a sport keeps the planned sport. Falling back to
+  // 'Ride' silently turned runners' sessions into rides while the rationale
+  // still described a run.
   const type =
-    modifications.new_type === 'Gym' ? 'WeightTraining' : modifications.new_type || 'Ride'
+    modifications.new_type === 'Gym'
+      ? 'WeightTraining'
+      : modifications.new_type ||
+        targetWorkout?.type ||
+        targetSnapshot?.type ||
+        getDefaultWorkoutType(await getAthletePrimarySport(userId))
   const title =
     modifications.new_title?.trim() ||
     (type === 'Rest' ? 'Rest Day' : targetWorkout?.title || 'Updated Workout')

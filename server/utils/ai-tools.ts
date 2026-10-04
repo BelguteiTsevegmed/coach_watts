@@ -10,6 +10,7 @@ import { metricTools } from './ai-tools/metric-tools'
 import { nutritionTools } from './ai-tools/nutrition'
 import { wellnessTools } from './ai-tools/wellness'
 import { journeyTools } from './ai-tools/journey'
+import { injuryTools } from './ai-tools/injuries'
 import { availabilityTools } from './ai-tools/availability'
 import { memoryTools } from './ai-tools/memory'
 import { timeTools } from './ai-tools/time'
@@ -64,6 +65,7 @@ export const getToolsWithContext = (
     ...conditionalNutritionTools,
     ...wellnessTools(userId, timezone),
     ...journeyTools(userId, timezone),
+    ...injuryTools(userId, timezone),
     ...availabilityTools(userId, settings),
     ...memoryTools(userId, chatRoomId),
     ...timeTools(userId, timezone),

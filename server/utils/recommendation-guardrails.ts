@@ -145,3 +145,80 @@ export function validateRecommendationAcceptanceTarget({
 
   return { ok: true as const }
 }
+
+export type RecommendationPlanDrift = {
+  changed: boolean
+  reason: 'workout_removed' | 'workout_changed' | 'workout_added' | null
+}
+
+type DriftWorkout = {
+  id: string
+  title?: string | null
+  type?: string | null
+  durationSec?: number | null
+  tss?: number | null
+  completed?: boolean | null
+  completedWorkouts?: Array<unknown> | null
+}
+
+function sameNumber(a: number | null | undefined, b: number | null | undefined, tolerance: number) {
+  if (a == null || b == null) return a == null && b == null
+  return Math.abs(a - b) <= tolerance
+}
+
+/**
+ * Has today's plan changed since the recommendation was generated? When it has,
+ * the recommendation text describes a session the athlete no longer sees, so the
+ * UI should offer a refresh instead of showing contradicting numbers.
+ *
+ * Compares the guardrail snapshot (taken at generation time) with today's
+ * planned workouts. If the athlete accepted the suggested modification, the
+ * accepted values are the expected state.
+ */
+export function detectRecommendationPlanDrift(params: {
+  analysisJson: unknown
+  userAccepted?: boolean | null
+  todayWorkouts: DriftWorkout[]
+}): RecommendationPlanDrift {
+  const analysis = (params.analysisJson || {}) as Record<string, any>
+  const guardrails = analysis.guardrails
+  // Recommendations generated before guardrails existed can't be checked.
+  if (!guardrails) return { changed: false, reason: null }
+
+  const snapshot = guardrails.targetPlannedWorkout as RecommendationTargetSnapshot | null
+  const isOpen = (workout: DriftWorkout) =>
+    !workout.completed && (workout.completedWorkouts?.length || 0) === 0
+
+  if (!snapshot?.id) {
+    return params.todayWorkouts.some(isOpen)
+      ? { changed: true, reason: 'workout_added' }
+      : { changed: false, reason: null }
+  }
+
+  const current = params.todayWorkouts.find((workout) => workout.id === snapshot.id)
+  if (!current) return { changed: true, reason: 'workout_removed' }
+
+  let expected = {
+    type: snapshot.type,
+    durationSec: snapshot.durationSec,
+    tss: snapshot.tss
+  }
+  const mods = analysis.suggested_modifications
+  if (params.userAccepted && mods) {
+    expected = {
+      type: mods.new_type === 'Gym' ? 'WeightTraining' : mods.new_type || expected.type,
+      durationSec:
+        typeof mods.new_duration_min === 'number'
+          ? Math.round(mods.new_duration_min * 60)
+          : expected.durationSec,
+      tss: typeof mods.new_tss === 'number' ? mods.new_tss : expected.tss
+    }
+  }
+
+  const changed =
+    (expected.type ?? null) !== (current.type ?? null) ||
+    !sameNumber(expected.durationSec, current.durationSec, 60) ||
+    !sameNumber(expected.tss, current.tss, 1)
+
+  return changed ? { changed: true, reason: 'workout_changed' } : { changed: false, reason: null }
+}

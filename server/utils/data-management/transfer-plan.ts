@@ -55,7 +55,7 @@ export const TRANSFER_SECTIONS: SectionInfo[] = [
   { key: 'fitfiles', description: 'Raw .fit file blobs (very large)', optIn: true },
   {
     key: 'wellness',
-    description: 'Wellness, daily metrics, check-ins, body measurements, journey events'
+    description: 'Wellness, daily metrics, check-ins, body measurements, journey events, injuries'
   },
   { key: 'metrics', description: 'Metric history (FTP/LTHR changes) and personal bests' },
   { key: 'nutrition', description: 'Nutrition days, nutrition plans + meals, recommendations' },
@@ -423,6 +423,12 @@ export const TRANSFER_TABLES: TransferTable[] = [
     section: 'wellness',
     label: 'Journey events',
     where: ({ userId, range }) => ({ userId, ...between('timestamp', range) })
+  },
+  {
+    model: 'injury',
+    section: 'wellness',
+    label: 'Injuries',
+    where: ({ userId }) => ({ userId })
   },
 
   // ---------------------------------------------------------------- metrics
