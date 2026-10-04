@@ -149,7 +149,7 @@
                     variant="outline"
                     size="sm"
                   >
-                    {{ t(`sport_${sport}`) }}
+                    {{ t(`sport_${String(sport).toLowerCase()}`) }}
                   </UBadge>
                 </template>
                 <span v-else class="text-muted">
