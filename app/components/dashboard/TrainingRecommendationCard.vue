@@ -473,7 +473,7 @@
   import RecoveryContextSlideover from '~/components/recovery/RecoveryContextSlideover.vue'
   import MiniWorkoutChart from '~/components/workouts/MiniWorkoutChart.vue'
   import { showDashboardProgressToast } from '~/utils/dashboard-progress-toast'
-  import { getDefaultSportSettings, getSportSettingsForActivity } from '~/utils/sportSettings'
+  import { getMiniChartPreference, getMiniChartSportSettings } from '~/utils/mini-workout-chart'
   import {
     getWorkoutIcon,
     getWorkoutColorClass,
@@ -555,77 +555,16 @@
     )
   })
 
-  function getChartPreference(workout: any): 'power' | 'hr' | 'pace' {
-    const primaryMetric = String(
-      workout?.lastGenerationSettingsSnapshot?.targetPolicy?.primaryMetric ||
-        workout?.createdFromSettingsSnapshot?.targetPolicy?.primaryMetric ||
-        ''
-    ).toLowerCase()
-
-    if (primaryMetric === 'heartrate') return 'hr'
-    if (primaryMetric === 'pace') return 'pace'
-    if (primaryMetric === 'power') return 'power'
-
-    const flattenedSteps = flattenWorkoutSteps(workout?.structuredWorkout?.steps || [])
-    const primaryTargets = flattenedSteps
-      .map((step: any) => String(step?.primaryTarget || '').toLowerCase())
-      .filter(Boolean)
-
-    if (primaryTargets.length > 0) {
-      const counts = primaryTargets.reduce((acc: Record<string, number>, metric: string) => {
-        acc[metric] = (acc[metric] || 0) + 1
-        return acc
-      }, {})
-      if ((counts.power || 0) >= Math.max(counts.heartrate || 0, counts.pace || 0)) return 'power'
-      if ((counts.heartrate || 0) >= Math.max(counts.power || 0, counts.pace || 0)) return 'hr'
-      if ((counts.pace || 0) > 0) return 'pace'
-    }
-
-    if (flattenedSteps.some((step: any) => step?.power)) return 'power'
-    if (flattenedSteps.some((step: any) => step?.heartRate)) return 'hr'
-    if (flattenedSteps.some((step: any) => step?.pace)) return 'pace'
-
-    return 'power'
+  function getChartPreference(workout: any) {
+    return getMiniChartPreference(workout)
   }
 
   function getChartSportSettings(workout: any) {
-    const allSportSettings = userStore.profile?.profile?.sportSettings || []
-    const specific = getSportSettingsForActivity(allSportSettings, workout?.type || '')
-    const fallback = getDefaultSportSettings(allSportSettings)
-
-    return (
-      specific || {
-        ftp: userStore.currentFtp,
-        lthr: fallback?.lthr,
-        maxHr: fallback?.maxHr,
-        thresholdPace: fallback?.thresholdPace,
-        hrZones: fallback?.hrZones || [],
-        powerZones: fallback?.powerZones || [],
-        paceZones: fallback?.paceZones || [],
-        targetPolicy: fallback?.targetPolicy,
-        loadPreference: fallback?.loadPreference
-      }
+    return getMiniChartSportSettings(
+      workout,
+      userStore.profile?.sportSettings,
+      userStore.currentFtp
     )
-  }
-
-  function flattenWorkoutSteps(steps: any[]): any[] {
-    if (!Array.isArray(steps)) return []
-
-    const flattened: any[] = []
-    for (const step of steps) {
-      const children = Array.isArray(step?.steps) ? step.steps : []
-      if (children.length > 0) {
-        const repsRaw = Number(step?.reps ?? step?.repeat ?? step?.intervals)
-        const reps = repsRaw > 1 ? repsRaw : 1
-        for (let i = 0; i < reps; i++) {
-          flattened.push(...flattenWorkoutSteps(children))
-        }
-      } else {
-        flattened.push(step)
-      }
-    }
-
-    return flattened
   }
 
   function openCreateAdHoc() {
