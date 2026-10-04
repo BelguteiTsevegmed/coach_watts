@@ -8,7 +8,7 @@
         : 'w-40 duration-700 delay-300',
       isMobile && (isExpanded || isFocused)
         ? 'bottom-0 w-full max-w-full px-0'
-        : 'bottom-[max(1.5rem,env(safe-area-inset-bottom,0px))]'
+        : 'bottom-[max(1.5rem,env(safe-area-inset-bottom,0px),calc(var(--app-bottom-nav-offset,0px)_+_0.75rem))]'
     ]"
     @mouseenter="onMouseEnter"
     @mouseleave="onMouseLeave"
