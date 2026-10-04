@@ -4,37 +4,39 @@
     data-testid="calendar-day-cell"
     :data-date="dayDateKey"
     :data-fuel-state="fuelState ?? ''"
-    class="min-h-[150px] p-2 bg-white dark:bg-gray-900 transition-colors flex flex-col relative"
-    :class="{
-      'opacity-50': isOtherMonth,
-      'bg-blue-50 dark:bg-blue-900/20 z-10 shadow-md': isToday,
-      'today-cell': isToday,
-      'bg-gray-100 dark:bg-gray-800 ring-2 ring-primary-500 ring-inset': isDayDragOver
-    }"
+    :data-today="isToday ? 'true' : undefined"
+    class="group/day min-h-[140px] p-1.5 transition-colors flex flex-col relative"
+    :class="[
+      isDayDragOver
+        ? 'bg-gray-100 dark:bg-gray-800 ring-2 ring-primary-500 ring-inset'
+        : isToday
+          ? 'today-cell bg-primary-50 dark:bg-primary-500/10 ring-2 ring-inset ring-primary-500/60 z-10'
+          : 'bg-white dark:bg-gray-900',
+      isOtherMonth ? 'opacity-50' : ''
+    ]"
     @dragover.prevent="onDayDragOver"
     @dragenter.prevent="onDayDragEnter"
     @dragleave="onDayDragLeave"
     @drop="onDayDrop"
   >
-    <!-- Date Number & Wellness Metrics -->
-    <div class="flex items-center justify-between mb-2">
-      <div class="flex items-center gap-2">
+    <!-- Date number (+ optional fuel state and wellness) -->
+    <div class="flex items-start justify-between gap-1 mb-1.5 min-h-6">
+      <div class="flex items-center gap-1.5 shrink-0">
         <div class="relative">
           <span
-            class="text-xs font-semibold flex items-center justify-center w-6 h-6"
+            class="text-xs font-semibold flex items-center justify-center min-w-6 h-6 px-1 rounded-full"
             :class="{
-              'bg-blue-500 text-white dark:bg-blue-400 dark:text-gray-900 rounded-full shadow-sm':
-                isToday,
-              'text-gray-400': isOtherMonth,
-              'text-gray-900 dark:text-gray-100': !isOtherMonth && !isToday
+              'bg-primary-500 text-white shadow-sm': isToday,
+              'text-gray-400 dark:text-gray-500': isOtherMonth && !isToday,
+              'text-gray-700 dark:text-gray-300': !isOtherMonth && !isToday
             }"
           >
             {{ dayNumber }}
           </span>
 
-          <!-- Fuel State Dot -->
+          <!-- Fuel State Dot (opt-in, nutrition only) -->
           <div
-            v-if="fuelState && settings?.showFuelState !== false"
+            v-if="fuelState && display.showFuelState"
             class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-900"
             :class="{
               'bg-blue-500': fuelState === 1,
@@ -44,72 +46,89 @@
             :title="`Fuel State ${fuelState}`"
           />
         </div>
-
-        <!-- Wellness Metrics -->
-        <button
-          v-if="dayWellness && settings?.showWellness !== false"
-          class="flex flex-wrap items-center gap-1.5 text-[10px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors cursor-pointer"
-          :title="'View wellness details'"
-          @click="
-            () => {
-              void $emit('wellness-click', date)
-            }
-          "
+        <span
+          v-if="isToday"
+          class="text-[10px] font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400"
         >
-          <span v-if="dayWellness.hrv != null" class="flex items-center gap-0.5">
-            <UIcon name="i-heroicons-heart" class="w-2.5 h-2.5" />
-            <span class="font-medium">{{ Math.round(dayWellness.hrv) }}</span>
-          </span>
-          <span v-if="dayWellness.hoursSlept != null" class="flex items-center gap-0.5">
-            <UIcon name="i-heroicons-moon" class="w-2.5 h-2.5" />
-            <span class="font-medium">{{ dayWellness.hoursSlept.toFixed(1) }}</span>
-          </span>
-          <span v-if="dayWellness.restingHr != null" class="flex items-center gap-0.5">
-            <UIcon name="i-heroicons-heart-20-solid" class="w-2.5 h-2.5" />
-            <span class="font-medium">{{ dayWellness.restingHr }}</span>
-          </span>
-          <span v-if="dayWellness.weight != null" class="flex items-center gap-0.5">
-            <UIcon name="i-heroicons-scale" class="w-2.5 h-2.5" />
-            <span class="font-medium">{{ formatWeight(dayWellness.weight, false) }}</span>
-          </span>
-        </button>
+          {{ t('day_today') }}
+        </span>
+        <UButton
+          v-if="canAddSession"
+          icon="i-heroicons-plus"
+          color="neutral"
+          variant="ghost"
+          size="xs"
+          class="h-6 w-6 justify-center p-0 opacity-0 transition-opacity group-hover/day:opacity-100 focus-visible:opacity-100"
+          :aria-label="t('day_add_session')"
+          :title="t('day_add_session')"
+          data-testid="calendar-day-add"
+          @click.stop="$emit('add-session', date)"
+        />
       </div>
+
+      <!-- Wellness Metrics (opt-in) -->
+      <button
+        v-if="dayWellness && display.showWellness"
+        type="button"
+        class="ml-auto flex flex-wrap justify-end items-center gap-x-1.5 gap-y-0.5 text-[10px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors cursor-pointer"
+        :title="t('day_wellness_details')"
+        @click="
+          () => {
+            void $emit('wellness-click', date)
+          }
+        "
+      >
+        <span v-if="dayWellness.hrv != null" class="flex items-center gap-0.5" title="HRV">
+          <UIcon name="i-heroicons-heart" class="w-2.5 h-2.5" />
+          <span class="font-medium">{{ Math.round(dayWellness.hrv) }}</span>
+        </span>
+        <span v-if="dayWellness.hoursSlept != null" class="flex items-center gap-0.5">
+          <UIcon name="i-heroicons-moon" class="w-2.5 h-2.5" />
+          <span class="font-medium">{{ dayWellness.hoursSlept.toFixed(1) }}</span>
+        </span>
+        <span v-if="dayWellness.restingHr != null" class="flex items-center gap-0.5">
+          <UIcon name="i-heroicons-heart-20-solid" class="w-2.5 h-2.5" />
+          <span class="font-medium">{{ dayWellness.restingHr }}</span>
+        </span>
+        <span v-if="dayWellness.weight != null" class="flex items-center gap-0.5">
+          <UIcon name="i-heroicons-scale" class="w-2.5 h-2.5" />
+          <span class="font-medium">{{ formatWeight(dayWellness.weight, false) }}</span>
+        </span>
+      </button>
     </div>
 
-    <!-- Activities (flex-1 to push nutrition to bottom) -->
+    <!-- Sessions (flex-1 pushes the optional fuel targets to the bottom) -->
     <div class="flex-1 flex flex-col min-h-0">
       <template v-for="(group, gIdx) in layoutGroups" :key="gIdx">
         <div v-if="group.type === 'spacer'" :class="group.class" aria-hidden="true" />
 
         <div v-else class="flex flex-col gap-1 shrink-0">
-          <button
+          <div
             v-for="activity in group.activities"
             :key="activity.id"
-            class="w-full shrink-0 text-left px-2 py-1 rounded text-xs hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group relative cursor-pointer"
-            :class="{
-              'bg-green-50 dark:bg-green-900/20':
-                activity.source === 'completed' && !activity.plannedWorkoutId,
-              'bg-blue-50 dark:bg-blue-900/20':
-                (activity.source === 'completed' && activity.plannedWorkoutId) ||
-                (activity.source === 'planned' && activity.status === 'completed_plan'),
-              'bg-amber-50 dark:bg-amber-900/20':
-                activity.source === 'planned' && activity.status === 'planned',
-              'bg-red-50 dark:bg-red-900/20': activity.status === 'missed',
-              'bg-gray-50 dark:bg-gray-800/50 border-dashed border-gray-300 dark:border-gray-700':
-                activity.source === 'note',
-              'ring-2 ring-primary-500 ring-offset-1': isDragOver === activity.id
-            }"
+            role="button"
+            tabindex="0"
+            data-testid="calendar-session"
+            :data-status="getSessionStatus(activity)"
+            class="group/session relative w-full shrink-0 text-left rounded-md border-l-[3px] px-1.5 py-1 text-xs transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-500"
+            :class="[
+              getSessionStatusStyle(getSessionStatus(activity)).card,
+              isDragOver === activity.id ? 'ring-2 ring-primary-500 ring-offset-1' : ''
+            ]"
             @click="
               () => {
                 void $emit('activity-click', activity)
               }
             "
+            @keydown.enter.self.prevent="$emit('activity-click', activity)"
+            @keydown.space.self.prevent="$emit('activity-click', activity)"
             @dragover.prevent="onDragOver"
             @dragleave="onDragLeave"
             @drop.stop="(e) => onDrop(e, activity)"
           >
+            <!-- Hover actions: save to library, drag to move/link/merge -->
             <div
-              class="absolute top-0 right-0 z-10 flex items-center gap-0.5 p-1 opacity-0 transition-opacity group-hover:opacity-100"
+              class="absolute top-0.5 right-0.5 z-10 flex items-center gap-0.5 rounded-md bg-white/95 dark:bg-gray-900/95 p-0.5 shadow-sm ring-1 ring-black/5 dark:ring-white/10 opacity-0 transition-opacity group-hover/session:opacity-100 focus-within:opacity-100"
             >
               <UButton
                 v-if="activity.source === 'planned' || activity.source === 'completed'"
@@ -121,19 +140,26 @@
                 :disabled="savingActivityId === activity.id"
                 :title="
                   activity.source === 'planned'
-                    ? 'Save planned workout as blueprint'
-                    : 'Save workout to library'
+                    ? t('session_save_plan_to_library')
+                    : t('session_save_to_library')
                 "
-                class="h-6 w-6 p-0"
+                :aria-label="
+                  activity.source === 'planned'
+                    ? t('session_save_plan_to_library')
+                    : t('session_save_to_library')
+                "
+                class="h-6 w-6 p-0 justify-center"
                 @click.stop="$emit('save-to-library', activity)"
+                @keydown.stop
               />
               <div
                 v-if="
                   activity.source === 'completed' ||
                   (activity.source === 'planned' && activity.status !== 'completed')
                 "
-                class="cursor-grab rounded-lg p-1 hover:bg-black/5 active:cursor-grabbing"
+                class="cursor-grab rounded p-1 hover:bg-black/5 dark:hover:bg-white/10 active:cursor-grabbing"
                 :draggable="true"
+                :title="t('session_drag_hint')"
                 @dragstart.stop="(e) => onDragStart(e, activity)"
                 @click.stop
               >
@@ -141,30 +167,33 @@
               </div>
             </div>
 
-            <!-- Status Dot -->
             <div class="flex items-start gap-1.5">
-              <div
-                class="w-2 h-2 rounded-full mt-0.5 flex-shrink-0"
-                :class="{
-                  'bg-green-500': activity.source === 'completed' && !activity.plannedWorkoutId,
-                  'bg-blue-500':
-                    (activity.source === 'completed' && activity.plannedWorkoutId) ||
-                    (activity.source === 'planned' && activity.status === 'completed_plan'),
-                  'bg-amber-500': activity.source === 'planned' && activity.status === 'planned',
-                  'bg-red-500': activity.status === 'missed',
-                  'bg-gray-400 dark:bg-gray-600': activity.source === 'note'
-                }"
+              <UIcon
+                :name="getEntryIcon(activity)"
+                class="w-3.5 h-3.5 mt-px shrink-0"
+                :class="getSessionStatusStyle(getSessionStatus(activity)).icon"
               />
 
               <div class="flex-1 min-w-0">
-                <!-- Title -->
-                <div class="font-medium truncate flex items-center gap-1" :title="activity.title">
-                  <span>{{ activity.title }}</span>
+                <!-- Title (wraps to two lines) + status mark -->
+                <div class="flex items-start gap-1">
+                  <span
+                    class="flex-1 min-w-0 font-medium leading-snug line-clamp-2 break-words text-gray-900 dark:text-gray-100"
+                    :title="activity.title"
+                  >
+                    {{ activity.title }}
+                  </span>
+                  <UIcon
+                    v-if="getSessionStatus(activity) === 'completed'"
+                    name="i-heroicons-check-circle-solid"
+                    class="w-3.5 h-3.5 mt-px shrink-0 text-green-500"
+                    :aria-label="t('status_done')"
+                  />
                   <UIcon
                     v-if="activity.isWeeklyNote"
                     name="i-heroicons-calendar-days"
-                    class="w-3 h-3 text-primary-500"
-                    title="Weekly Note"
+                    class="w-3 h-3 mt-0.5 shrink-0 text-primary-500"
+                    :title="t('session_weekly_note')"
                   />
                 </div>
 
@@ -176,155 +205,65 @@
                   {{ activity.category }}
                 </div>
 
-                <!-- Metrics -->
+                <!-- Duration · distance (+ details when enabled) -->
                 <div
-                  v-if="
-                    activity.duration ||
-                    activity.plannedDuration ||
-                    activity.distance ||
-                    activity.plannedDistance ||
-                    activity.averageHr ||
-                    activity.tss ||
-                    activity.trimp ||
-                    activity.plannedTss ||
-                    getActivityStartTime(activity)
-                  "
-                  class="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 flex-wrap"
+                  v-if="getSessionMeta(activity).length > 0"
+                  class="flex flex-wrap items-center gap-x-1 text-[10px] text-gray-500 dark:text-gray-400 mt-0.5"
                 >
-                  <span
-                    v-if="getActivityStartTime(activity)"
-                    class="inline-flex items-center gap-0.5 text-primary-600 dark:text-primary-400 font-medium mr-1"
-                  >
-                    <UIcon name="i-heroicons-clock" class="w-2.5 h-2.5" />
-                    <span>{{ getActivityStartTime(activity) }}</span>
-                  </span>
-
-                  <template
-                    v-for="(item, i) in [
-                      activity.duration || activity.plannedDuration
-                        ? {
-                            label: formatDuration(
-                              activity.duration || activity.plannedDuration || 0
-                            )
-                          }
-                        : null,
-                      activity.distance || activity.plannedDistance
-                        ? {
-                            label: formatDistance(
-                              activity.distance || activity.plannedDistance || 0
-                            )
-                          }
-                        : null,
-                      activity.averageHr
-                        ? {
-                            label: Math.round(activity.averageHr).toString(),
-                            icon: 'i-heroicons-heart',
-                            class: 'text-red-500 dark:text-red-400'
-                          }
-                        : null,
-                      activity.tss || activity.trimp || activity.plannedTss
-                        ? {
-                            label: Math.round(
-                              activity.tss ?? activity.trimp ?? activity.plannedTss ?? 0
-                            ).toString(),
-                            dot: true,
-                            dotClass:
-                              activity.source === 'completed' ? 'bg-green-500' : 'bg-amber-500'
-                          }
-                        : null
-                    ].filter(Boolean)"
-                    :key="i"
-                  >
-                    <template v-if="item">
-                      <span v-if="i > 0" class="opacity-50 text-[8px] mx-0.5">•</span>
-                      <span class="flex items-center gap-0.5" :class="item.class">
-                        <UIcon v-if="item.icon" :name="item.icon" class="w-2.5 h-2.5" />
-                        <div
-                          v-if="item.dot"
-                          class="w-2.5 h-0.5 rounded-full"
-                          :class="item.dotClass"
-                        />
-                        <span>{{ item.label }}</span>
-                      </span>
-                    </template>
+                  <template v-for="(item, i) in getSessionMeta(activity)" :key="i">
+                    <span v-if="i > 0" class="opacity-50" aria-hidden="true">·</span>
+                    <span class="inline-flex items-center gap-0.5" :class="item.class">
+                      <UIcon v-if="item.icon" :name="item.icon" class="w-2.5 h-2.5" />
+                      <span>{{ item.label }}</span>
+                    </span>
                   </template>
                 </div>
 
-                <!-- Training Stress Metrics (CTL/ATL/TSB) for completed workouts -->
+                <!-- The plan this workout completed -->
+                <div
+                  v-if="getLinkedPlanTitle(activity)"
+                  class="mt-0.5 flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400"
+                  :title="t('session_planned_as', { title: getLinkedPlanTitle(activity) })"
+                >
+                  <UIcon name="i-heroicons-link" class="w-2.5 h-2.5 shrink-0" />
+                  <span class="truncate">{{ getLinkedPlanTitle(activity) }}</span>
+                </div>
+
+                <!-- Fitness / fatigue / form after this workout (opt-in) -->
                 <div
                   v-if="
+                    display.showTrainingStress &&
                     activity.source === 'completed' &&
-                    (activity.ctl || activity.atl) &&
-                    settings?.showTrainingStress !== false
+                    (activity.ctl || activity.atl)
                   "
-                  class="flex items-center gap-2 text-[9px] text-gray-400 dark:text-gray-500 mt-0.5"
+                  class="flex flex-wrap items-center gap-x-1.5 text-[10px] text-gray-500 dark:text-gray-400 mt-0.5"
                 >
-                  <UTooltip
-                    v-if="activity.ctl"
-                    text="Chronic Training Load - Your fitness level at this point"
-                  >
-                    <span class="flex items-center gap-0.5">
-                      <span class="text-purple-600 dark:text-purple-400 font-semibold">CTL</span>
-                      <span>{{ activity.ctl.toFixed(0) }}</span>
+                  <UTooltip v-if="activity.ctl" :text="t('load_fitness_hint')">
+                    <span>
+                      {{ t('load_fitness') }}
+                      <span class="font-semibold text-gray-700 dark:text-gray-200">{{
+                        Math.round(activity.ctl)
+                      }}</span>
                     </span>
                   </UTooltip>
-                  <UTooltip
-                    v-if="activity.atl"
-                    text="Acute Training Load - Your fatigue level at this point"
-                  >
-                    <span class="flex items-center gap-0.5">
-                      <span class="text-yellow-600 dark:text-yellow-400 font-semibold">ATL</span>
-                      <span>{{ activity.atl.toFixed(0) }}</span>
+                  <UTooltip v-if="activity.atl" :text="t('load_fatigue_hint')">
+                    <span>
+                      {{ t('load_fatigue') }}
+                      <span class="font-semibold text-gray-700 dark:text-gray-200">{{
+                        Math.round(activity.atl)
+                      }}</span>
                     </span>
                   </UTooltip>
-                  <UTooltip
-                    v-if="activity.ctl && activity.atl"
-                    :text="`Training Stress Balance: ${getTSBTooltip(activity.ctl - activity.atl)}`"
-                  >
-                    <span class="flex items-center gap-0.5">
-                      <span class="font-semibold" :class="getTSBColor(activity.ctl - activity.atl)"
-                        >TSB</span
+                  <UTooltip v-if="activity.ctl && activity.atl" :text="t('load_form_hint')">
+                    <span>
+                      {{ t('load_form') }}
+                      <span
+                        class="font-semibold"
+                        :class="getFormColorClass(activity.ctl - activity.atl)"
+                        >{{ formatSigned(activity.ctl - activity.atl) }}</span
                       >
-                      <span :class="getTSBColor(activity.ctl - activity.atl)">
-                        {{ activity.ctl - activity.atl > 0 ? '+' : ''
-                        }}{{ (activity.ctl - activity.atl).toFixed(0) }}
-                      </span>
                     </span>
                   </UTooltip>
-                </div>
-
-                <!-- Planned Indicator Badge -->
-                <div
-                  v-if="activity.source === 'completed' && activity.plannedWorkoutId"
-                  class="mt-1"
-                >
-                  <UBadge color="primary" variant="subtle" size="xs">
-                    <UIcon name="i-heroicons-calendar" class="w-3 h-3" />
-                    <span class="ml-0.5">Planned</span>
-                  </UBadge>
-                </div>
-
-                <!-- Linked Planned Workout Details -->
-                <div
-                  v-if="activity.linkedPlannedWorkout"
-                  class="mt-1.5 ml-2 pl-2 border-l-2 border-primary-200 dark:border-primary-800 space-y-0.5 opacity-80"
-                >
-                  <div class="flex items-center gap-1">
-                    <UIcon name="i-heroicons-link" class="w-2.5 h-2.5 text-primary-500 shrink-0" />
-                    <div
-                      class="text-[10px] text-primary-700 dark:text-primary-300 truncate italic font-medium"
-                    >
-                      {{ activity.linkedPlannedWorkout?.title }}
-                    </div>
-                  </div>
-                  <div class="text-[9px] text-gray-400 dark:text-gray-500 pl-3.5">
-                    <span v-if="activity.linkedPlannedWorkout?.duration">{{
-                      formatDuration(activity.linkedPlannedWorkout?.duration)
-                    }}</span>
-                    <span v-if="activity.linkedPlannedWorkout?.tss">
-                      • {{ Math.round(activity.linkedPlannedWorkout?.tss || 0) }} TSS</span
-                    >
-                  </div>
                 </div>
 
                 <!-- Mini Workout Chart (Structured Planned) -->
@@ -351,7 +290,7 @@
                 </div>
               </div>
             </div>
-          </button>
+          </div>
         </div>
       </template>
 
@@ -360,6 +299,7 @@
         <button
           v-for="m in milestones.slice(0, 2)"
           :key="m.id"
+          type="button"
           class="w-full flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors text-left mb-0.5 last:mb-0"
           :class="{
             'bg-yellow-50 dark:bg-yellow-900/30 hover:bg-yellow-100 dark:hover:bg-yellow-900/50':
@@ -372,22 +312,16 @@
           @click.stop="$emit('activity-click', m)"
         >
           <UIcon
-            v-if="m.source === 'goal'"
-            :name="m.priority === 'HIGH' ? 'i-heroicons-star-solid' : 'i-heroicons-flag-solid'"
-            class="w-3 h-3 text-yellow-600 dark:text-yellow-400 shrink-0"
-          />
-          <UIcon
-            v-if="m.source === 'threshold'"
-            name="i-heroicons-arrow-trending-up"
-            class="w-3 h-3 text-purple-600 dark:text-purple-400 shrink-0"
-          />
-          <UIcon
-            v-if="m.source === 'pb'"
-            name="i-heroicons-trophy-solid"
-            class="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0"
+            :name="getEntryIcon(m)"
+            class="w-3 h-3 shrink-0"
+            :class="{
+              'text-yellow-600 dark:text-yellow-400': m.source === 'goal',
+              'text-purple-600 dark:text-purple-400': m.source === 'threshold',
+              'text-teal-600 dark:text-teal-400': m.source === 'pb'
+            }"
           />
           <span
-            class="text-[10px] font-bold truncate"
+            class="text-[10px] font-bold line-clamp-2 break-words"
             :class="{
               'text-yellow-700 dark:text-yellow-300': m.source === 'goal',
               'text-purple-700 dark:text-purple-300': m.source === 'threshold',
@@ -401,17 +335,18 @@
         <!-- More Milestones Indicator -->
         <button
           v-if="milestones.length > 2"
-          class="w-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors text-left"
+          type="button"
+          class="w-full px-1.5 py-0.5 text-[10px] font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition-colors text-left"
           @click.stop="$emit('activity-click', milestones[2]!)"
         >
-          + {{ milestones.length - 2 }} more milestones
+          {{ t('day_more_milestones', { count: milestones.length - 2 }) }}
         </button>
       </div>
     </div>
 
-    <!-- Nutrition Summary (subtle, at bottom) - mt-auto pushes to bottom -->
+    <!-- Fuel targets (opt-in, nutrition only) - mt-auto pushes to bottom -->
     <div
-      v-if="dayNutrition && settings?.showNutrition !== false"
+      v-if="dayNutrition && display.showNutrition"
       class="mt-auto pt-2 border-t border-gray-200 dark:border-gray-700 text-[10px] text-gray-500 dark:text-gray-500 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors rounded-b"
       :title="dayNutrition.isEstimate ? 'View estimated fueling plan' : 'View nutrition details'"
       @click.stop="$emit('nutrition-click', date)"
@@ -463,7 +398,7 @@
 </template>
 
 <script setup lang="ts">
-  import { isSameMonth } from 'date-fns'
+  import { useTranslate } from '@tolgee/vue'
   import type { CalendarActivity } from '~/types/calendar'
   import MiniWorkoutChart from '~/components/workouts/MiniWorkoutChart.vue'
   import MiniZoneChart from '~/components/MiniZoneChart.vue'
@@ -473,8 +408,21 @@
     getStructuredWorkoutObject,
     hasStructuredWorkoutPreviewData
   } from '~/utils/structuredWorkout'
-  import { formatDistance as formatDist } from '~/utils/metrics'
+  import {
+    formatSessionDistance,
+    formatSessionDuration,
+    formatSigned,
+    getEntryIcon,
+    getFormColorClass,
+    getSessionDistanceMeters,
+    getSessionDurationSeconds,
+    getSessionStatus,
+    getSessionStatusStyle,
+    resolveActivityCalendarSettings,
+    type ActivityCalendarSettings
+  } from '~/utils/calendarDisplay'
 
+  const { t } = useTranslate('activities')
   const { formatDate, formatDateUTC, formatTime, getUserLocalDate, formatWeight } = useFormat()
   const userStore = useUserStore()
 
@@ -485,9 +433,12 @@
     streams?: Record<string, any>
     userZones?: any
     allSportSettings?: any[]
-    settings?: any
+    settings?: Partial<ActivityCalendarSettings> | null
     savingActivityId?: string | null
   }>()
+
+  // Calm by default: anything not explicitly switched on in the calendar settings stays hidden.
+  const display = computed(() => resolveActivityCalendarSettings(props.settings))
 
   const emit = defineEmits<{
     'activity-click': [activity: CalendarActivity]
@@ -498,6 +449,7 @@
     'reschedule-activity': [data: { activity: { id: string; source: string }; date: Date }]
     'schedule-template': [data: { template: any; date: Date }]
     'save-to-library': [activity: CalendarActivity]
+    'add-session': [date: Date]
   }>()
 
   function getActivityZones(activity: CalendarActivity) {
@@ -694,6 +646,11 @@
     )
   })
 
+  // Sessions can be added from today onwards; past days are logged by uploading a workout.
+  const canAddSession = computed(
+    () => formatDateUTC(props.date, 'yyyy-MM-dd') >= formatDateUTC(getUserLocalDate(), 'yyyy-MM-dd')
+  )
+
   // Filter out wellness dummy activities and milestones for display in the main activity list
   const displayActivities = computed(() => {
     return props.activities
@@ -755,7 +712,7 @@
   })
 
   const layoutGroups = computed(() => {
-    if (props.settings?.alignActivitiesByTime) {
+    if (display.value.alignActivitiesByTime) {
       return [
         { type: 'bucket' as const, activities: timeBuckets.value.morning },
         { type: 'spacer' as const, class: 'flex-1 min-h-1' },
@@ -821,20 +778,63 @@
     return score !== null && score < 70
   })
 
-  function formatDuration(seconds: number | undefined | null): string {
-    if (typeof seconds !== 'number' || isNaN(seconds)) return ''
-
-    const h = Math.floor(seconds / 3600)
-    const m = Math.floor((seconds % 3600) / 60)
-
-    if (h > 0) {
-      return `${h}h${m > 0 ? `${m}m` : ''}`
-    }
-    return `${m}m`
+  interface SessionMetaItem {
+    label: string
+    icon?: string
+    class?: string
   }
 
-  function formatDistance(meters: number): string {
-    return formatDist(meters, userStore.profile?.distanceUnits || 'Kilometers')
+  function getSessionMeta(activity: CalendarActivity): SessionMetaItem[] {
+    const items: SessionMetaItem[] = []
+    const showDetails = display.value.showSessionDetails
+
+    if (getSessionStatus(activity) === 'missed') {
+      items.push({
+        label: t.value('status_missed'),
+        class: 'font-medium text-red-600 dark:text-red-400'
+      })
+    }
+
+    if (showDetails) {
+      const startTime = getActivityStartTime(activity)
+      if (startTime) {
+        items.push({
+          label: startTime,
+          icon: 'i-heroicons-clock',
+          class: 'text-primary-600 dark:text-primary-400'
+        })
+      }
+    }
+
+    const duration = formatSessionDuration(getSessionDurationSeconds(activity))
+    if (duration) items.push({ label: duration })
+
+    const distance = formatSessionDistance(
+      getSessionDistanceMeters(activity),
+      userStore.profile?.distanceUnits
+    )
+    if (distance) items.push({ label: distance })
+
+    if (showDetails) {
+      if (activity.averageHr) {
+        items.push({
+          label: Math.round(activity.averageHr).toString(),
+          icon: 'i-heroicons-heart',
+          class: 'text-red-500 dark:text-red-400'
+        })
+      }
+      const load = activity.tss ?? activity.trimp ?? activity.plannedTss
+      if (load) items.push({ label: `${Math.round(load)} TSS` })
+    }
+
+    return items
+  }
+
+  /** Title of the planned session this workout completed, when it differs from its own. */
+  function getLinkedPlanTitle(activity: CalendarActivity): string {
+    const title = activity.linkedPlannedWorkout?.title?.trim()
+    if (!title || title === activity.title?.trim()) return ''
+    return title
   }
 
   function getActivityStartTime(activity: CalendarActivity): string {
@@ -855,23 +855,6 @@
     }
 
     return formatDate(activity.date, 'HH:mm') || '12:00'
-  }
-
-  function getTSBColor(tsb: number | null): string {
-    if (tsb === null) return 'text-gray-400'
-    if (tsb >= 5) return 'text-green-600 dark:text-green-400'
-    if (tsb >= -10) return 'text-yellow-600 dark:text-yellow-400'
-    if (tsb >= -25) return 'text-blue-600 dark:text-blue-400'
-    return 'text-red-600 dark:text-red-400'
-  }
-
-  function getTSBTooltip(tsb: number): string {
-    if (tsb > 25) return 'Resting too long - fitness declining'
-    if (tsb > 5) return 'Fresh and ready to race'
-    if (tsb > -10) return 'Maintaining fitness'
-    if (tsb > -25) return 'Building fitness'
-    if (tsb > -40) return 'High fatigue - caution'
-    return 'Severe fatigue - rest needed'
   }
 
   function getNutritionClass(metric: 'calories' | 'protein' | 'carbs' | 'fat'): string {
