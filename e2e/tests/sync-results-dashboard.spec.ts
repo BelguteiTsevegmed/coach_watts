@@ -99,7 +99,7 @@ test.describe('PR #253 & Smoke Test 3: Sync Results & Dashboard', () => {
     await expect(authedPage).toHaveURL(/\/dashboard/)
     // Verify seeded workout titles or sections appear
     await expect(
-      authedPage.getByText(/E2E Endurance Ride|E2E Tempo Run|Recent Activity|Dashboard/i).first()
+      authedPage.getByText(/E2E Endurance Ride|E2E Tempo Run|Recent Activity|Today/i).first()
     ).toBeVisible()
   })
 
