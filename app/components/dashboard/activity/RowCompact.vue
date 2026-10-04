@@ -106,7 +106,7 @@
         if (d.label === 'Avg HR') shortLabel = 'HR'
         if (d.label === 'Avg Power') shortLabel = 'Pwr'
         if (d.label === 'Duration') shortLabel = '' // Implied 52m
-        if (d.label === 'TSS') shortLabel = 'TSS'
+        if (d.label === 'TSS') shortLabel = 'Load'
 
         return {
           ...d,

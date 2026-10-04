@@ -212,6 +212,10 @@
   const { t } = useTranslate('common')
   const breakpoints = useBreakpoints(breakpointsTailwind)
   const isMobile = breakpoints.smaller('sm')
+  // Below lg the layout shows the bottom tab bar, whose Coach tab (and each
+  // page's header "Ask coach" button) already opens the coach. A floating
+  // pill there would only cover content, so quick capture is desktop-only.
+  const hasBottomNav = breakpoints.smaller('lg')
 
   const viewportHeight = ref(
     typeof window !== 'undefined' ? window.visualViewport?.height || window.innerHeight : 0
@@ -231,7 +235,8 @@
   })
 
   const input = ref('')
-  const isVisible = ref(false)
+  const isOnEnabledPage = ref(false)
+  const isVisible = computed(() => isOnEnabledPage.value && !hasBottomNav.value)
   const isExpanded = ref(false)
   const isHovered = ref(false)
   const isFocused = ref(false)
@@ -284,7 +289,7 @@
   watch(
     () => route.path,
     (path) => {
-      isVisible.value =
+      isOnEnabledPage.value =
         enabledPages.some((p) => path === p || path.startsWith(p + '/')) && path !== '/chat'
     },
     { immediate: true }
