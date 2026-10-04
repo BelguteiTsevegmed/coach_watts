@@ -495,7 +495,7 @@
             <!-- List View -->
             <div
               v-else
-              class="bg-[oklch(14%_0.018_155)] rounded-xl border border-white/8 shadow overflow-x-auto h-full flex flex-col"
+              class="bg-default rounded-xl border border-default shadow overflow-x-auto h-full flex flex-col"
             >
               <UTable
                 ref="table"
@@ -508,9 +508,9 @@
                 :ui="{
                   root: 'w-full',
                   base: 'w-full table-auto',
-                  th: 'text-left text-xs font-bold uppercase tracking-widest text-gray-400 sticky top-0 bg-[oklch(14%_0.018_155)] z-10 px-4 py-3 border-b border-white/8',
-                  td: 'text-sm text-gray-100 cursor-pointer px-4 py-3',
-                  tbody: 'divide-y divide-white/8'
+                  th: 'text-left text-xs font-bold uppercase tracking-widest text-muted sticky top-0 bg-default z-10 px-4 py-3 border-b border-default',
+                  td: 'text-sm text-default cursor-pointer px-4 py-3',
+                  tbody: 'divide-y divide-default'
                 }"
                 @select="(_, row) => openActivity(row.original)"
               >
@@ -729,7 +729,7 @@
                     variant="subtle"
                     size="xs"
                   >
-                    {{ row.original.status }}
+                    {{ listStatusLabel(row.original.status) }}
                   </UBadge>
                 </template>
               </UTable>
@@ -1844,6 +1844,15 @@
   function onMobileActivityDragCancel() {
     mobileDraggingActivity.value = null
     mobileDragTargetDateKey.value = null
+  }
+
+  function listStatusLabel(status: string | null | undefined) {
+    if (status === 'completed' || status === 'completed_plan') return t.value('legend_completed')
+    if (status === 'missed') return t.value('legend_missed')
+    if (status === 'planned') return t.value('legend_planned')
+    if (!status) return ''
+    const text = status.replace(/_/g, ' ')
+    return text.charAt(0).toUpperCase() + text.slice(1)
   }
 
   async function openActivity(activity: CalendarActivity) {
