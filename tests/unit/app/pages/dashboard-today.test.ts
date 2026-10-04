@@ -79,6 +79,9 @@ async function mountPage() {
         UDashboardNavbar: {
           template:
             '<div><slot name="title" /><slot name="leading" /><slot name="right" /><slot /></div>'
+        },
+        DashboardRecentActivityCard: {
+          template: '<div class="recent-activity-stub"><slot name="footer" /></div>'
         }
       }
     }
@@ -93,15 +96,17 @@ async function mountPage() {
 describe('Today screen', () => {
   const fetchMock = vi.fn()
   let recentItems: any[] = []
+  let integrations: any[] = []
 
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     recentItems = [runWorkout('a'), runWorkout('b')]
+    integrations = []
 
     fetchMock.mockReset()
     fetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/integrations/status') return { integrations: [] }
+      if (url === '/api/integrations/status') return { integrations }
       if (url === '/api/profile/dashboard') {
         return {
           profile: { name: 'Runner', nutritionTrackingEnabled: false },
@@ -165,5 +170,14 @@ describe('Today screen', () => {
       'Functional Threshold Power (FTP)',
       'Training Zones'
     ])
+  })
+
+  it('keeps the Garmin attribution on Today when Garmin is connected', async () => {
+    const withoutGarmin = await mountPage()
+    expect(withoutGarmin.find('[data-testid="garmin-attribution"]').exists()).toBe(false)
+
+    integrations = [{ provider: 'garmin' }]
+    const withGarmin = await mountPage()
+    expect(withGarmin.find('[data-testid="garmin-attribution"]').exists()).toBe(true)
   })
 })
