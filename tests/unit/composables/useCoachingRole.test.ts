@@ -11,6 +11,7 @@ describe('resolveCoachingRole (CW-103)', () => {
 
     expect(role.isCoachForAnyone).toBe(true)
     expect(role.isPureAthlete).toBe(false)
+    expect(role.hasOwnCoach).toBe(false)
     expect(role.showFullCoachingSuite).toBe(true)
   })
 
@@ -23,6 +24,7 @@ describe('resolveCoachingRole (CW-103)', () => {
 
     expect(role.isCoachForAnyone).toBe(true)
     expect(role.isPureAthlete).toBe(false)
+    expect(role.hasOwnCoach).toBe(false)
     expect(role.showFullCoachingSuite).toBe(true)
   })
 
@@ -35,6 +37,7 @@ describe('resolveCoachingRole (CW-103)', () => {
 
     expect(role.isCoachForAnyone).toBe(false)
     expect(role.isPureAthlete).toBe(true)
+    expect(role.hasOwnCoach).toBe(true)
     expect(role.showFullCoachingSuite).toBe(false)
   })
 
@@ -47,6 +50,7 @@ describe('resolveCoachingRole (CW-103)', () => {
 
     expect(role.isCoachForAnyone).toBe(false)
     expect(role.isPureAthlete).toBe(false)
+    expect(role.hasOwnCoach).toBe(false)
     expect(role.showFullCoachingSuite).toBe(true)
   })
 
@@ -59,6 +63,7 @@ describe('resolveCoachingRole (CW-103)', () => {
 
     expect(role.isCoachForAnyone).toBe(true)
     expect(role.isPureAthlete).toBe(false)
+    expect(role.hasOwnCoach).toBe(true)
     expect(role.showFullCoachingSuite).toBe(true)
   })
 })
