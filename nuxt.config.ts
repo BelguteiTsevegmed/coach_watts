@@ -115,7 +115,7 @@ export default defineNuxtConfig({
       title: 'Coach Watts',
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         {
           name: 'description',
           content: 'AI-powered endurance coaching platform that adapts to your training.'
