@@ -4,15 +4,17 @@
       <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-primary" />
     </div>
 
-    <div v-else-if="!data?.weeks?.length" class="text-center py-12">
-      <UIcon name="i-heroicons-chart-bar" class="w-12 h-12 mx-auto mb-4 text-gray-400" />
-      <p class="text-gray-500">No training data found for this period.</p>
+    <div v-else-if="!data?.weeks?.length || availableTypes.length === 0" class="text-center py-12">
+      <slot name="empty">
+        <UIcon name="i-heroicons-chart-bar" class="w-12 h-12 mx-auto mb-4 text-gray-400" />
+        <p class="text-gray-500">No training data found for this period.</p>
+      </slot>
     </div>
 
     <div v-else class="space-y-4">
-      <div class="flex items-center gap-2">
+      <div v-if="availableTypes.length > 1" class="flex items-center gap-2">
         <UButton
-          v-for="type in ['power', 'hr'] as const"
+          v-for="type in availableTypes"
           :key="type"
           size="xs"
           :color="selectedType === type ? 'primary' : 'neutral'"
@@ -87,7 +89,12 @@
     ...props.settings
   }))
 
-  const selectedType = ref<'power' | 'hr'>('power')
+  const emit = defineEmits<{
+    loaded: [data: WeeklyZonesResponse | null]
+  }>()
+
+  // Optional v-model:type; stays local state when the parent does not bind it.
+  const selectedType = defineModel<'power' | 'hr'>('type', { default: 'power' })
 
   const { data, pending, refresh } = await useFetch<WeeklyZonesResponse, Error, string & {}>(
     '/api/analytics/weekly-zones',
@@ -105,6 +112,27 @@
     () => {
       refresh()
     }
+  )
+
+  // Zone types that actually have recorded time (e.g. no power meter → HR only).
+  const availableTypes = computed(() => {
+    const weeks = data.value?.weeks || []
+    return (['power', 'hr'] as const).filter((type) =>
+      weeks.some((w) => (type === 'power' ? w.powerZones : w.hrZones)?.some((v) => v > 0))
+    )
+  })
+
+  watch(
+    [data, availableTypes],
+    () => {
+      const [first] = availableTypes.value
+      if (first && !availableTypes.value.includes(selectedType.value)) {
+        selectedType.value = first
+      }
+      // Client-only so a parent reacting to the data cannot cause a hydration mismatch.
+      if (import.meta.client) emit('loaded', data.value ?? null)
+    },
+    { immediate: true }
   )
 
   const activeLabels = computed(() => {
