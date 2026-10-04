@@ -1,29 +1,22 @@
 <template>
-  <UCard
-    :ui="{
-      root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
-      body: 'p-4 sm:p-6'
-    }"
-  >
+  <UCard :ui="mobileListCardUi">
     <template #header>
-      <div class="flex items-center justify-between">
-        <h3 class="text-base font-black uppercase tracking-widest text-gray-400">
-          {{ title }}
-        </h3>
+      <PerformanceCardHeader :title="title" as="h4">
         <UButton
           icon="i-heroicons-cog-6-tooth"
           color="neutral"
           variant="ghost"
           size="xs"
+          :aria-label="t('chart_settings_label')"
           @click="
             () => {
               void $emit('settings')
             }
           "
         />
-      </div>
+      </PerformanceCardHeader>
     </template>
-    <div class="h-[300px]">
+    <div class="h-[280px]">
       <ClientOnly>
         <TrendChart :data="data" :type="type" :settings="settings" :plugins="[ChartDataLabels]" />
       </ClientOnly>
@@ -34,6 +27,9 @@
 <script setup lang="ts">
   import TrendChart from '~/components/TrendChart.vue'
   import ChartDataLabels from 'chartjs-plugin-datalabels'
+  import { useTranslate } from '@tolgee/vue'
+  import { mobileListCardUi } from '~/utils/mobile-surface-ui'
+  import PerformanceCardHeader from './PerformanceCardHeader.vue'
 
   defineProps<{
     title: string
@@ -43,4 +39,6 @@
   }>()
 
   defineEmits(['settings'])
+
+  const { t } = useTranslate('performance')
 </script>
