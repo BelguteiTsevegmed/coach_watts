@@ -36,10 +36,11 @@ test.describe('Dashboard & Daily Recommendations Suite', () => {
     await dashboard.goto()
 
     await expect(authedPage).toHaveURL(/\/dashboard/)
-    await expect(authedPage).toHaveTitle(/Dashboard/i)
+    await expect(authedPage).toHaveTitle(/Today/i)
 
     // Verify main heading and content containers render
     await expect(authedPage.getByRole('heading').first()).toBeVisible()
+    await expect(dashboard.recommendationCard).toBeVisible({ timeout: 15000 })
   })
 
   test('2. Returns today recommendation data from API endpoint', async ({ authedPage }) => {

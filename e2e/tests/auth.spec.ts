@@ -11,6 +11,6 @@ test.describe('authenticated flows', () => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
 
     await expect(page).toHaveURL(/\/dashboard/)
-    await expect(page).toHaveTitle(/Dashboard/i)
+    await expect(page).toHaveTitle(/Today/i)
   })
 })

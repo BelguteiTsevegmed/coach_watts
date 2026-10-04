@@ -16,10 +16,8 @@ export class DashboardPage {
 
   constructor(page: Page) {
     this.page = page
-    this.recommendationCard = page
-      .locator('[data-testid="recommendation-card"], .recommendation-card, header')
-      .first()
-    this.refineButton = page.getByRole('button', { name: /refine|refresh/i }).first()
+    this.recommendationCard = page.locator('[data-testid="today-session-card"]').first()
+    this.refineButton = page.getByRole('button', { name: /adjust|refine|refresh/i }).first()
     this.refineModal = page.locator('[role="dialog"]').first()
     this.refineTextarea = page.locator('textarea').first()
     this.refineSubmitButton = page
