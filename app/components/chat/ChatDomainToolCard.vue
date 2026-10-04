@@ -75,7 +75,10 @@
     'record_wellness_event',
     'get_wellness_events',
     'update_wellness_event',
-    'delete_wellness_event'
+    'delete_wellness_event',
+    'get_injuries',
+    'log_injury',
+    'update_injury'
   ])
 
   const profileToolNames = new Set([
@@ -271,6 +274,8 @@
         return `Loaded ${payload.value?.count ?? 0} wellness entr${payload.value?.count === 1 ? 'y' : 'ies'}.`
       case 'get_wellness_events':
         return `Loaded ${payload.value?.count ?? 0} wellness event${payload.value?.count === 1 ? '' : 's'}.`
+      case 'get_injuries':
+        return `Loaded ${payload.value?.count ?? 0} injur${payload.value?.count === 1 ? 'y' : 'ies'}.`
       case 'get_training_availability':
         return items.value.length > 0
           ? `Loaded ${items.value.length} availability day${items.value.length === 1 ? '' : 's'}.`
@@ -664,6 +669,36 @@
             }
           ]
         : []
+    }
+
+    if (
+      props.toolName === 'get_injuries' ||
+      props.toolName === 'log_injury' ||
+      props.toolName === 'update_injury'
+    ) {
+      const injuries = response.injury ? [response.injury] : asArray(response.injuries)
+      return injuries.map((injury: any) => ({
+        id: injury.id,
+        title: injury.title || injury.location || 'Injury',
+        subtitle: [
+          injury.title ? injury.location : undefined,
+          typeof injury.days_since_onset === 'number'
+            ? `${injury.days_since_onset} day${injury.days_since_onset === 1 ? '' : 's'}`
+            : undefined
+        ]
+          .filter(Boolean)
+          .join(' • '),
+        badges: [
+          formatBadgeValue(
+            'Pain',
+            injury.painLevel !== undefined ? `${injury.painLevel}/10` : undefined
+          ),
+          typeof injury.status === 'string'
+            ? injury.status.charAt(0) + injury.status.slice(1).toLowerCase()
+            : undefined
+        ].filter(Boolean) as string[],
+        description: injury.notes || injury.description
+      }))
     }
 
     if (props.toolName === 'get_wellness_events') {
