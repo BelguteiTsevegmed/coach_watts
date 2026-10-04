@@ -1,5 +1,5 @@
 {
-  "activities_title": "Лаборатория производительности",
+  "activities_title": "Календарь",
   "controls_columns": "Колонки",
   "controls_days_fri": "Пт",
   "controls_days_mon": "Пн",
@@ -54,5 +54,5 @@
   "legend_proposed": "Предложенный",
   "legend_threshold": "Порог",
   "meta_description": "Просматривайте свой тренировочный календарь, анализируйте завершенные тренировки и планируйте будущие занятия.",
-  "meta_title": "Активности"
+  "meta_title": "Календарь"
 }

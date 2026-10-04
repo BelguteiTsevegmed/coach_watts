@@ -1,5 +1,5 @@
 {
-  "activities_title": "Performance Lab",
+  "activities_title": "Calendrier",
   "controls_columns": "Colonnes",
   "controls_days_fri": "Ven",
   "controls_days_mon": "Lun",
@@ -54,5 +54,5 @@
   "legend_proposed": "Proposé",
   "legend_threshold": "Seuil",
   "meta_description": "Consultez votre calendrier d'entraînement, analysez vos séances terminées et planifiez vos futures sessions.",
-  "meta_title": "Activités"
+  "meta_title": "Calendrier"
 }

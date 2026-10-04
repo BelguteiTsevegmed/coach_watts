@@ -8,10 +8,11 @@ test.describe('Activities & Fitness / Health Tracking', () => {
     await activities.goto()
 
     await expect(authedPage).toHaveURL(/\/activities/)
-    await expect(authedPage).toHaveTitle(/Activities/i)
+    await expect(authedPage).toHaveTitle(/Calendar/i)
+    await expect(activities.titleHeading).toBeVisible()
 
-    // Verify activities page or seeded workout content is rendered
-    await expect(authedPage.getByText(/E2E|Activities|Workouts|Ride|Run/i).first()).toBeVisible()
+    // Verify the calendar or seeded workout content is rendered
+    await expect(authedPage.getByText(/E2E|Calendar|Workouts|Ride|Run/i).first()).toBeVisible()
   })
 
   test('renders fitness & health tracking page', async ({ authedPage }) => {

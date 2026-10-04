@@ -10,7 +10,7 @@ export class ActivitiesPage {
 
   constructor(page: Page) {
     this.page = page
-    this.titleHeading = page.getByRole('heading', { level: 1, name: /activities/i })
+    this.titleHeading = page.getByRole('heading', { level: 1, name: /calendar/i })
     this.workoutList = page.locator('main, [data-testid="activities-list"], .activities-list')
     this.searchInput = page.getByPlaceholder(/search|filter/i).first()
     this.fitnessLink = page.getByRole('link', { name: /fitness/i }).first()

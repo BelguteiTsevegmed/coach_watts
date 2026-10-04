@@ -1,5 +1,5 @@
 {
-  "activities_title": "Laboratorio de rendimiento",
+  "activities_title": "Calendario",
   "controls_columns": "Columnas",
   "controls_days_fri": "Vie",
   "controls_days_mon": "Lun",
@@ -54,5 +54,5 @@
   "legend_proposed": "Propuesto",
   "legend_threshold": "Límite",
   "meta_description": "Vea su calendario de entrenamiento, analice los entrenamientos completados y planifique sesiones futuras.",
-  "meta_title": "Actividades"
+  "meta_title": "Calendario"
 }
