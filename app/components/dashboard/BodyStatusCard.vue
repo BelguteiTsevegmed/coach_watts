@@ -80,7 +80,8 @@
 
 <script setup lang="ts">
   import { useTranslate } from '@tolgee/vue'
-  import { daysBetweenKeys, utcDateKey } from '~/utils/today-plan'
+  import { daysBetweenKeys } from '~/utils/date-keys'
+  import { utcDateKey } from '~/utils/today-plan'
 
   /** Contract of `GET /api/injuries?status=active`. */
   interface ActiveInjury {

@@ -284,8 +284,8 @@
   import PerformanceSettingsModal from '~/components/performance/PerformanceSettingsModal.vue'
   import PerformanceTrainingVolumeCard from '~/components/performance/PerformanceTrainingVolumeCard.vue'
   import { mobileListCardUi } from '~/utils/mobile-surface-ui'
+  import { addDaysToKey } from '~/utils/date-keys'
   import {
-    addDaysToKey,
     computeFitnessTrend,
     hasPowerData,
     mondayOfKey,

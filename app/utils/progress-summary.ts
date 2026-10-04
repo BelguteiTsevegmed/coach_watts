@@ -5,6 +5,7 @@
  * list, weekly zone totals, goals) into plain-language building blocks. No
  * fetching, no Vue, no i18n — the components translate the returned kinds.
  */
+import { addDaysToKey, daysBetweenKeys } from '~/utils/date-keys'
 
 export type SportGroup = 'run' | 'swim' | 'ride' | 'strength' | 'other'
 
@@ -45,8 +46,6 @@ export function sportGroupOf(type?: string | null): SportGroup {
 // Dates — everything is bucketed by the athlete's local calendar day
 // ---------------------------------------------------------------------------
 
-const DAY_MS = 24 * 60 * 60 * 1000
-
 /** `YYYY-MM-DD` for `date` in `timeZone` (falls back to UTC on a bad zone). */
 export function localDateKey(date: Date | string, timeZone?: string): string {
   const d = typeof date === 'string' ? new Date(date) : date
@@ -65,15 +64,6 @@ export function localDateKey(date: Date | string, timeZone?: string): string {
 
 function keyToUtc(key: string): number {
   return Date.parse(`${key}T00:00:00Z`)
-}
-
-export function addDaysToKey(key: string, days: number): string {
-  return new Date(keyToUtc(key) + days * DAY_MS).toISOString().slice(0, 10)
-}
-
-/** Whole calendar days from `fromKey` to `toKey` (negative when `toKey` is earlier). */
-export function daysBetweenKeys(fromKey: string, toKey: string): number {
-  return Math.round((keyToUtc(toKey) - keyToUtc(fromKey)) / DAY_MS)
 }
 
 /** Monday of the ISO week containing `key`. */

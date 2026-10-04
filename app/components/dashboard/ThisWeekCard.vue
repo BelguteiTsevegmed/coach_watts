@@ -155,9 +155,9 @@
   import { useTranslate } from '@tolgee/vue'
   import type { CalendarActivity } from '~/types/calendar'
   import { getWorkoutIcon, getWorkoutColorClass } from '~/utils/activity-types'
+  import { daysBetweenKeys } from '~/utils/date-keys'
   import {
     buildComingUp,
-    daysBetweenKeys,
     formatTrainingDuration,
     summarizeWeek,
     type UpcomingWorkoutLike,

@@ -5,25 +5,11 @@
  */
 import type { CalendarActivity } from '~/types/calendar'
 import { getCalendarActivityDateKey } from '~/utils/calendar'
-
-const DAY_MS = 24 * 60 * 60 * 1000
+import { addDaysToKey, daysBetweenKeys } from '~/utils/date-keys'
 
 function keyToUtcMs(key: string): number {
   const [y, m, d] = key.split('-').map(Number)
   return Date.UTC(y || 1970, (m || 1) - 1, d || 1)
-}
-
-function utcMsToKey(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10)
-}
-
-export function addDaysToKey(key: string, days: number): string {
-  return utcMsToKey(keyToUtcMs(key) + days * DAY_MS)
-}
-
-/** Whole days from `fromKey` to `toKey` (negative when `toKey` is earlier). */
-export function daysBetweenKeys(fromKey: string, toKey: string): number {
-  return Math.round((keyToUtcMs(toKey) - keyToUtcMs(fromKey)) / DAY_MS)
 }
 
 /** Date key of a date-only value stored as UTC midnight (planned workouts, goals). */

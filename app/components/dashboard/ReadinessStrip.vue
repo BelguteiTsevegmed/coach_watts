@@ -66,7 +66,8 @@
     getSleepTone,
     type ReadinessTone
   } from '~/utils/readiness'
-  import { daysBetweenKeys, utcDateKey } from '~/utils/today-plan'
+  import { daysBetweenKeys } from '~/utils/date-keys'
+  import { utcDateKey } from '~/utils/today-plan'
 
   const props = defineProps<{
     /** `summary` from `/api/performance/pmc`; null when unavailable. */

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { addDaysToKey, daysBetweenKeys } from '../../../../app/utils/date-keys'
 import type { CalendarActivity } from '../../../../app/types/calendar'
 import {
-  addDaysToKey,
   buildComingUp,
-  daysBetweenKeys,
   formatTrainingDistance,
   formatTrainingDuration,
   getWeekDateKeys,

@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { addDaysToKey, daysBetweenKeys } from './date-keys'
 import {
-  addDaysToKey,
   averageCompleteWeeks,
   buildWeeklyVolume,
   classifyForm,
   computeFitnessTrend,
   computeIntensitySplit,
-  daysBetweenKeys,
   describeCountdown,
   goalProgressPct,
   goalTargetKey,
