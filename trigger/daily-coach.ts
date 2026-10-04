@@ -22,10 +22,11 @@ import { isWithinPreferredEmailTime } from '../server/utils/email-schedule'
 import { getCurrentFitnessSummary } from '../server/utils/training-stress'
 import { evaluateFitbitRecoveryAlert } from '../server/utils/wellness'
 import { dispatchTask } from '../server/utils/task-dispatcher'
-import {
-  formatPromptHeight,
-  formatPromptWeight
-} from '../server/utils/ai-prompt-format'
+import { formatPromptHeight, formatPromptWeight } from '../server/utils/ai-prompt-format'
+import { getAthletePrimarySport } from '../server/utils/coaching/sport'
+import { buildCoachingPrinciples } from '../server/utils/coaching/principles'
+import { buildCoachRoleIntro } from '../server/utils/coaching/persona'
+import { fetchOpenInjuries, formatInjuriesForPrompt } from '../server/utils/coaching/injury-context'
 
 const suggestionSchema = {
   type: 'object',
@@ -251,14 +252,22 @@ ${activeGoals
 `
     }
 
-    const aiSettings = await getUserAiSettings(userId)
+    const [aiSettings, primarySport, openInjuries] = await Promise.all([
+      getUserAiSettings(userId),
+      getAthletePrimarySport(userId),
+      fetchOpenInjuries(userId)
+    ])
     logger.log('Using AI settings', {
       model: aiSettings.aiModelPreference,
       persona: aiSettings.aiPersona
     })
 
     // Build prompt with comprehensive context
-    const prompt = `You are a **${aiSettings.aiPersona}** cycling coach providing daily workout guidance.
+    const prompt = `${buildCoachRoleIntro({
+      persona: aiSettings.aiPersona,
+      sport: primarySport,
+      task: 'providing daily workout guidance.'
+    })}
 Adapt your tone and style to match your persona.
 Preferred Language: ${user?.language || 'English'} (ALL analysis and text responses MUST be in this language)
 
@@ -271,7 +280,7 @@ ${formattedContext}
 YESTERDAY'S TRAINING:
 ${
   yesterdayWorkout
-    ? `${yesterdayWorkout.title} - TSS: ${yesterdayWorkout.tss || 'N/A'}, Duration: ${Math.round(yesterdayWorkout.durationSec / 60)} min, Avg Power: ${yesterdayWorkout.averageWatts || 'N/A'}W`
+    ? `${yesterdayWorkout.title} (${yesterdayWorkout.type || 'Workout'}) - TSS: ${yesterdayWorkout.tss || 'N/A'}, Duration: ${Math.round(yesterdayWorkout.durationSec / 60)} min${yesterdayWorkout.averageWatts ? `, Avg Power: ${yesterdayWorkout.averageWatts}W` : ''}`
     : 'Rest day or no data'
 }
 
@@ -289,6 +298,8 @@ ${todayMetric.spO2 ? `- SpO2: ${todayMetric.spO2}%` : ''}`
 
 FITBIT RECOVERY ALERT CHECK:
 - ${fitbitRecoveryAlert.summary}
+
+${formatInjuriesForPrompt(openInjuries, { today: todayDateOnly })}
 
 DECISION LOGIC:
 Use Training Stress Balance (TSB/Form) as primary indicator:
@@ -320,7 +331,10 @@ CRITICAL INSTRUCTIONS:
 1. PRIORITIZE the "Training Load & Form" metrics provided in the training context above for any fitness assessment.
 2. IGNORE any conflicting TSB/CTL values found in the "ATHLETE PROFILE" section if they differ from the fresh metrics, as the profile may contain stale summaries.
 3. Base your recommendation on the current TSB and recovery metrics.
-4. Maintain your **${aiSettings.aiPersona}** persona throughout.`
+4. An ACTIVE injury with pain >= 4/10 overrides "proceed" for sessions that load it: modify, cross-train or rest, and say why.
+5. Maintain your **${aiSettings.aiPersona}** persona throughout.
+
+${buildCoachingPrinciples(primarySport)}`
 
     logger.log(`Generating suggestion with Gemini (${aiSettings.aiModelPreference})`)
 

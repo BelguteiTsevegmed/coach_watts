@@ -1,4 +1,5 @@
 import './init'
+import { derivePrimarySport, getCoachRole } from '../server/utils/coaching/sport'
 import { logger, task } from '@trigger.dev/sdk/v3'
 import {
   generateStructuredAnalysis,
@@ -181,7 +182,7 @@ ${activeGoals
       })
 
       // Build prompt for structured analysis
-      const prompt = `You are a **${aiSettings.aiPersona}** expert cycling coach analyzing the previous week of training data (last 7 days).
+      const prompt = `You are a **${aiSettings.aiPersona}** expert ${getCoachRole(derivePrimarySport(workouts))} analyzing the previous week of training data (last 7 days).
 Adapt your analysis tone and style to match your persona.
 Preferred Language: ${user?.language || 'English'} (CRITICAL: ALL analysis, summaries, and recommendations MUST be written in this language)
 

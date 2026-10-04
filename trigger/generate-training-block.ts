@@ -19,6 +19,14 @@ import { TRAINING_BLOCK_TYPES, TRAINING_BLOCK_FOCUSES } from '../app/utils/train
 import { availabilityRepository } from '../server/utils/repositories/availabilityRepository'
 import { enqueuePlannedWorkoutStructureGeneration } from '../server/utils/planned-workout-structure-trigger'
 import { registerTaskHandler } from '../server/utils/task-registry'
+import {
+  getAthletePrimarySport,
+  getDefaultActivityTypes,
+  getSportLabel
+} from '../server/utils/coaching/sport'
+import { buildCoachingPrinciples } from '../server/utils/coaching/principles'
+import { buildCoachRoleIntro } from '../server/utils/coaching/persona'
+import { fetchOpenInjuries, formatInjuriesForPrompt } from '../server/utils/coaching/injury-context'
 import { normalizeGeneratedWorkoutType } from '../server/utils/plans/workout-type'
 import {
   validateGeneratedBlockWeeks,
@@ -221,10 +229,15 @@ ${profile.planning_context?.opportunities?.length ? `Opportunities: ${profile.pl
 `
   }
 
-  const currentFitness = await getCurrentFitnessSummary(userId, undefined, {
-    adjustForTodayUncompletedPlannedTSS: true,
-    timezone
-  })
+  const [currentFitness, primarySport, openInjuries] = await Promise.all([
+    getCurrentFitnessSummary(userId, undefined, {
+      adjustForTodayUncompletedPlannedTSS: true,
+      timezone
+    }),
+    getAthletePrimarySport(userId),
+    fetchOpenInjuries(userId)
+  ])
+  const injuryContext = formatInjuriesForPrompt(openInjuries, { today: userLocalToday })
 
   // 2. Prepare Context Data
   // Map existing weeks to get volume targets before we delete them
@@ -324,8 +337,14 @@ ${profile.planning_context?.opportunities?.length ? `Opportunities: ${profile.pl
           .join('\n')
       : `- Primary Event Date: ${formatUserDate(goal.eventDate || block.plan.targetDate || new Date(), timezone)}`
 
-  const allowedTypes = (block.plan as any).activityTypes || ['Ride']
-  const allowedTypesString = Array.isArray(allowedTypes) ? allowedTypes.join(', ') : 'Ride'
+  // Plans created without explicit activity types used to default to cycling,
+  // which put rides into runners' plans. Fall back to the athlete's own sport.
+  const planActivityTypes = (block.plan as any).activityTypes
+  const allowedTypes =
+    Array.isArray(planActivityTypes) && planActivityTypes.length > 0
+      ? planActivityTypes
+      : getDefaultActivityTypes(primarySport)
+  const allowedTypesString = allowedTypes.join(', ')
 
   const allowedBlockTypes = TRAINING_BLOCK_TYPES.map((t) => `- ${t.value}: ${t.description}`).join(
     '\n'
@@ -336,7 +355,11 @@ ${profile.planning_context?.opportunities?.length ? `Opportunities: ${profile.pl
 
   const customInstructions = (block.plan as any).customInstructions || ''
 
-  const prompt = `You are a **${aiSettings.aiPersona}** expert endurance coach designing a specific mesocycle (training block) for an athlete.
+  const prompt = `${buildCoachRoleIntro({
+    persona: aiSettings.aiPersona,
+    sport: primarySport,
+    task: 'designing a specific mesocycle (training block) for an athlete.'
+  })}
 Adapt your tone and structure reasoning to match your **${aiSettings.aiPersona}** persona.
 Preferred Language: ${user?.language || 'English'} (CRITICAL: ALL labels, explanations, reasoning, and workout descriptions MUST be written in this language)
 
@@ -352,7 +375,10 @@ ATHLETE PROFILE:
 - Weight: ${user?.weight || 'Unknown'} ${user?.weightUnits === 'Pounds' ? 'lbs' : 'kg'}
 - Coach Persona: ${aiSettings.aiPersona}
 - Allowed Workout Types: ${allowedTypesString} (ONLY schedule these types + Rest/Recovery)
+- Primary Sport (from recent training): ${getSportLabel(primarySport)}
 ${athleteProfileContext}
+
+${injuryContext}
 
 CURRENT FITNESS STATUS (Source of Truth):
 - CTL (Fitness): ${currentFitness.ctl.toFixed(1)}
@@ -429,7 +455,8 @@ Generate a detailed daily training plan for each week in this block (${block.dur
 - Ensure progressive overload from week 1 to ${block.durationWeeks - 1}.
 - Ensure the recovery week (if applicable) has clearly reduced volume and intensity versus prior loading weeks.
 - Quantify recovery intent in your rationale (what was reduced and why).
-- For "Ride" workouts, provide realistic TSS estimates based on duration and intensity.
+- Provide realistic TSS estimates for every workout based on duration and intensity (for runs, use HR/pace-based load).
+- **INJURIES**: Respect the "ACTIVE INJURIES & NIGGLES" above. While an ACTIVE injury with pain >= 4/10 affects a sport, the first week must not load that area in that sport: use cross-training that doesn't load it (within the allowed types where possible), reduced volume/intensity, or rest, then progress it gradually in later weeks. RECOVERING injuries: rebuild the affected sport gradually. Mention this in the week summaries.
 - Workout types: ${allowedTypesString}, Rest. DO NOT use generic types like "Active Recovery" - map recovery sessions to a light Ride/Run or Rest.
 - Start each week on a Monday.
 - Provide a summary for each week explaining the focus and volume.
@@ -444,6 +471,8 @@ ${allowedFocuses}
 
 ALLOWED BLOCK TYPES:
 ${allowedBlockTypes}
+
+${buildCoachingPrinciples(primarySport)}
 
 OUTPUT FORMAT:
 Return valid JSON matching the schema provided.`

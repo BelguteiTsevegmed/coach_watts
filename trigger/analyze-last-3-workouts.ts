@@ -1,4 +1,5 @@
 import './init'
+import { derivePrimarySport, getCoachRole } from '../server/utils/coaching/sport'
 import { logger, task } from '@trigger.dev/sdk/v3'
 import { generateStructuredAnalysis, buildWorkoutSummary } from '../server/utils/gemini'
 import { prisma } from '../server/utils/db'
@@ -43,7 +44,9 @@ function buildAnalysisPrompt(workouts: any[], user: any, timezone: string, sport
 
   const userAge = calculateAge(user?.dob)
 
-  let prompt = `You are a friendly, supportive cycling coach analyzing your athlete's recent training progression.
+  // Voice follows the sport of the workouts being analyzed (was hard-coded to cycling).
+  const coachRole = getCoachRole(derivePrimarySport(workouts))
+  let prompt = `You are a friendly, supportive ${coachRole} analyzing your athlete's recent training progression.
 
 USER PROFILE:
 - Age: ${userAge || 'Unknown'}
