@@ -16,10 +16,8 @@ export class DashboardPage {
 
   constructor(page: Page) {
     this.page = page
-    this.recommendationCard = page
-      .locator('[data-testid="recommendation-card"], .recommendation-card, header')
-      .first()
-    this.refineButton = page.getByRole('button', { name: /refine|refresh/i }).first()
+    this.recommendationCard = page.locator('[data-testid="today-session-card"]').first()
+    this.refineButton = page.getByRole('button', { name: /adjust|refine|refresh/i }).first()
     this.refineModal = page.locator('[role="dialog"]').first()
     this.refineTextarea = page.locator('textarea').first()
     this.refineSubmitButton = page
@@ -27,7 +25,7 @@ export class DashboardPage {
       .first()
     this.checkinModal = page.locator('[role="dialog"], div.fixed.inset-0').first()
     this.wellnessModal = page.locator('[role="dialog"], div.fixed.inset-0').first()
-    this.navCalendar = page.getByRole('link', { name: /calendar/i })
+    this.navCalendar = page.getByTestId('sidebar-nav').getByRole('link', { name: /^calendar$/i })
     this.navActivities = page.getByRole('link', { name: /activities/i })
     this.navFitness = page.getByRole('link', { name: /fitness|health/i })
     this.navChat = page.getByRole('link', { name: /chat/i })

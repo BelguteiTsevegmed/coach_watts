@@ -1,5 +1,5 @@
 <template>
-  <UTooltip :text="t('navbar_tasks_tooltip')" :popper="{ placement: 'bottom' }">
+  <UTooltip v-if="visible" :text="t('navbar_tasks_tooltip')" :popper="{ placement: 'bottom' }">
     <UButton
       color="neutral"
       variant="outline"
@@ -27,5 +27,13 @@
 
   const { t } = useTranslate('dashboard')
   const { activeRunCount } = useUserRunsState()
-  const { toggle } = useTriggerMonitor()
+  const { toggle, isOpen } = useTriggerMonitor()
+  const { data } = useAuth()
+
+  // Background jobs are plumbing. Athletes only see this button while the
+  // coach is actually working on something (or the panel is open); admins
+  // keep it everywhere for debugging.
+  const visible = computed(
+    () => activeRunCount.value > 0 || isOpen.value || Boolean((data.value?.user as any)?.isAdmin)
+  )
 </script>

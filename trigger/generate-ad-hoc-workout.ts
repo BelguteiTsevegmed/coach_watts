@@ -14,6 +14,14 @@ import { filterGoalsForContext } from '../server/utils/goal-context'
 import { enqueuePlannedWorkoutStructureGeneration } from '../server/utils/planned-workout-structure-trigger'
 import { autoUploadPlannedWorkoutToIntervalsIfEnabled } from '../server/utils/intervals-sync'
 import { registerTaskHandler } from '../server/utils/task-registry'
+import {
+  getAthletePrimarySport,
+  getDefaultWorkoutType,
+  getSportLabel
+} from '../server/utils/coaching/sport'
+import { buildCoachingPrinciples } from '../server/utils/coaching/principles'
+import { buildCoachRoleIntro } from '../server/utils/coaching/persona'
+import { fetchOpenInjuries, formatInjuriesForPrompt } from '../server/utils/coaching/injury-context'
 
 const adHocWorkoutSchema = {
   type: 'object',
@@ -82,6 +90,13 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
     localTime
   })
 
+  // The athlete's sport decides the default session type (was always 'Ride').
+  const [primarySport, openInjuries] = await Promise.all([
+    getAthletePrimarySport(userId),
+    fetchOpenInjuries(userId)
+  ])
+  const defaultType = getDefaultWorkoutType(primarySport)
+
   // Fetch Data
   const [todayMetric, recentWorkouts, user, athleteProfile, rawActiveGoals, sportSettings] =
     await Promise.all([
@@ -116,13 +131,13 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
           priority: true
         }
       }),
-      // Fetch settings for requested type or default to Ride
-      sportSettingsRepository.getForActivityType(userId, preferences?.type || 'Ride')
+      // Fetch settings for requested type or the athlete's own sport
+      sportSettingsRepository.getForActivityType(userId, preferences?.type || defaultType)
     ])
   const activeGoals = filterGoalsForContext(rawActiveGoals, timezone, today)
 
   // Build Context
-  let context = `Athlete: FTP ${user?.ftp || 250}W. Persona: ${user?.aiPersona || 'Supportive'}.`
+  let context = `Athlete: primary sport ${getSportLabel(primarySport)}${user?.ftp ? `, FTP ${user.ftp}W` : ''}. Persona: ${user?.aiPersona || 'Supportive'}.`
   if (todayMetric) {
     context += `\nRecovery: ${todayMetric.recoveryScore || 'Unknown'}%. Sleep: ${todayMetric.sleepHours || 0}h.`
   }
@@ -162,8 +177,10 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
       .join('\n')}`
   }
 
+  context += `\n\n${formatInjuriesForPrompt(openInjuries, { today })}`
+
   // Incorporate User Preferences
-  let goalPrompt = 'Based on recovery and recent history, create the optimal workout.'
+  let goalPrompt = `Based on recovery and recent history, create the optimal workout. Default to a ${defaultType} unless an injury or the athlete's request points elsewhere.`
   if (preferences) {
     goalPrompt = `The user has requested a specific workout:
       - Type: ${preferences.type || 'Any'}
@@ -178,7 +195,11 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
       - If recovery is good, prescribe a workout that fits the current focus or maintains fitness.`
   }
 
-  const prompt = `Design one high-quality workout prescription for this athlete for TODAY.
+  const prompt = `${buildCoachRoleIntro({
+    persona: user?.aiPersona,
+    sport: primarySport,
+    task: 'designing one high-quality workout prescription for this athlete for TODAY.'
+  })}
     
     LOCAL CONTEXT:
     - Date: ${dateStr}
@@ -199,6 +220,9 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
     - Prefer minimum effective dose over excessive load when uncertainty exists.
     - Use the athlete's defined zones/thresholds when setting intensity language.
     - Provide concise athlete-facing execution cues.
+    - If an ACTIVE injury with pain >= 4/10 affects the requested sport, prescribe a version that doesn't load the area (or the other allowed sport) and say why in the reasoning.
+
+    ${buildCoachingPrinciples(primarySport)}
     
     OUTPUT:
     JSON with title, description, type (Ride/Run), durationMinutes, targetTss, intensity, objective, executionCues, and reasoning.`

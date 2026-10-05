@@ -11,7 +11,7 @@
         variant: 'link',
         onClick: (e: Event) => e.stopPropagation()
       }"
-      class="mb-6 w-full shadow-sm transition-all duration-200"
+      class="w-full shadow-sm transition-all duration-200"
       :class="[
         { 'cursor-pointer': isShare || !!message.targetUrl },
         isAdvert

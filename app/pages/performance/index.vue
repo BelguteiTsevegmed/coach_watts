@@ -1,259 +1,117 @@
 <template>
   <UDashboardPanel id="performance">
     <template #header>
-      <UDashboardNavbar :title="t('page_title')">
+      <UDashboardNavbar :title="t('progress_title')">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
-          <div class="flex items-center gap-2">
-            <ClientOnly>
-              <DashboardTriggerMonitorButton />
-            </ClientOnly>
+          <UDropdownMenu :items="menuItems" :content="{ align: 'end' }">
             <UButton
-              icon="i-heroicons-adjustments-horizontal"
+              icon="i-heroicons-ellipsis-horizontal"
               color="neutral"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              @click="
-                () => {
-                  isPerformanceSettingsModalOpen = true
-                }
-              "
-            >
-              {{ t('nav_customize') }}
-            </UButton>
-            <UButton
-              :loading="generatingExplanations"
-              color="primary"
-              variant="solid"
-              icon="i-heroicons-sparkles"
-              size="sm"
-              class="font-bold"
-              @click="
-                () => {
-                  void generateExplanations()
-                }
-              "
-            >
-              <span class="sm:hidden">{{ t('nav_generate') }}</span>
-              <span class="hidden sm:inline">{{ t('nav_generate_insights') }}</span>
-            </UButton>
-          </div>
+              :aria-label="t('menu_label')"
+            />
+          </UDropdownMenu>
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="relative p-0 sm:p-6 space-y-4 sm:space-y-6 pb-24">
-        <PerformanceSettingsModal v-model:open="isPerformanceSettingsModalOpen" />
-        <div
-          v-if="isGarminConnected"
-          class="px-4 pt-1 sm:px-0 sm:pt-0 sm:absolute sm:right-6 sm:top-6 sm:z-10"
-        >
+      <div class="mx-auto w-full max-w-5xl space-y-4 pb-24 sm:space-y-6 sm:p-6">
+        <div v-if="isGarminConnected" class="flex justify-end px-4 pt-3 sm:px-0 sm:pt-0">
           <div class="flex items-center gap-1.5">
-            <span
-              class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
-            >
+            <span class="text-[10px] font-medium uppercase tracking-wider text-muted">
               {{ tc('attribution_garmin') }}
             </span>
             <img
               src="/images/logos/Garmin-Tag-black-high-res.png"
-              class="h-5 w-auto dark:hidden"
+              class="h-4 w-auto dark:hidden"
               alt="Garmin"
             />
             <img
               src="/images/logos/Garmin-Tag-white-high-res.png"
-              class="hidden h-5 w-auto dark:block"
+              class="hidden h-4 w-auto dark:block"
               alt="Garmin"
             />
           </div>
         </div>
 
-        <!-- Dashboard Branding -->
-        <div class="px-4 sm:px-0">
-          <h1 class="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
-            {{ t('branding_title') }}
-          </h1>
-          <p
-            class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em] mt-1 italic"
-          >
-            {{ t('branding_subtitle') }}
-          </p>
-        </div>
-
-        <!-- 1. Activity Highlights (Big Numbers) -->
-        <div v-if="sectionSettings.highlights?.visible !== false" class="space-y-4">
-          <div
-            class="flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-0"
-          >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400">
-              {{ t('highlights_header') }}
-            </h2>
-            <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <USelectMenu
-                v-model="highlightsScope"
-                :items="workoutScopeOptions"
-                value-key="value"
-                label-key="label"
-                class="w-full sm:w-52"
-                size="xs"
-                color="neutral"
-                variant="outline"
-              />
-              <USelect
-                v-model="highlightsPeriod"
-                :items="periodOptions"
-                size="xs"
-                class="w-full sm:w-36"
-                color="neutral"
-                variant="outline"
-              />
-            </div>
-          </div>
-          <ActivityHighlights
-            :period="highlightsPeriod"
-            :sport="scopeToSport(highlightsScope)"
-            :tags="scopeToTags(highlightsScope)"
-          />
-        </div>
-
-        <!-- 2. Athlete Profile Scores -->
-        <div v-if="sectionSettings.athleteProfile?.visible !== false" class="space-y-4">
-          <div class="flex items-center justify-between px-4 sm:px-0">
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400">
-              {{ t('profile_header') }}
-            </h2>
-            <UBadge
-              v-if="profileData?.scores?.lastUpdated"
-              color="neutral"
-              variant="soft"
-              size="sm"
-              class="font-black uppercase tracking-widest text-[9px]"
-            >
-              {{ t('profile_sync', { date: formatDateLocal(profileData.scores.lastUpdated) }) }}
-            </UBadge>
-          </div>
-
-          <div v-if="profileLoading" class="flex justify-center py-12">
-            <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-primary" />
-          </div>
-
-          <div v-else-if="profileData" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <ScoreCard
-              :title="t('profile_fitness_title')"
-              :score="profileData.scores?.currentFitness"
-              :explanation="
-                profileData.scores?.currentFitnessExplanationJson
-                  ? t('profile_click_detailed')
-                  : profileData.scores?.currentFitnessExplanation
-              "
-              icon="i-heroicons-bolt"
-              color="blue"
-              @click="
-                (data) =>
-                  openModalWithStructured(data, profileData?.scores?.currentFitnessExplanationJson)
-              "
-            />
-            <ScoreCard
-              :title="t('profile_recovery_title')"
-              :score="profileData.scores?.recoveryCapacity"
-              :explanation="
-                profileData.scores?.recoveryCapacityExplanationJson
-                  ? t('profile_click_detailed')
-                  : profileData.scores?.recoveryCapacityExplanation
-              "
-              icon="i-heroicons-heart"
-              color="green"
-              @click="
-                (data) =>
-                  openModalWithStructured(
-                    data,
-                    profileData?.scores?.recoveryCapacityExplanationJson
-                  )
-              "
-            />
-            <ScoreCard
-              v-if="nutritionEnabled"
-              :title="t('profile_nutrition_title')"
-              :score="profileData.scores?.nutritionCompliance"
-              :explanation="
-                profileData.scores?.nutritionComplianceExplanationJson
-                  ? t('profile_click_detailed')
-                  : profileData.scores?.nutritionComplianceExplanation
-              "
-              icon="i-heroicons-cake"
-              color="purple"
-              @click="
-                (data) =>
-                  openModalWithStructured(
-                    data,
-                    profileData?.scores?.nutritionComplianceExplanationJson
-                  )
-              "
-            />
-            <ScoreCard
-              :title="t('profile_consistency_title')"
-              :score="profileData.scores?.trainingConsistency"
-              :explanation="
-                profileData.scores?.trainingConsistencyExplanationJson
-                  ? t('profile_click_detailed')
-                  : profileData.scores?.trainingConsistencyExplanation
-              "
-              icon="i-heroicons-calendar"
-              color="orange"
-              @click="
-                (data) =>
-                  openModalWithStructured(
-                    data,
-                    profileData?.scores?.trainingConsistencyExplanationJson
-                  )
-              "
-            />
-          </div>
-        </div>
-
-        <!-- Personal Bests Summary -->
-        <div
-          v-if="sectionSettings.records?.visible !== false && hasPersonalBests"
-          class="space-y-4"
-        >
-          <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-4 sm:px-0">
-            {{ t('bests_header') }}
-          </h2>
-          <PerformanceBestsSummary :personal-bests="profileData?.personalBests || []" />
-        </div>
-
-        <!-- Score Detail Modal -->
-        <ScoreDetailModal
-          v-model="showModal"
-          :title="modalData.title"
-          :score="modalData.score"
-          :explanation="modalData.explanation"
-          :analysis-data="modalData.analysisData"
-          :color="modalData.color"
+        <!-- 1. Headline: how is training going, in plain words -->
+        <PerformanceProgressHeadline
+          :loading="pmcLoading || workoutsLoading"
+          :fitness="fitnessTrend"
+          :sessions="sessionRate"
+          :current-tsb="currentTsb"
+          :window-weeks="HEADLINE_WEEKS"
         />
 
-        <!-- 3. PMC Chart (Performance Management Chart) -->
-        <div v-if="sectionSettings.pmc?.visible !== false && nutritionEnabled" class="space-y-4">
-          <PerformancePmcCard
-            v-model:period="pmcPeriod"
-            :period-options="pmcPeriodOptions"
-            :settings="chartSettings.pmc"
-            @settings="
-              openChartSettings('pmc', t('pmc_title'), {
-                max: 150,
-                step: 5,
-                showOverlays: false,
-                showWellnessEventsOption: true
-              })
-            "
-          />
-        </div>
+        <!-- 2. Goal progress -->
+        <PerformanceGoalProgress
+          v-if="sections.goals.visible"
+          :goals="goals"
+          :loading="goalsLoading"
+        />
 
-        <!-- 4. Power Duration Curve -->
-        <div v-if="sectionSettings.powerCurve?.visible !== false" class="space-y-4">
+        <!-- 3. Fitness, fatigue & form -->
+        <PerformancePmcCard
+          v-if="sections.pmc.visible"
+          v-model:period="pmcPeriod"
+          :period-options="pmcPeriodOptions"
+          :settings="chartSettings.pmc"
+          @settings="
+            openChartSettings('pmc', t('pmc_card_title'), {
+              max: 150,
+              step: 5,
+              showOverlays: false,
+              showWellnessEventsOption: true
+            })
+          "
+        />
+
+        <!-- 4. Training volume & consistency -->
+        <PerformanceTrainingVolumeCard
+          v-if="sections.volume.visible"
+          :workouts="recentWorkouts"
+          :loading="workoutsLoading"
+          :weeks="VOLUME_WEEKS"
+          :time-zone="timezone"
+          :distance-unit="distanceUnit"
+        />
+
+        <!-- 5. Intensity distribution (~80/20) -->
+        <PerformanceIntensityDistributionCard
+          v-if="sections.distribution.visible"
+          v-model:period="distributionPeriod"
+          v-model:scope="distributionScope"
+          :period-options="distributionPeriodOptions"
+          :scope-options="workoutScopeOptions"
+          :sport="scopeToSport(distributionScope)"
+          :tags="scopeToTags(distributionScope)"
+          :settings="chartSettings.distribution"
+          @settings="
+            openChartSettings('distribution', t('intensity_card_title'), {
+              unit: 'h',
+              max: 50,
+              step: 1,
+              showOverlays: false
+            })
+          "
+        />
+
+        <!-- 6. Personal bests -->
+        <PerformanceBestsSummary
+          v-if="sections.records.visible"
+          :personal-bests="profileData?.personalBests || []"
+          :show-power="hasPower"
+        />
+
+        <!-- 7. Power-based cards: only for athletes who train with power -->
+        <template v-if="hasPower">
           <PerformancePowerCurveCard
+            v-if="sections.powerCurve.visible"
             v-model:period="powerCurvePeriod"
             v-model:scope="powerCurveScope"
             :period-options="periodOptions"
@@ -262,7 +120,7 @@
             :tags="scopeToTags(powerCurveScope)"
             :settings="chartSettings.powerCurve"
             @settings="
-              openChartSettings('powerCurve', t('power_curve_title'), {
+              openChartSettings('powerCurve', t('power_curve_card_title'), {
                 unit: 'W',
                 max: 1500,
                 step: 50,
@@ -271,31 +129,9 @@
               })
             "
           />
-        </div>
 
-        <!-- 5. Efficiency & Decoupling -->
-        <div v-if="sectionSettings.efficiency?.visible !== false" class="space-y-4">
-          <PerformanceEfficiencyCard
-            v-model:period="efficiencyPeriod"
-            v-model:scope="efficiencyScope"
-            :period-options="periodOptions"
-            :scope-options="workoutScopeOptions"
-            :sport="scopeToSport(efficiencyScope)"
-            :tags="scopeToTags(efficiencyScope)"
-            :settings="chartSettings.efficiency"
-            @settings="
-              openChartSettings('efficiency', t('efficiency_title'), {
-                max: 5,
-                step: 0.1,
-                showOverlays: false
-              })
-            "
-          />
-        </div>
-
-        <!-- 7. FTP Evolution Chart -->
-        <div v-if="sectionSettings.ftp?.visible !== false" class="space-y-4">
           <PerformanceFtpEvolutionCard
+            v-if="sections.ftp.visible"
             v-model:period="ftpPeriod"
             v-model:scope="ftpScope"
             :period-options="ftpPeriodOptions"
@@ -304,7 +140,7 @@
             :tags="scopeToTags(ftpScope)"
             :settings="chartSettings.ftp"
             @settings="
-              openChartSettings('ftp', t('ftp_evolution_title'), {
+              openChartSettings('ftp', t('ftp_card_title'), {
                 unit: 'W',
                 max: 500,
                 step: 10,
@@ -313,361 +149,104 @@
               })
             "
           />
-        </div>
 
-        <!-- 8. Training Intensity Distribution -->
-        <div v-if="sectionSettings.distribution?.visible !== false" class="space-y-4">
-          <PerformanceIntensityDistributionCard
-            v-model:period="distributionPeriod"
-            v-model:scope="distributionScope"
-            :period-options="distributionPeriodOptions"
+          <PerformanceEfficiencyCard
+            v-if="sections.efficiency.visible"
+            v-model:period="efficiencyPeriod"
+            v-model:scope="efficiencyScope"
+            :period-options="periodOptions"
             :scope-options="workoutScopeOptions"
-            :sport="scopeToSport(distributionScope)"
-            :tags="scopeToTags(distributionScope)"
-            :settings="chartSettings.distribution"
+            :sport="scopeToSport(efficiencyScope)"
+            :tags="scopeToTags(efficiencyScope)"
+            :settings="chartSettings.efficiency"
             @settings="
-              openChartSettings('distribution', t('intensity_dist_title'), {
-                unit: 'h',
-                max: 50,
-                step: 1,
+              openChartSettings('efficiency', t('efficiency_card_title'), {
+                max: 5,
+                step: 0.1,
                 showOverlays: false
               })
             "
           />
-        </div>
+        </template>
 
-        <!-- 9. Workout Scores -->
-        <div v-if="sectionSettings.workoutScores?.visible !== false" class="space-y-4">
-          <div
-            class="flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-0"
-          >
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">
-              {{ t('workout_header') }}
-            </h2>
-            <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <USelectMenu
-                v-model="workoutScope"
-                :items="workoutScopeOptions"
-                value-key="value"
-                label-key="label"
-                class="w-full sm:w-52"
-                size="xs"
-                color="neutral"
-                variant="outline"
+        <!-- Go deeper: link out instead of duplicating other pages -->
+        <nav class="px-4 sm:px-0" :aria-label="t('more_detail_label')">
+          <h2 class="mb-2 text-sm font-semibold text-highlighted">{{ t('more_detail_title') }}</h2>
+          <ul class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <li v-for="link in detailLinks" :key="link.to">
+              <NuxtLink
+                :to="link.to"
+                class="flex items-center gap-3 rounded-lg border border-default px-3 py-2.5 transition-colors hover:bg-elevated/60"
+              >
+                <UIcon :name="link.icon" class="size-5 shrink-0 text-muted" />
+                <span class="min-w-0 flex-1">
+                  <span class="block text-sm font-medium text-highlighted">{{ link.label }}</span>
+                  <span class="block truncate text-xs text-muted">{{ link.description }}</span>
+                </span>
+                <UIcon name="i-heroicons-chevron-right" class="size-4 shrink-0 text-dimmed" />
+              </NuxtLink>
+            </li>
+          </ul>
+        </nav>
+
+        <!-- 8. Coach scores (beta): AI ratings, collapsed by default -->
+        <section v-if="showCoachScores" class="space-y-4">
+          <UCard :ui="mobileListCardUi">
+            <button
+              type="button"
+              class="flex w-full items-center justify-between gap-3 text-left"
+              :aria-expanded="coachScoresOpen"
+              aria-controls="coach-scores-panel"
+              @click="
+                () => {
+                  toggleCoachScores()
+                }
+              "
+            >
+              <span class="min-w-0">
+                <span class="flex items-center gap-2">
+                  <span class="text-base font-semibold text-highlighted">
+                    {{ t('coach_scores_title') }}
+                  </span>
+                  <UBadge color="neutral" variant="soft" size="sm">
+                    {{ t('coach_scores_beta') }}
+                  </UBadge>
+                </span>
+                <span class="mt-1 block text-sm text-muted">{{ t('coach_scores_summary') }}</span>
+              </span>
+              <UIcon
+                name="i-heroicons-chevron-down"
+                class="size-5 shrink-0 text-muted transition-transform duration-200"
+                :class="coachScoresOpen ? 'rotate-180' : ''"
               />
-              <USelect
-                v-model="selectedPeriod"
-                :items="periodOptions"
-                class="w-full sm:w-36"
-                size="xs"
-                color="neutral"
-                variant="outline"
-              />
-            </div>
+            </button>
+          </UCard>
+
+          <div v-if="coachScoresMounted" v-show="coachScoresOpen" id="coach-scores-panel">
+            <PerformanceCoachScores
+              :profile-scores="profileData?.scores"
+              :nutrition-enabled="nutritionEnabled"
+              :sections="{
+                athleteProfile: sections.athleteProfile.visible,
+                workoutScores: sections.workoutScores.visible,
+                nutritionScores: sections.nutritionScores.visible
+              }"
+              :chart-settings="{
+                performance: chartSettings.performance,
+                nutrition: chartSettings.nutrition
+              }"
+              :scope-options="workoutScopeOptions"
+              :period-options="periodOptions"
+              @settings="(key, title, options) => openChartSettings(key, title, options)"
+            />
           </div>
+        </section>
 
-          <div v-if="workoutLoading" class="flex justify-center py-12">
-            <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-primary" />
-          </div>
-
-          <div v-else-if="workoutData" class="space-y-6">
-            <!-- Score Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <ScoreCard
-                :title="t('workout_overall_title')"
-                :score="workoutData.summary?.avgOverall"
-                icon="i-heroicons-star"
-                color="yellow"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    workoutData &&
-                    openWorkoutModal(
-                      t('workout_overall_full'),
-                      workoutData.summary?.avgOverall,
-                      'yellow'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('workout_technical_title')"
-                :score="workoutData.summary?.avgTechnical"
-                icon="i-heroicons-cog"
-                color="blue"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    workoutData &&
-                    openWorkoutModal(
-                      t('workout_technical_full'),
-                      workoutData.summary?.avgTechnical,
-                      'blue'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('workout_effort_title')"
-                :score="workoutData.summary?.avgEffort"
-                icon="i-heroicons-fire"
-                color="red"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    workoutData &&
-                    openWorkoutModal(
-                      t('workout_effort_full'),
-                      workoutData.summary?.avgEffort,
-                      'red'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('workout_pacing_title')"
-                :score="workoutData.summary?.avgPacing"
-                icon="i-heroicons-chart-bar"
-                color="green"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    workoutData &&
-                    openWorkoutModal(
-                      t('workout_pacing_full'),
-                      workoutData.summary?.avgPacing,
-                      'green'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('workout_execution_title')"
-                :score="workoutData.summary?.avgExecution"
-                icon="i-heroicons-check-circle"
-                color="purple"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    workoutData &&
-                    openWorkoutModal(
-                      t('workout_execution_full'),
-                      workoutData.summary?.avgExecution,
-                      'purple'
-                    )
-                "
-              />
-            </div>
-
-            <!-- Trend Chart and Radar Chart Side by Side -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <!-- Score Trends (2/3 width) -->
-              <div class="lg:col-span-2 space-y-4">
-                <PerformanceScoreTrajectoryCard
-                  :title="t('trajectory_workout_title')"
-                  :data="workoutData.workouts"
-                  type="workout"
-                  :settings="chartSettings.performance"
-                  @settings="
-                    openChartSettings('performance', t('trajectory_workout_title'), {
-                      max: 10,
-                      step: 1,
-                      showOverlays: false
-                    })
-                  "
-                />
-              </div>
-
-              <!-- Current Balance (1/3 width) -->
-              <div class="lg:col-span-1 space-y-4">
-                <UCard
-                  :ui="{
-                    root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
-                    body: 'p-4 sm:p-6'
-                  }"
-                >
-                  <template #header>
-                    <h3 class="text-base font-black uppercase tracking-widest text-gray-400">
-                      {{ t('execution_balance_header') }}
-                    </h3>
-                  </template>
-                  <div class="h-[320px]">
-                    <ClientOnly>
-                      <RadarChart
-                        :scores="{
-                          overall: workoutData.summary?.avgOverall,
-                          technical: workoutData.summary?.avgTechnical,
-                          effort: workoutData.summary?.avgEffort,
-                          pacing: workoutData.summary?.avgPacing,
-                          execution: workoutData.summary?.avgExecution
-                        }"
-                        type="workout"
-                      />
-                    </ClientOnly>
-                  </div>
-                </UCard>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 10. Nutrition Scores -->
-        <div
-          v-if="sectionSettings.nutritionScores?.visible !== false && nutritionEnabled"
-          class="space-y-4"
-        >
-          <div class="px-1">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">
-              {{ t('nutrition_header') }}
-            </h2>
-          </div>
-
-          <div v-if="nutritionLoading" class="flex justify-center py-12">
-            <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-primary-500" />
-          </div>
-
-          <div v-else-if="nutritionData" class="space-y-6">
-            <!-- Score Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <ScoreCard
-                :title="t('workout_overall_title')"
-                :score="nutritionData.summary?.avgOverall"
-                icon="i-heroicons-star"
-                color="yellow"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    nutritionData &&
-                    openNutritionModal(
-                      t('nutrition_overall_full'),
-                      nutritionData.summary?.avgOverall,
-                      'yellow'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('nutrition_macro_title')"
-                :score="nutritionData.summary?.avgMacroBalance"
-                icon="i-heroicons-scale"
-                color="blue"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    nutritionData &&
-                    openNutritionModal(
-                      t('nutrition_macro_full'),
-                      nutritionData.summary?.avgMacroBalance,
-                      'blue'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('nutrition_quality_title')"
-                :score="nutritionData.summary?.avgQuality"
-                icon="i-heroicons-sparkles"
-                color="green"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    nutritionData &&
-                    openNutritionModal(
-                      t('nutrition_quality_full'),
-                      nutritionData.summary?.avgQuality,
-                      'green'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('nutrition_adherence_title')"
-                :score="nutritionData.summary?.avgAdherence"
-                icon="i-heroicons-check-badge"
-                color="purple"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    nutritionData &&
-                    openNutritionModal(
-                      t('nutrition_adherence_full'),
-                      nutritionData.summary?.avgAdherence,
-                      'purple'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('nutrition_hydration_title')"
-                :score="nutritionData.summary?.avgHydration"
-                icon="i-heroicons-beaker"
-                color="cyan"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    nutritionData &&
-                    openNutritionModal(
-                      t('nutrition_hydration_full'),
-                      nutritionData.summary?.avgHydration,
-                      'cyan'
-                    )
-                "
-              />
-            </div>
-
-            <!-- Trend Chart and Radar Chart Side by Side -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <!-- Score Trends (2/3 width) -->
-              <div class="lg:col-span-2 space-y-4">
-                <PerformanceScoreTrajectoryCard
-                  :title="t('trajectory_nutrition_title')"
-                  :data="nutritionData.nutrition"
-                  type="nutrition"
-                  :settings="chartSettings.nutrition"
-                  @settings="
-                    openChartSettings('nutrition', t('trajectory_nutrition_title'), {
-                      max: 10,
-                      step: 1,
-                      showOverlays: false
-                    })
-                  "
-                />
-              </div>
-
-              <!-- Current Balance (1/3 width) -->
-              <div class="lg:col-span-1 space-y-4">
-                <UCard
-                  :ui="{
-                    root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
-                    body: 'p-4 sm:p-6'
-                  }"
-                >
-                  <template #header>
-                    <h3 class="text-base font-black uppercase tracking-widest text-gray-400">
-                      {{ t('metabolic_balance_header') }}
-                    </h3>
-                  </template>
-                  <div class="h-[320px]">
-                    <ClientOnly>
-                      <RadarChart
-                        :scores="{
-                          overall: nutritionData.summary?.avgOverall,
-                          macroBalance: nutritionData.summary?.avgMacroBalance,
-                          quality: nutritionData.summary?.avgQuality,
-                          adherence: nutritionData.summary?.avgAdherence,
-                          hydration: nutritionData.summary?.avgHydration
-                        }"
-                        type="nutrition"
-                      />
-                    </ClientOnly>
-                  </div>
-                </UCard>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PerformanceSettingsModal
+          v-model:open="isPerformanceSettingsModalOpen"
+          :show-power-sections="hasPower"
+          :show-nutrition="nutritionEnabled"
+        />
 
         <ChartSettingsModal
           v-if="activeMetricSettings"
@@ -692,49 +271,81 @@
 
 <script setup lang="ts">
   import { useTranslate } from '@tolgee/vue'
-  import ActivityHighlights from '~/components/ActivityHighlights.vue'
-  import PowerCurveChart from '~/components/PowerCurveChart.vue'
-  import EfficiencyTrendChart from '~/components/EfficiencyTrendChart.vue'
-  import ReadinessCorrelationChart from '~/components/ReadinessCorrelationChart.vue'
   import ChartSettingsModal from '~/components/charts/ChartSettingsModal.vue'
-  import PerformanceSettingsModal from '~/components/performance/PerformanceSettingsModal.vue'
-  import PerformancePmcCard from '~/components/performance/PerformancePmcCard.vue'
-  import PerformancePowerCurveCard from '~/components/performance/PerformancePowerCurveCard.vue'
+  import PerformanceBestsSummary from '~/components/performance/PerformanceBestsSummary.vue'
+  import PerformanceCoachScores from '~/components/performance/PerformanceCoachScores.vue'
   import PerformanceEfficiencyCard from '~/components/performance/PerformanceEfficiencyCard.vue'
   import PerformanceFtpEvolutionCard from '~/components/performance/PerformanceFtpEvolutionCard.vue'
+  import PerformanceGoalProgress from '~/components/performance/PerformanceGoalProgress.vue'
   import PerformanceIntensityDistributionCard from '~/components/performance/PerformanceIntensityDistributionCard.vue'
-  import PerformanceScoreTrajectoryCard from '~/components/performance/PerformanceScoreTrajectoryCard.vue'
-  import PerformanceBestsSummary from '~/components/performance/PerformanceBestsSummary.vue'
-  import ChartDataLabels from 'chartjs-plugin-datalabels'
+  import PerformancePmcCard from '~/components/performance/PerformancePmcCard.vue'
+  import PerformancePowerCurveCard from '~/components/performance/PerformancePowerCurveCard.vue'
+  import PerformanceProgressHeadline from '~/components/performance/PerformanceProgressHeadline.vue'
+  import PerformanceSettingsModal from '~/components/performance/PerformanceSettingsModal.vue'
+  import PerformanceTrainingVolumeCard from '~/components/performance/PerformanceTrainingVolumeCard.vue'
+  import { mobileListCardUi } from '~/utils/mobile-surface-ui'
+  import { addDaysToKey } from '~/utils/date-keys'
+  import {
+    computeFitnessTrend,
+    hasPowerData,
+    mondayOfKey,
+    resolveSectionVisibility,
+    sessionsPerWeek,
+    type ProgressGoal,
+    type ProgressWorkout
+  } from '~/utils/progress-summary'
+
+  definePageMeta({
+    middleware: 'auth',
+    layout: 'default'
+  })
+
+  /** The headline compares the last 6 weeks; volume shows the last 12. */
+  const HEADLINE_WEEKS = 6
+  const VOLUME_WEEKS = 12
 
   const { t } = useTranslate('performance')
   const { t: tc } = useTranslate('common')
 
   const userStore = useUserStore()
   const integrationStore = useIntegrationStore()
-  const theme = useTheme()
-  const { formatDate: baseFormatDate } = useFormat()
-  const isGarminConnected = computed(() => {
-    return (
-      integrationStore.integrationStatus?.integrations?.some((i: any) => i.provider === 'garmin') ??
-      false
-    )
+  const { timezone, getUserLocalDate } = useFormat()
+
+  useHead({
+    title: () => t.value('progress_title'),
+    meta: [
+      {
+        name: 'description',
+        content: () => t.value('progress_meta_description')
+      }
+    ]
   })
 
-  const activeMetricSettings = ref<{
-    key: string
-    title: string
-    unit?: string
-    max?: number
-    step?: number
-    showOverlays?: boolean
-    showFreshnessBandsOption?: boolean
-    showEstimatedFtpOption?: boolean
-    showWellnessEventsOption?: boolean
-    defaultType?: 'line' | 'bar'
-  } | null>(null)
+  const isGarminConnected = computed(
+    () =>
+      integrationStore.integrationStatus?.integrations?.some((i: any) => i.provider === 'garmin') ??
+      false
+  )
 
-  const defaultChartSettings: any = {
+  const nutritionEnabled = computed(
+    () =>
+      userStore.profile?.nutritionTrackingEnabled !== false &&
+      userStore.user?.nutritionTrackingEnabled !== false
+  )
+
+  const distanceUnit = computed<'km' | 'mi'>(() =>
+    userStore.profile?.distanceUnits === 'Miles' ? 'mi' : 'km'
+  )
+
+  // ---------------------------------------------------------------------------
+  // Section visibility & chart settings (both user-customisable)
+  // ---------------------------------------------------------------------------
+
+  const sections = computed(() =>
+    resolveSectionVisibility(userStore.user?.dashboardSettings?.performanceSections)
+  )
+
+  const defaultChartSettings: Record<string, Record<string, unknown>> = {
     pmc: {
       smooth: true,
       yScale: 'dynamic',
@@ -759,87 +370,58 @@
 
   const chartSettings = computed(() => {
     const userSettings = userStore.user?.dashboardSettings?.performanceCharts || {}
-    const merged: any = {}
+    const merged: Record<string, any> = {}
     for (const key in defaultChartSettings) {
-      merged[key] = {
-        ...defaultChartSettings[key],
-        ...(userSettings[key] || {})
-      }
+      merged[key] = { ...defaultChartSettings[key], ...(userSettings[key] || {}) }
     }
     return merged
   })
 
-  const defaultSectionSettings = {
-    highlights: { visible: true },
-    athleteProfile: { visible: true },
-    records: { visible: true },
-    pmc: { visible: true },
-    powerCurve: { visible: true },
-    efficiency: { visible: true },
-    ftp: { visible: true },
-    distribution: { visible: true },
-    workoutScores: { visible: true },
-    nutritionScores: { visible: true }
-  }
+  const activeMetricSettings = ref<{
+    key: string
+    title: string
+    unit?: string
+    max?: number
+    step?: number
+    showOverlays?: boolean
+    showFreshnessBandsOption?: boolean
+    showEstimatedFtpOption?: boolean
+    showWellnessEventsOption?: boolean
+    defaultType?: 'line' | 'bar'
+  } | null>(null)
 
-  const sectionSettings = computed(() => {
-    const userSections = userStore.user?.dashboardSettings?.performanceSections || {}
-    const merged: any = {}
-    for (const key in defaultSectionSettings) {
-      merged[key] = {
-        ...defaultSectionSettings[key as keyof typeof defaultSectionSettings],
-        ...(userSections[key] || {})
-      }
-    }
-    return merged
-  })
-
-  function openChartSettings(key: string, title: string, options: any = {}) {
+  function openChartSettings(key: string, title: string, options: Record<string, unknown> = {}) {
     activeMetricSettings.value = { key, title, ...options }
   }
 
-  definePageMeta({
-    middleware: 'auth',
-    layout: 'default'
-  })
-  const nutritionEnabled = computed(
-    () =>
-      userStore.profile?.nutritionTrackingEnabled !== false &&
-      userStore.user?.nutritionTrackingEnabled !== false
+  const isPerformanceSettingsModalOpen = ref(false)
+
+  // ---------------------------------------------------------------------------
+  // Data
+  // ---------------------------------------------------------------------------
+
+  interface AthleteProfile {
+    personalBests?: Array<{
+      id?: string
+      type: string
+      category: string
+      value: number
+      unit: string
+      date: string
+    }>
+    scores?: Record<string, any> & { lastUpdated?: string }
+  }
+
+  const trainingLoadDisplayMode = computed(
+    () => userStore.user?.dashboardSettings?.trainingLoad?.displayMode || 'adjusted'
   )
 
-  useHead({
-    title: 'Performance Scores',
-    meta: [
-      {
-        name: 'description',
-        content:
-          'Detailed analysis of your athletic performance, including FTP evolution, training load, nutrition quality, and workout execution.'
-      },
-      { property: 'og:title', content: 'Performance Scores | Coach Watts' },
-      {
-        property: 'og:description',
-        content:
-          'Detailed analysis of your athletic performance, including FTP evolution, training load, nutrition quality, and workout execution.'
-      }
-    ]
-  })
-
-  const selectedPeriod = ref<number | string>(30)
-  const highlightsPeriod = ref<number | string>(30)
-  const highlightsScope = ref<string>('all')
-  const efficiencyPeriod = ref<number | string>(90)
-  const efficiencyScope = ref<string>('all')
-  const readinessPeriod = ref<number | string>(30)
-  const powerCurvePeriod = ref<number | string>(90)
-  const powerCurveScope = ref<string>('all')
-  const workoutScope = ref<string>('all')
-  const scopeToSport = (scope: string) =>
-    scope === 'all' || scope.startsWith('tag:') ? 'all' : scope
-  const scopeToTags = (scope: string) => (scope.startsWith('tag:') ? [scope.slice(4)] : [])
+  // Enough history for 12 Monday–Sunday weeks (+1 day of time-zone slack).
+  const todayKey = getUserLocalDate().toISOString().slice(0, 10)
+  const workoutsStartDate = `${addDaysToKey(mondayOfKey(todayKey), -7 * (VOLUME_WEEKS - 1) - 1)}T00:00:00.000Z`
 
   // These requests are independent; start them together instead of creating a waterfall.
-  const [sportsResult, workoutTagsResult, profileResult, workoutResult, nutritionResult] =
+  const [sportsResult, tagsResult, profileResult, pmcResult, goalsResult, workoutsResult] =
     await Promise.all([
       useAsyncData<string[]>('workouts-sports', () => ($fetch as any)('/api/workouts/sports')),
       useAsyncData<Array<{ value: string; count: number }>>('workouts-tags', () =>
@@ -848,67 +430,83 @@
       useAsyncData<AthleteProfile>('athlete-profile', () =>
         ($fetch as any)('/api/scores/athlete-profile')
       ),
-      useAsyncData(
-        'workout-trends',
+      useAsyncData<any>(
+        'progress-pmc-summary',
         () =>
-          ($fetch as any)('/api/scores/workout-trends', {
+          ($fetch as any)('/api/performance/pmc', {
             query: {
-              days: selectedPeriod.value,
-              sport: scopeToSport(workoutScope.value),
-              tags: scopeToTags(workoutScope.value).join(',')
+              days: String(HEADLINE_WEEKS * 7),
+              displayMode: trainingLoadDisplayMode.value
             }
           }),
-        { watch: [selectedPeriod, workoutScope] }
+        { watch: [trainingLoadDisplayMode] }
       ),
-      useAsyncData(
-        'nutrition-trends',
-        () =>
-          ($fetch as any)('/api/scores/nutrition-trends', {
-            query: {
-              days: selectedPeriod.value
-            }
-          }),
-        { watch: [selectedPeriod] }
+      useAsyncData<{ goals?: ProgressGoal[] }>('progress-goals', () =>
+        ($fetch as any)('/api/goals')
+      ),
+      useAsyncData<ProgressWorkout[]>('progress-recent-workouts', () =>
+        ($fetch as any)('/api/workouts', {
+          query: { startDate: workoutsStartDate, limit: 500 }
+        })
       )
     ])
 
-  const { data: sportsData } = sportsResult as any
-  const { data: workoutTagsData } = workoutTagsResult as any
-  const sportOptions = computed(() => {
-    const options = [{ label: t.value('highlights_all_sports'), value: 'all' }]
-    if (sportsData.value) {
-      sportsData.value.forEach((sport: string) => {
-        options.push({ label: sport, value: sport })
-      })
-    }
-    return options
-  })
+  const { data: sportsData } = sportsResult
+  const { data: workoutTagsData } = tagsResult
+  const { data: profileData } = profileResult
+  const { data: pmcData, pending: pmcLoading } = pmcResult
+  const { data: goalsData, pending: goalsLoading } = goalsResult
+  const { data: workoutsData, pending: workoutsLoading } = workoutsResult
 
-  const availableWorkoutTags = computed(() =>
-    (workoutTagsData.value || []).map((tag: any) => ({
-      label: `${tag.value} (${tag.count})`,
-      value: tag.value
-    }))
+  const goals = computed(() => goalsData.value?.goals || [])
+  const recentWorkouts = computed(() => workoutsData.value || [])
+
+  const fitnessTrend = computed(() =>
+    pmcData.value?.data
+      ? computeFitnessTrend(pmcData.value.data, { currentCtl: pmcData.value.summary?.currentCTL })
+      : null
   )
+  const currentTsb = computed<number | null>(() => {
+    const tsb = pmcData.value?.summary?.currentTSB
+    return typeof tsb === 'number' ? tsb : null
+  })
+  const sessionRate = computed(() =>
+    workoutsData.value
+      ? sessionsPerWeek(recentWorkouts.value, {
+          days: HEADLINE_WEEKS * 7,
+          timeZone: timezone.value
+        })
+      : null
+  )
+
+  // FTP, W/kg and power charts are hidden unless the athlete has power data.
+  const hasPower = computed(() =>
+    hasPowerData(recentWorkouts.value, profileData.value?.personalBests || [])
+  )
+
+  // ---------------------------------------------------------------------------
+  // Scope & period selectors
+  // ---------------------------------------------------------------------------
+
+  const scopeToSport = (scope: string) =>
+    scope === 'all' || scope.startsWith('tag:') ? 'all' : scope
+  const scopeToTags = (scope: string) => (scope.startsWith('tag:') ? [scope.slice(4)] : [])
 
   const workoutScopeOptions = computed(() => {
     const groups: Array<Array<{ label: string; value?: string; type?: 'label' }>> = [
       [
-        { label: 'Sports', type: 'label' },
-        ...sportOptions.value.map((option) => ({ label: option.label, value: option.value }))
+        { label: t.value('scope_group_sports'), type: 'label' },
+        { label: t.value('highlights_all_sports'), value: 'all' },
+        ...(sportsData.value || []).map((sport) => ({ label: sport, value: sport }))
       ]
     ]
-
-    if (availableWorkoutTags.value.length > 0) {
+    const tags = workoutTagsData.value || []
+    if (tags.length > 0) {
       groups.push([
-        { label: 'Tags', type: 'label' },
-        ...availableWorkoutTags.value.map((tag: any) => ({
-          label: tag.label,
-          value: `tag:${tag.value}`
-        }))
+        { label: t.value('scope_group_tags'), type: 'label' },
+        ...tags.map((tag) => ({ label: `${tag.value} (${tag.count})`, value: `tag:${tag.value}` }))
       ])
     }
-
     return groups
   })
 
@@ -931,17 +529,6 @@
     { label: t.value('period_all_time'), value: 3650 }
   ])
 
-  const ftpPeriod = ref<number | string>(12)
-  const ftpScope = ref<string>('all')
-  const ftpPeriodOptions = computed(() => [
-    { label: t.value('period_3_months'), value: 3 },
-    { label: t.value('period_6_months'), value: 6 },
-    { label: t.value('period_12_months'), value: 12 },
-    { label: t.value('period_24_months'), value: 24 },
-    { label: t.value('period_ytd'), value: 'YTD' },
-    { label: t.value('period_all_time'), value: 3650 }
-  ])
-
   const distributionPeriod = ref<number | string>(12)
   const distributionScope = ref<string>('all')
   const distributionPeriodOptions = computed(() => [
@@ -953,340 +540,83 @@
     { label: t.value('period_all_time'), value: 3650 }
   ])
 
-  const hasPersonalBests = computed(() => {
-    return (profileData.value?.personalBests?.length || 0) > 0
-  })
+  const powerCurvePeriod = ref<number | string>(90)
+  const powerCurveScope = ref<string>('all')
+  const efficiencyPeriod = ref<number | string>(90)
+  const efficiencyScope = ref<string>('all')
+  const ftpPeriod = ref<number | string>(12)
+  const ftpScope = ref<string>('all')
+  const ftpPeriodOptions = computed(() => [
+    { label: t.value('period_3_months'), value: 3 },
+    { label: t.value('period_6_months'), value: 6 },
+    { label: t.value('period_12_months'), value: 12 },
+    { label: t.value('period_24_months'), value: 24 },
+    { label: t.value('period_ytd'), value: 'YTD' },
+    { label: t.value('period_all_time'), value: 3650 }
+  ])
 
-  interface AthleteProfile {
-    personalBests?: any[]
-    scores?: {
-      lastUpdated?: string
-      currentFitness?: number
-      currentFitnessExplanation?: string
-      currentFitnessExplanationJson?: any
-      recoveryCapacity?: number
-      recoveryCapacityExplanation?: string
-      recoveryCapacityExplanationJson?: any
-      nutritionCompliance?: number
-      nutritionComplianceExplanation?: string
-      nutritionComplianceExplanationJson?: any
-      trainingConsistency?: number
-      trainingConsistencyExplanation?: string
-      trainingConsistencyExplanationJson?: any
-    }
+  // ---------------------------------------------------------------------------
+  // Coach scores (collapsed; mounted on first open so its data loads lazily)
+  // ---------------------------------------------------------------------------
+
+  const showCoachScores = computed(
+    () =>
+      sections.value.athleteProfile.visible ||
+      sections.value.workoutScores.visible ||
+      (nutritionEnabled.value && sections.value.nutritionScores.visible)
+  )
+  const coachScoresOpen = ref(false)
+  const coachScoresMounted = ref(false)
+
+  function toggleCoachScores() {
+    coachScoresOpen.value = !coachScoresOpen.value
+    if (coachScoresOpen.value) coachScoresMounted.value = true
   }
 
-  const { data: profileData, pending: profileLoading } = profileResult as any
-  const { data: workoutData, pending: workoutLoading } = workoutResult as any
-  const { data: nutritionData, pending: nutritionLoading } = nutritionResult as any
-  // Modal state
-  const showModal = ref(false)
-  const loadingExplanation = ref(false)
-  const generatingExplanations = ref(false)
-  const modalData = ref<{
-    title: string
-    score: number | null
-    explanation: string | null
-    analysisData?: any
-    color?: 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'cyan'
-  }>({
-    title: '',
-    score: null,
-    explanation: null,
-    analysisData: undefined,
-    color: undefined
-  })
+  // ---------------------------------------------------------------------------
+  // Header overflow menu & outbound links
+  // ---------------------------------------------------------------------------
 
-  // Cache for explanations to avoid refetching
-  const workoutExplanations = ref<Record<string, any>>({})
-  const nutritionExplanations = ref<Record<string, any>>({})
+  const menuItems = computed(() => [
+    [
+      { label: t.value('menu_goals'), icon: 'i-heroicons-flag', to: '/profile/goals' },
+      { label: t.value('link_recovery_details'), icon: 'i-heroicons-heart', to: '/fitness' },
+      { label: t.value('menu_reports'), icon: 'i-heroicons-document-text', to: '/reports' },
+      {
+        label: t.value('menu_all_bests'),
+        icon: 'i-heroicons-trophy',
+        to: '/performance/bests'
+      }
+    ],
+    [
+      {
+        label: t.value('menu_customize'),
+        icon: 'i-heroicons-adjustments-horizontal',
+        onSelect: () => {
+          isPerformanceSettingsModalOpen.value = true
+        }
+      }
+    ]
+  ])
 
-  // Toast for notifications
-  const toast = useToast()
-
-  // Handle score card click (for cards with plain text explanation)
-  const openModal = (data: {
-    title: string
-    score?: number | null
-    explanation?: string | null
-    color?: 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'cyan'
-  }) => {
-    modalData.value = {
-      title: data.title,
-      score: data.score ?? null,
-      explanation: data.explanation ?? null,
-      analysisData: undefined,
-      color: data.color
-    }
-    showModal.value = true
-  }
-
-  // Handle score card click with structured data
-  const openModalWithStructured = (
-    data: {
-      title: string
-      score?: number | null
-      explanation?: string | null
-      color?: 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'cyan'
+  const detailLinks = computed(() => [
+    {
+      to: '/fitness',
+      icon: 'i-heroicons-heart',
+      label: t.value('link_recovery_details'),
+      description: t.value('link_recovery_details_description')
     },
-    structuredData?: any
-  ) => {
-    modalData.value = {
-      title: data.title,
-      score: data.score ?? null,
-      explanation: structuredData ? null : (data.explanation ?? null),
-      analysisData: structuredData || undefined,
-      color: data.color
+    {
+      to: '/reports',
+      icon: 'i-heroicons-document-text',
+      label: t.value('menu_reports'),
+      description: t.value('link_reports_description')
+    },
+    {
+      to: '/workouts',
+      icon: 'i-heroicons-list-bullet',
+      label: t.value('link_workouts'),
+      description: t.value('link_workouts_description')
     }
-    showModal.value = true
-  }
-
-  // Map display titles to metric names
-  const getWorkoutMetricName = (title: string): string => {
-    const isTReady = typeof t.value === 'function'
-    if (!isTReady) return 'overall'
-
-    if (title === t.value('workout_overall_full')) return 'overall'
-    if (title === t.value('workout_technical_full')) return 'technical'
-    if (title === t.value('workout_effort_full')) return 'effort'
-    if (title === t.value('workout_pacing_full')) return 'pacing'
-    if (title === t.value('workout_execution_full')) return 'execution'
-
-    return 'overall'
-  }
-
-  // Handle workout aggregate score click - fetch from database or trigger generation
-  const openWorkoutModal = async (title: string, score: number | null, color?: string) => {
-    if (!score || !workoutData.value) return
-
-    modalData.value = {
-      title,
-      score,
-      explanation: t.value('loading_insights'),
-      analysisData: undefined,
-      color: color as any
-    }
-    showModal.value = true
-    loadingExplanation.value = true
-
-    if (scopeToTags(workoutScope.value).length > 0) {
-      modalData.value.explanation =
-        'Detailed AI insights are currently unavailable for tag-filtered subsets.'
-      loadingExplanation.value = false
-      return
-    }
-
-    const metric = getWorkoutMetricName(title)
-    const cacheKey = `${selectedPeriod.value}-${metric}`
-
-    // Check memory cache first
-    if (workoutExplanations.value[cacheKey]) {
-      modalData.value.analysisData = workoutExplanations.value[cacheKey]
-      modalData.value.explanation = null
-      loadingExplanation.value = false
-      return
-    }
-
-    try {
-      // Fetch from database (or trigger generation if not available)
-      const response: any = await $fetch<any, string & {}>('/api/scores/explanation', {
-        query: {
-          type: 'workout',
-          period: selectedPeriod.value,
-          metric
-        }
-      })
-
-      if (response.cached && response.analysis) {
-        // Explanation was found in database
-        workoutExplanations.value[cacheKey] = response.analysis
-        modalData.value.analysisData = response.analysis
-        modalData.value.explanation = null
-      } else if (response.generating) {
-        // Explanation is being generated - show message
-        modalData.value.explanation = t.value('generating_insights_wait')
-        refreshRuns()
-      } else {
-        // Not cached and not generating (manual trigger required)
-        modalData.value.explanation = response.message || t.value('no_insights_available')
-      }
-    } catch (error) {
-      console.error('Error fetching workout explanation:', error)
-      modalData.value.explanation = t.value('failed_to_load_explanation')
-    } finally {
-      if (!modalData.value.explanation?.includes('Generating')) {
-        loadingExplanation.value = false
-      }
-    }
-  }
-
-  // Map display titles to metric names
-  const getNutritionMetricName = (title: string): string => {
-    const isTReady = typeof t.value === 'function'
-    if (!isTReady) return 'overall'
-
-    if (title === t.value('nutrition_overall_full')) return 'overall'
-    if (title === t.value('nutrition_macro_full')) return 'macroBalance'
-    if (title === t.value('nutrition_quality_full')) return 'quality'
-    if (title === t.value('nutrition_adherence_full')) return 'adherence'
-    if (title === t.value('nutrition_hydration_full')) return 'hydration'
-
-    return 'overall'
-  }
-
-  // Handle nutrition aggregate score click - fetch from database or trigger generation
-  const openNutritionModal = async (title: string, score: number | null, color?: string) => {
-    if (!score || !nutritionData.value) return
-
-    modalData.value = {
-      title,
-      score,
-      explanation: t.value('loading_insights'),
-      analysisData: undefined,
-      color: color as any
-    }
-    showModal.value = true
-    loadingExplanation.value = true
-
-    const metric = getNutritionMetricName(title)
-    const cacheKey = `${selectedPeriod.value}-${metric}`
-
-    // Check memory cache first
-    if (nutritionExplanations.value[cacheKey]) {
-      modalData.value.analysisData = nutritionExplanations.value[cacheKey]
-      modalData.value.explanation = null
-      loadingExplanation.value = false
-      return
-    }
-
-    try {
-      // Fetch from database (or trigger generation if not available)
-      const response: any = await $fetch<any, string & {}>('/api/scores/explanation', {
-        query: {
-          type: 'nutrition',
-          period: selectedPeriod.value,
-          metric
-        }
-      })
-
-      if (response.cached && response.analysis) {
-        // Explanation was found in database
-        nutritionExplanations.value[cacheKey] = response.analysis
-        modalData.value.analysisData = response.analysis
-        modalData.value.explanation = null
-      } else if (response.generating) {
-        // Explanation is being generated - show message
-        modalData.value.explanation = t.value('generating_insights_wait')
-        refreshRuns()
-      } else {
-        // Not cached and not generating (manual trigger required)
-        modalData.value.explanation = response.message || t.value('no_insights_available')
-      }
-    } catch (error) {
-      console.error('Error fetching nutrition explanation:', error)
-      modalData.value.explanation = t.value('failed_to_load_explanation')
-    } finally {
-      if (!modalData.value.explanation?.includes('Generating')) {
-        loadingExplanation.value = false
-      }
-    }
-  }
-
-  // Background Task Monitoring
-  const { refresh: refreshRuns } = useUserRuns()
-  const { onTaskCompleted, onTaskFailed } = useUserRunsState()
-
-  // Generate explanations function
-  const generateExplanations = async () => {
-    generatingExplanations.value = true
-    try {
-      await $fetch<any, string & {}>('/api/scores/generate-explanations', { method: 'POST' })
-      refreshRuns()
-
-      toast.add({
-        title: t.value('toast_generation_started_title'),
-        description: t.value('toast_generation_started_desc'),
-        color: 'success',
-        icon: 'i-heroicons-sparkles'
-      })
-
-      // Clear the caches so fresh explanations will be fetched
-      workoutExplanations.value = {}
-      nutritionExplanations.value = {}
-    } catch (error: any) {
-      generatingExplanations.value = false
-      toast.add({
-        title: 'Generation Failed',
-        description: error.data?.message || error.message || 'Failed to start generation',
-        color: 'error',
-        icon: 'i-heroicons-exclamation-circle'
-      })
-    }
-  }
-
-  const refreshCurrentModal = async () => {
-    if (!showModal.value || !modalData.value) return
-
-    // Identify if it is a workout or nutrition modal based on title/context
-    const title = modalData.value.title
-    const isWorkout = [
-      t.value('workout_overall_full'),
-      t.value('workout_technical_full'),
-      t.value('workout_effort_full'),
-      t.value('workout_pacing_full'),
-      t.value('workout_execution_full')
-    ].includes(title)
-
-    if (isWorkout) {
-      await openWorkoutModal(title, modalData.value.score, modalData.value.color)
-    } else {
-      await openNutritionModal(title, modalData.value.score, modalData.value.color)
-    }
-  }
-
-  // Listen for completion
-  onTaskCompleted('generate-score-explanations', async () => {
-    generatingExplanations.value = false
-    workoutExplanations.value = {}
-    nutritionExplanations.value = {}
-
-    toast.add({
-      title: t.value('toast_insights_ready_title'),
-      description: t.value('toast_insights_ready_desc'),
-      color: 'success',
-      icon: 'i-heroicons-check-badge'
-    })
-
-    if (showModal.value) {
-      await refreshCurrentModal()
-    }
-  })
-
-  onTaskFailed('generate-score-explanations', async (run) => {
-    generatingExplanations.value = false
-    toast.add({
-      title: t.value('toast_generation_failed_title') || 'Generation Failed',
-      description: run.error?.message || 'Failed to generate insights',
-      color: 'error',
-      icon: 'i-heroicons-exclamation-circle'
-    })
-  })
-
-  // Watch for period changes and refetch
-  watch(selectedPeriod, async () => {
-    const refreshes = [refreshNuxtData('workout-trends')]
-    if (nutritionEnabled.value) {
-      refreshes.push(refreshNuxtData('nutrition-trends'))
-    }
-    await Promise.all(refreshes)
-  })
-
-  watch(workoutScope, async () => {
-    await refreshNuxtData('workout-trends')
-  })
-
-  const formatDateLocal = (date: string) => {
-    return baseFormatDate(date)
-  }
-  const isPerformanceSettingsModalOpen = ref(false)
+  ])
 </script>

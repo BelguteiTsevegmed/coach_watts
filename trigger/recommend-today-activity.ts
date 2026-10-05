@@ -58,6 +58,16 @@ import {
 
 import { registerTaskHandler } from '../server/utils/task-registry'
 import { dispatchTask } from '../server/utils/task-dispatcher'
+import { getAthletePrimarySport } from '../server/utils/coaching/sport'
+import { buildCoachingPrinciples } from '../server/utils/coaching/principles'
+import { buildCoachRoleIntro } from '../server/utils/coaching/persona'
+import {
+  fetchOpenInjuries,
+  findInjuryConflicts,
+  formatInjuriesForPrompt,
+  formatInjuryConflictsForPrompt
+} from '../server/utils/coaching/injury-context'
+import { applyRecommendationConsistency } from '../server/utils/coaching/recommendation-consistency'
 
 interface RecommendationAnalysis {
   recommendation: 'proceed' | 'modify' | 'reduce_intensity' | 'rest'
@@ -119,7 +129,10 @@ const recommendationSchema = {
         new_duration_min: { type: 'number' },
         zone_adjustments: { type: 'string' },
         description: { type: 'string' }
-      }
+      },
+      // The accept flow writes these to the planned workout; a missing sport or
+      // duration used to leave a stale duration and fall back to cycling.
+      required: ['new_title', 'new_type', 'new_tss', 'new_duration_min', 'description']
     },
     recovery_analysis: {
       type: 'object',
@@ -273,7 +286,9 @@ export async function runRecommendTodayActivity(payload: {
       weeklyAvailability,
       recentWellness,
       mealTargetContext,
-      wellnessEvents
+      wellnessEvents,
+      primarySport,
+      openInjuries
     ] = await Promise.all([
       // Today's planned workouts (Fetch ALL to handle multi-session days)
       prisma.plannedWorkout.findMany({
@@ -287,7 +302,9 @@ export async function runRecommendTodayActivity(payload: {
             none: {}
           }
         },
-        orderBy: { tss: 'desc' } // Prioritize hardest workout
+        // Prioritize hardest workout. Postgres sorts NULLs first on DESC, which
+        // made a TSS-less session (e.g. strength) the "primary" one.
+        orderBy: [{ tss: { sort: 'desc', nulls: 'last' } }, { durationSec: 'desc' }]
       }),
 
       // Today's recovery metrics from Wellness table (WHOOP, Intervals.icu, etc.)
@@ -432,12 +449,20 @@ export async function runRecommendTodayActivity(payload: {
       getWellnessEventOverlaysForUser(userId, {
         startDate: new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000),
         endDate: today
-      })
+      }),
+
+      // Coach brain: athlete's sport (voice + principles) and logged injuries
+      getAthletePrimarySport(userId),
+      fetchOpenInjuries(userId)
     ])
     const activeGoals = filterGoalsForContext(rawActiveGoals, userTimezone, today)
 
     // Identify primary workout for linking (DB only allows 1:1) and logic fallback
     const primaryPlannedWorkout = plannedWorkouts[0] || null
+
+    const injuryContext = formatInjuriesForPrompt(openInjuries, { today })
+    const injuryConflicts = findInjuryConflicts(openInjuries, plannedWorkouts)
+    const injuryConflictContext = formatInjuryConflictsForPrompt(injuryConflicts)
 
     // Build today's availability summary
     const availabilityContext = todayAvailability
@@ -818,7 +843,11 @@ CURRENT ATHLETE STATUS (Source of Truth):
 `
 
     // Build comprehensive prompt
-    const prompt = `You are a **${aiSettings.aiPersona}** expert cycling coach analyzing today's training for your athlete.
+    const prompt = `${buildCoachRoleIntro({
+      persona: aiSettings.aiPersona,
+      sport: primarySport,
+      task: "analyzing today's training for your athlete."
+    })}
 Adapt your analysis tone and recommendation style to match your **${aiSettings.aiPersona}** persona.
 
 CURRENT CONTEXT:
@@ -835,7 +864,7 @@ ${availabilityContext}
 ${weeklyAvailabilityContext}
 ${focusedRecsContext}
 
-TODAY'S PLANNED WORKOUT(S):
+TODAY'S PLANNED WORKOUT(S) — GROUND TRUTH (the athlete sees exactly these values on screen):
 ${
   plannedWorkouts.length > 0
     ? plannedWorkouts
@@ -843,9 +872,9 @@ ${
           (pw, i) => `
 WORKOUT ${i + 1}${i === 0 ? ' (Primary)' : ''}:
 - Title: ${pw.title}
-- Duration: ${pw.durationSec ? Math.round(pw.durationSec / 60) : 'Unknown'} minutes
-- TSS: ${pw.tss || 'Unknown'}
 - Type: ${pw.type || 'Unknown'}
+- Duration: ${pw.durationSec ? `${Math.round(pw.durationSec / 60)} min` : 'not set'}
+- TSS: ${typeof pw.tss === 'number' ? Math.round(pw.tss) : 'not set'}
 - Description: ${pw.description || 'None'}
 `
         )
@@ -853,11 +882,22 @@ WORKOUT ${i + 1}${i === 0 ? ' (Primary)' : ''}:
     : 'No workout planned for today'
 }
 
+NUMBERS MUST MATCH THE PLAN (CRITICAL):
+- Only the workout(s) listed directly above are "today's plan". Never describe tomorrow's, a past, or a profile/goal session as today's.
+- In "reasoning", refer to today's planned session by its exact title/type, and if you state its duration or TSS use exactly the values above (no rounding, re-estimating or unit conversion) — or state no numbers. Never change its sport in the text.
+- If you propose a change, describe it in words in "reasoning" (e.g. "shorten it and keep it easy", "swap the run for an easy spin") and put the new numbers ONLY in suggested_modifications (new_type, new_duration_min, new_tss). Never present proposed numbers as if they were the plan.
+- planned_workout.original_title / original_duration_min / original_tss must copy the Primary workout's values exactly.
+- If a value above is "not set", don't invent one.
+
+${injuryConflictContext}
+
 ${upcomingContext}
 ${eventsContext}
 ${metricsContext}
 ${buildCalendarSourceOfTruthPrompt(futureWorkouts)}
 ${ATHLETE_AUTONOMY_PROMPT_BLOCK}
+
+${injuryContext}
 
 TODAY'S RECOVERY METRICS:
 ${
@@ -915,10 +955,13 @@ CRITICAL INSTRUCTIONS:
 8. If a synced wellness event overlaps today or the recent biometrics downturn, explicitly call out that correlation in your reasoning and adjust the recommendation accordingly.
 9. Treat future goals, athlete-profile themes, and event categories as planning context only. They do NOT make a workout scheduled unless that intensity appears in the planned workouts list.
 10. Never frame the athlete's current ride, tour, or planned session as something you can abort or overwrite. You may only propose a safer alternative.
+11. INJURIES: read the "ACTIVE INJURIES & NIGGLES" section before deciding. If an ACTIVE injury with pain >= 4/10 affects today's session sport, you MUST modify or replace the session (cross-train without loading the area, reduce, or rest) and say why. Refer to a physio/doctor for red flags; never diagnose.
+
+${buildCoachingPrinciples(primarySport)}
 
 ${zoneDefinitions}
 
-When suggesting modifications (e.g. "Ride in Zone 2"), target ONLY the user's defined Z2 range for this specific sport. Never use generic percentages - always reference the provided zones first.
+When suggesting modifications (e.g. "keep it in Zone 2"), target ONLY the user's defined Z2 range for this specific sport. Never use generic percentages - always reference the provided zones first.
 
 TASK:
 Analyze whether the athlete should proceed with today's planned workout or modify it based on their current recovery state, recent training load, AND FUTURE PLANS. 
@@ -936,9 +979,9 @@ DECISION CRITERIA:
    - Recovery > 80%: Good day for intensity.
 
 2. **Future Load & Events (PROACTIVE LOAD MANAGEMENT)**:
-   - Check the **Upcoming Events** list. If an 'A' or 'B' priority event is within 48-72 hours, ensure freshness (TSB > -10). Recommend tapering/easy rides if fatigue is high.
+   - Check the **Upcoming Events** list. If an 'A' or 'B' priority event is within 48-72 hours, ensure freshness (TSB > -10). Recommend tapering/easy sessions if fatigue is high.
    - Review **Projected Fitness Trends**. If TSB is projected to drop below -30 (High Risk) in the next few days, consider reducing load TODAY to prevent overreaching, unless it is a planned "Overload Block".
-   - If a massive workout (TSS > 150) is planned tomorrow, consider saving matches today.
+   - If a massive workout (TSS > 150) is planned tomorrow, consider keeping today easier.
 
 **If Recovery Score is "Unknown"**: Infer recovery status from Sleep (quality/duration), HRV trends, and Resting HR.
 
@@ -1032,6 +1075,40 @@ Maintain your **${aiSettings.aiPersona}** persona throughout.`
     )
 
     logger.log('Analysis generated', { recommendation: analysis.recommendation })
+
+    // Keep the text consistent with the plan on screen (exact planned numbers,
+    // no silent sport switch, injury conflicts never "proceed").
+    const completedSessionNumbers = recentWorkouts.map((w: any) => ({
+      title: w.title,
+      type: w.type,
+      durationSec: w.durationSec,
+      tss: w.tss
+    }))
+    const dailyCompletedTss = Object.values(
+      recentWorkouts.reduce((acc: Record<string, number>, w: any) => {
+        const key = getTimestampDateKey(w.date, userTimezone)
+        acc[key] = (acc[key] || 0) + (w.tss || 0)
+        return acc
+      }, {})
+    )
+    const consistentAnalysis = applyRecommendationConsistency({
+      analysis: analysis as any,
+      primaryPlannedWorkout,
+      plannedWorkouts,
+      completedWorkouts: [
+        ...completedSessionNumbers,
+        ...dailyCompletedTss.map((tss) => ({ tss })),
+        { tss: (currentPlan?.planJson as any)?.totalTSS }
+      ],
+      injuryConflicts
+    }) as RecommendationAnalysis
+    if ((consistentAnalysis as any).rationale_check || (consistentAnalysis as any).injury_guard) {
+      logger.warn('Recommendation adjusted for consistency', {
+        rationaleCheck: (consistentAnalysis as any).rationale_check,
+        injuryGuard: (consistentAnalysis as any).injury_guard
+      })
+    }
+    Object.assign(analysis, consistentAnalysis)
 
     // Update or create the recommendation
     let recommendation

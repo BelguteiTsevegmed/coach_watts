@@ -17,7 +17,14 @@ export interface CoachingRoleResult {
    * pure athletes here, so the "Add Athlete" onboarding path stays reachable.
    */
   isPureAthlete: boolean
-  /** Whether the full coach-oriented nav suite should be shown. */
+  /** The user is connected to at least one coach of their own. */
+  hasOwnCoach: boolean
+  /**
+   * CW-103 rule: everyone except a pure athlete gets the coach-oriented suite.
+   * The athlete-first app navigation is stricter and only shows the suite to
+   * people who actually coach someone (`isCoachForAnyone`) — see
+   * `app/utils/navigation.ts`.
+   */
   showFullCoachingSuite: boolean
 }
 
@@ -31,11 +38,13 @@ export interface CoachingRoleResult {
  */
 export function resolveCoachingRole(signals: CoachingRoleSignals): CoachingRoleResult {
   const isCoachForAnyone = signals.coachedAthletesCount > 0 || signals.pendingCoachRequestsCount > 0
-  const isPureAthlete = signals.ownCoachesCount > 0 && !isCoachForAnyone
+  const hasOwnCoach = signals.ownCoachesCount > 0
+  const isPureAthlete = hasOwnCoach && !isCoachForAnyone
 
   return {
     isCoachForAnyone,
     isPureAthlete,
+    hasOwnCoach,
     showFullCoachingSuite: !isPureAthlete
   }
 }
@@ -86,6 +95,7 @@ export function useCoachingRole() {
   return {
     isCoachForAnyone: computed(() => role.value.isCoachForAnyone),
     isPureAthlete: computed(() => role.value.isPureAthlete),
+    hasOwnCoach: computed(() => role.value.hasOwnCoach),
     showFullCoachingSuite: computed(() => role.value.showFullCoachingSuite)
   }
 }

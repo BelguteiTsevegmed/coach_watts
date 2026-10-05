@@ -1,10 +1,10 @@
 <template>
   <UDashboardPanel id="performance-bests">
     <template #header>
-      <UDashboardNavbar title="All-Time Personal Bests">
+      <UDashboardNavbar title="Personal bests">
         <template #leading>
           <UButton icon="i-heroicons-arrow-left" color="neutral" variant="ghost" to="/performance">
-            Back to Performance
+            Progress
           </UButton>
         </template>
         <template #right>

@@ -1,14 +1,40 @@
 <template>
   <UCard
     v-if="isOnboarded"
-    class="lg:col-span-2 overflow-hidden flex flex-col h-full"
-    :ui="{
-      root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
-      body: 'px-4 py-4 sm:px-6 sm:py-6'
-    }"
+    class="overflow-hidden flex flex-col"
+    :class="compact ? '' : 'lg:col-span-2 h-full'"
+    :ui="
+      compact
+        ? {
+            root: 'rounded-none sm:rounded-xl shadow-none sm:shadow-sm ring-0 sm:ring ring-default border-y border-default sm:border-y-0 divide-y-0',
+            header: 'px-4 pt-4 pb-0 sm:px-6 sm:pt-6',
+            body: 'px-4 py-2 sm:px-6 sm:py-3',
+            footer: 'px-4 py-3 sm:px-6'
+          }
+        : {
+            root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
+            body: 'px-4 py-4 sm:px-6 sm:py-6'
+          }
+    "
   >
     <template #header>
-      <div class="flex items-center justify-between">
+      <div v-if="compact" class="flex items-center justify-between gap-3">
+        <h3 class="flex items-center gap-2 text-sm font-semibold text-highlighted">
+          <UIcon name="i-heroicons-clock" class="size-5 text-primary" />
+          {{ t('recent_activity_header') }}
+        </h3>
+        <UButton
+          to="/workouts"
+          color="neutral"
+          variant="link"
+          size="xs"
+          trailing-icon="i-heroicons-arrow-right"
+          class="px-0"
+        >
+          {{ t('today_recent_see_all') }}
+        </UButton>
+      </div>
+      <div v-else class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <UIcon name="i-heroicons-clock" class="w-5 h-5 text-primary-500" />
           <h3 class="font-bold text-sm tracking-tight uppercase">
@@ -28,18 +54,34 @@
     </template>
 
     <!-- Loading state -->
-    <div v-if="activityStore.loading" class="text-center py-8">
+    <div v-if="activityStore.loading && !hasItems" class="text-center py-8">
       <UIcon name="i-heroicons-arrow-path" class="w-6 h-6 animate-spin inline text-primary" />
       <p class="text-sm text-muted mt-2">{{ t('recent_activity_loading') }}</p>
     </div>
 
     <!-- No activity -->
-    <div
-      v-else-if="!activityStore.recentActivity || activityStore.recentActivity.items.length === 0"
-      class="text-center py-8"
-    >
-      <UIcon name="i-heroicons-calendar" class="w-12 h-12 mx-auto text-muted mb-3" />
+    <div v-else-if="!hasItems" class="text-center" :class="compact ? 'py-6' : 'py-8'">
+      <UIcon
+        name="i-heroicons-calendar"
+        class="mx-auto text-muted mb-3"
+        :class="compact ? 'size-8' : 'w-12 h-12'"
+      />
       <p class="text-sm text-muted">{{ t('recent_activity_empty') }}</p>
+    </div>
+
+    <!-- Compact list (Today screen): training first, no wellness hero -->
+    <div v-else-if="compact">
+      <DashboardActivityRowCompact
+        v-for="item in compactItems"
+        :key="item.id"
+        :item="item"
+        :date-label="getDateLabel(item.date, item.type)"
+        @click="
+          () => {
+            void navigateActivity(item)
+          }
+        "
+      />
     </div>
 
     <!-- New Layout -->
@@ -78,11 +120,27 @@
         />
       </div>
     </div>
+
+    <template v-if="$slots.footer" #footer>
+      <slot name="footer" />
+    </template>
   </UCard>
 </template>
 
 <script setup lang="ts">
   import { useTranslate } from '@tolgee/vue'
+
+  const props = withDefaults(
+    defineProps<{
+      /** Today-screen variant: short training list, no wellness hero. */
+      compact?: boolean
+      /** Maximum rows in the compact list. */
+      limit?: number
+    }>(),
+    { compact: false, limit: 5 }
+  )
+
+  defineSlots<{ footer?: () => any }>()
 
   const { t } = useTranslate('dashboard')
   const activityStore = useActivityStore()
@@ -149,6 +207,18 @@
     // Find the first wellness item (Recent Activity is already sorted by date desc)
     return activityStore.recentActivity.items.find((i: any) => i.type === 'wellness')
   })
+
+  const compactItems = computed(() => {
+    const items: any[] = activityStore.recentActivity?.items || []
+    // Readiness is shown elsewhere on Today, so the compact list skips wellness rows.
+    return items.filter((i: any) => i.type !== 'wellness').slice(0, props.limit)
+  })
+
+  const hasItems = computed(() =>
+    props.compact
+      ? compactItems.value.length > 0
+      : (activityStore.recentActivity?.items?.length || 0) > 0
+  )
 
   const listItems = computed(() => {
     if (!activityStore.recentActivity?.items) return []

@@ -1,5 +1,5 @@
 {
-  "activities_title": "性能实验室",
+  "activities_title": "日历",
   "controls_columns": "列",
   "controls_days_fri": "星期五",
   "controls_days_mon": "星期一",
@@ -54,5 +54,5 @@
   "legend_proposed": "建议的",
   "legend_threshold": "临界点",
   "meta_description": "查看您的训练日历，分析已完成的训练，并计划未来的训练。",
-  "meta_title": "活动"
+  "meta_title": "日历"
 }

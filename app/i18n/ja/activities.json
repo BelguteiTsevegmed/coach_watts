@@ -1,5 +1,5 @@
 {
-  "activities_title": "パフォーマンスラボ",
+  "activities_title": "カレンダー",
   "controls_columns": "列",
   "controls_days_fri": "金曜",
   "controls_days_mon": "月曜日",
@@ -54,5 +54,5 @@
   "legend_proposed": "提案",
   "legend_threshold": "しきい値",
   "meta_description": "トレーニング カレンダーを表示し、完了したワークアウトを分析し、今後のセッションを計画します。",
-  "meta_title": "活動"
+  "meta_title": "カレンダー"
 }

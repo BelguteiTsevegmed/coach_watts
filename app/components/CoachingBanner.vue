@@ -8,7 +8,7 @@
     <div
       v-if="coachingStore.isCoachingMode"
       role="status"
-      class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] max-w-[calc(100vw-2rem)] bg-primary-600 text-white py-2 px-4 rounded-full shadow-xl flex items-center gap-4 border border-white/20 whitespace-nowrap"
+      class="fixed bottom-[calc(var(--app-bottom-nav-offset,0px)_+_1rem)] left-1/2 -translate-x-1/2 z-[60] max-w-[calc(100vw-2rem)] bg-primary-600 text-white py-2 px-4 rounded-full shadow-xl flex items-center gap-4 border border-white/20 whitespace-nowrap"
     >
       <div class="flex items-center gap-2 text-sm font-medium min-w-0">
         <UIcon name="i-heroicons-eye" class="w-5 h-5 shrink-0" />

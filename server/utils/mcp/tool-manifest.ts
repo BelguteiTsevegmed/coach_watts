@@ -120,6 +120,13 @@ export const MCP_TOOL_MANIFEST: McpToolPolicy[] = [
     timeoutMs: DEFAULT_READ_TIMEOUT_MS
   },
   {
+    name: 'get_injuries',
+    phase: 'read',
+    scopes: ['health:read'],
+    mutates: false,
+    timeoutMs: DEFAULT_READ_TIMEOUT_MS
+  },
+  {
     name: 'get_nutrition_log',
     phase: 'read',
     scopes: ['nutrition:read'],
@@ -342,6 +349,20 @@ export const MCP_TOOL_MANIFEST: McpToolPolicy[] = [
   },
   {
     name: 'delete_wellness_event',
+    phase: 'write',
+    scopes: ['health:write'],
+    mutates: true,
+    timeoutMs: DEFAULT_WRITE_TIMEOUT_MS
+  },
+  {
+    name: 'log_injury',
+    phase: 'write',
+    scopes: ['health:write'],
+    mutates: true,
+    timeoutMs: DEFAULT_WRITE_TIMEOUT_MS
+  },
+  {
+    name: 'update_injury',
     phase: 'write',
     scopes: ['health:write'],
     mutates: true,

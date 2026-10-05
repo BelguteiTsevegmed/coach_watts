@@ -384,13 +384,16 @@ const CHAT_SKILL_MANIFESTS: Record<ChatSkillId, ChatSkillManifest> = {
   wellness: {
     id: 'wellness',
     description:
-      'Wellness and recovery workflows: inspect recovery metrics, log symptoms or wellness events, and manage wellness history.',
+      'Wellness, recovery and injury workflows: inspect recovery metrics, log symptoms or wellness events, log or update injuries, niggles and pain, and manage wellness history.',
     toolNames: [
       'get_wellness_metrics',
       'record_wellness_event',
       'get_wellness_events',
       'update_wellness_event',
-      'delete_wellness_event'
+      'delete_wellness_event',
+      'get_injuries',
+      'log_injury',
+      'update_injury'
     ],
     instructionFragment: `## Wellness Skill
 
@@ -398,6 +401,7 @@ const CHAT_SKILL_MANIFESTS: Record<ChatSkillId, ChatSkillManifest> = {
 - When the user wants to log, update, or delete a wellness event, call the relevant wellness tool instead of only acknowledging the request.
 - If the target event is discoverable from recent wellness history, inspect it with tools before asking the user to restate details.
 - For recovery questions, prefer fetching wellness metrics before interpreting how the athlete is doing.
+- Injuries and niggles: when the athlete mentions pain or an injury, log it with \`log_injury\` (body area, side, pain 0-10, onset) or, if that area is already listed in their injuries, update it with \`update_injury\` (pain level, RECOVERING/RESOLVED status, notes). Ask only for missing essentials (where, which side, how bad). Then adapt the advice using the pain rules and refer to a professional for red flags. Never diagnose.
 - If approval would be needed, emit the wellness mutation tool call first so the system can create the approval request. Without the tool call, there is nothing for the user to approve.
 - Do not claim a wellness event or recovery change was saved unless the tool actually ran successfully.`,
     contextFlags: ['wellness', 'time', 'date_context'],
@@ -770,7 +774,7 @@ Rules:
 - Use "profile" for athlete profile, sport settings, zones, units, or preference changes.
 - Use "availability" for schedule slots, training availability, gym access, or day constraints.
 - Use "recommendations" for workout recommendations or recommendation details.
-- Use "wellness" for recovery metrics, symptom logging, sleep, soreness, fatigue, or wellness history.
+- Use "wellness" for recovery metrics, symptom logging, sleep, soreness, fatigue, wellness history, or when the athlete mentions pain, a niggle or an injury (logging or updating it).
 - Use "analysis" for training-load analysis, forecasting, explicit math, pace/zones calculations, or charts.
 - Use "nutrition" for meal, hydration, fueling, or nutrition-log requests.
 - Use "memory" when the user explicitly asks to remember, forget, review, or update saved memory.

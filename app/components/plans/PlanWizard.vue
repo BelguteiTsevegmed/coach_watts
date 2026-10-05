@@ -1381,6 +1381,10 @@
 
   function selectGoal(goal: any) {
     selectedGoal.value = goal
+    const goalSports = activityTypesForGoal(goal)
+    if (goalSports && !activityTypesTouched.value) {
+      selectedActivityTypes.value = goalSports
+    }
     const targetDate = goal.eventDate || goal.targetDate
     if (targetDate) {
       endDate.value = formatDate(targetDate, 'yyyy-MM-dd')
@@ -1424,7 +1428,11 @@
       .join(' ')
   }
 
+  // Once the athlete picks sports themselves, selecting a goal stops overriding them.
+  const activityTypesTouched = ref(false)
+
   function toggleActivityType(type: string) {
+    activityTypesTouched.value = true
     if (selectedActivityTypes.value.includes(type)) {
       // Prevent deselecting the last one
       if (selectedActivityTypes.value.length > 1) {

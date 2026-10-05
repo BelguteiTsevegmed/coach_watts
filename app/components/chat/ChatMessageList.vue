@@ -28,7 +28,8 @@
     'retry-turn',
     'remember-message',
     'forget-message',
-    'retry-load'
+    'retry-load',
+    'starter-prompt'
   ])
   const toast = useToast()
   const messageListRef = ref<HTMLElement | null>(null)
@@ -836,7 +837,10 @@
         </UButton>
       </div>
 
-      <ChatWelcomeTips v-else-if="filteredMessages.length === 0" />
+      <ChatWelcomeTips
+        v-else-if="filteredMessages.length === 0"
+        @prompt="(text: string) => emit('starter-prompt', text)"
+      />
 
       <div v-else class="h-full flex flex-col">
         <UChatMessages

@@ -33,8 +33,10 @@
   }
 }
 
+/* Room under page content for the floating quick-capture pill, which is only
+   shown at lg+ (smaller screens use the bottom tab bar instead). */
 @utility quick-capture-inset {
-  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0;
 }
 
 @utility navbar-icon-action {
@@ -49,9 +51,9 @@
   @apply m-0 size-5 shrink-0;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 1024px) {
   .quick-capture-inset {
-    padding-bottom: 0;
+    padding-bottom: 5rem;
   }
 }
 

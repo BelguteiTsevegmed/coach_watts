@@ -1,5 +1,5 @@
 {
-  "activities_title": "Teljesítmény Labor",
+  "activities_title": "Naptár",
   "controls_columns": "Oszlopok",
   "controls_days_fri": "P",
   "controls_days_mon": "Hé",
@@ -54,5 +54,5 @@
   "legend_proposed": "Javasolt",
   "legend_threshold": "Küszöb",
   "meta_description": "Tekintse meg edzésnaptárát, elemezze elvégzett edzéseit, és tervezze meg jövőbeli edzéseit.",
-  "meta_title": "Tevékenységek"
+  "meta_title": "Naptár"
 }

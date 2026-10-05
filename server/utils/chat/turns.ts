@@ -115,6 +115,7 @@ export function isMutatingChatTool(toolName: string) {
     toolName === 'log_nutrition_meal' ||
     toolName === 'log_hydration_intake' ||
     toolName === 'lock_meal_to_plan' ||
+    toolName === 'log_injury' ||
     toolName === 'generate_planned_workout_structure' ||
     toolName === 'adjust_planned_workout' ||
     toolName === 'set_planned_workout_structure' ||

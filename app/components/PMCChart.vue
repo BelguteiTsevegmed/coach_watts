@@ -110,7 +110,7 @@
             }}{{ (pmcData.summary?.currentTSB ?? 0).toFixed(1) }}
           </div>
           <div class="mt-1 text-[10px] font-bold uppercase tracking-tighter text-gray-500">
-            {{ pmcData.summary?.formStatus }}
+            {{ formWord(pmcData.summary?.currentTSB) }}
           </div>
         </div>
 
@@ -124,7 +124,7 @@
         >
           <div class="flex items-center justify-between mb-1">
             <span class="text-[10px] font-black uppercase tracking-widest text-gray-400 italic"
-              >Avg TSS</span
+              >Avg load</span
             >
             <UIcon name="i-heroicons-calculator" class="w-3.5 h-3.5 text-gray-400" />
           </div>
@@ -252,6 +252,7 @@
 
 <script setup lang="ts">
   import { Line } from 'vue-chartjs'
+  import { getFormLevel, type FormLevel } from '~/utils/readiness'
   import ChartDataLabels from 'chartjs-plugin-datalabels'
   import {
     getWellnessEventsForDate,
@@ -412,6 +413,20 @@
     if (tsb >= 5) return 'text-emerald-500'
     if (tsb >= -10) return 'text-amber-500'
     return 'text-red-500'
+  }
+
+  // Same words as Today and the workout page, so one form value never gets
+  // two descriptions (the server's formStatus says e.g. "Maintenance").
+  const FORM_WORDS: Record<FormLevel, string> = {
+    fresh: 'Fresh',
+    neutral: 'Neutral',
+    tired: 'Tired',
+    very_tired: 'Very tired'
+  }
+
+  function formWord(tsb: number | null | undefined) {
+    const level = getFormLevel(tsb)
+    return level ? FORM_WORDS[level] : ''
   }
 
   function getFormStatusBg(tsb: number) {

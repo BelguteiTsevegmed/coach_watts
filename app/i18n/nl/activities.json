@@ -1,5 +1,5 @@
 {
-  "activities_title": "Prestaties Lab",
+  "activities_title": "Kalender",
   "controls_columns": "Kolommen",
   "controls_days_fri": "Vr",
   "controls_days_mon": "Ma",
@@ -54,5 +54,5 @@
   "legend_proposed": "Voorgesteld",
   "legend_threshold": "Drempel",
   "meta_description": "Bekijk je trainingskalender, analyseer voltooide workouts en plan toekomstige sessies.",
-  "meta_title": "Activiteiten"
+  "meta_title": "Kalender"
 }

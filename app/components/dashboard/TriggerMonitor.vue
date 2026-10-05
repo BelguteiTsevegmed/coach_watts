@@ -1,5 +1,8 @@
 <template>
-  <div v-if="modelValue" class="fixed bottom-4 right-4 z-50 w-80 sm:w-96 shadow-xl">
+  <div
+    v-if="modelValue"
+    class="fixed bottom-[calc(var(--app-bottom-nav-offset,0px)_+_1rem)] right-4 z-50 w-80 sm:w-96 shadow-xl"
+  >
     <UCard :ui="{ body: 'p-0', header: 'p-3' }">
       <template #header>
         <div class="flex items-center justify-between">
