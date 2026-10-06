@@ -60,7 +60,7 @@
 
 <script setup lang="ts">
   import { useTranslate } from '@tolgee/vue'
-  import { getPainBand } from '../../../shared/injuries'
+  import { getPainBand } from '#shared/injuries'
 
   const props = defineProps<{
     open: boolean

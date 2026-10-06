@@ -149,7 +149,7 @@
     type InjuryFormPayload,
     type InjurySport,
     type InjuryStatus
-  } from '../../../shared/injuries'
+  } from '#shared/injuries'
 
   const props = defineProps<{
     open: boolean

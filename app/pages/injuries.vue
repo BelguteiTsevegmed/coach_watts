@@ -357,7 +357,7 @@
     type InjuryDTO,
     type InjuryFormPayload,
     type InjuryStatus
-  } from '../../shared/injuries'
+  } from '#shared/injuries'
 
   definePageMeta({
     middleware: 'auth',
