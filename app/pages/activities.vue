@@ -135,7 +135,10 @@
                 variant="ghost"
                 icon="i-heroicons-rectangle-stack"
                 @click="
-                  isWorkoutDrawerVisible ? (isWorkoutDrawerVisible = false) : openWorkoutLibrary()
+                  () => {
+                    if (isWorkoutDrawerVisible) isWorkoutDrawerVisible = false
+                    else openWorkoutLibrary()
+                  }
                 "
                 >{{ t('controls_workout_library') }}</UButton
               >

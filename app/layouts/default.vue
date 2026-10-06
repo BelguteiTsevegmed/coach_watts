@@ -143,6 +143,11 @@
     return !translated || translated === key ? fallback : translated
   }
 
+  const searchInputProps = computed(() => ({
+    placeholder: navLabel('navigation_search_title', 'Search'),
+    'aria-label': navLabel('navigation_search_title', 'Search')
+  }))
+
   // Navigation Items
   const links = computed<NavigationMenuItem[][]>(() => {
     // Force re-evaluation on language change or ready state
@@ -1145,7 +1150,7 @@
     <UDashboardSearch
       :key="tolgee.getLanguage()"
       :groups="groups"
-      :input="{ 'aria-label': navLabel('navigation_search_title', 'Search') }"
+      :input="searchInputProps"
       :title="navLabel('navigation_search_title', 'Search')"
       :description="
         navLabel('navigation_search_description', 'Search pages, workouts, and shortcuts')

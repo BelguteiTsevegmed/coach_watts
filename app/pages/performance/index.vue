@@ -19,7 +19,11 @@
               icon="i-heroicons-adjustments-horizontal"
               color="neutral"
               variant="ghost"
-              @click="isPerformanceSettingsModalOpen = true"
+              @click="
+                () => {
+                  isPerformanceSettingsModalOpen = true
+                }
+              "
               >{{ t('nav_customize') }}</UButton
             >
             <UDropdownMenu :items="menuItems" :content="{ align: 'end' }">
