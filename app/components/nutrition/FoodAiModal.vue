@@ -10,7 +10,7 @@
   >
     <template #header>
       <div class="flex items-center justify-between w-full">
-        <h3 class="text-lg font-black uppercase tracking-tight flex items-center gap-2">
+        <h3 class="text-lg font-medium tracking-tight flex items-center gap-2">
           <UIcon name="i-heroicons-sparkles" class="w-5 h-5 text-primary-500" />
           AI Nutrition Logger
         </h3>
@@ -29,7 +29,7 @@
 
     <template #body>
       <div class="space-y-4">
-        <p class="text-xs text-gray-500 font-bold uppercase tracking-widest">
+        <p class="text-xs text-gray-500 font-bold">
           Describe what you ate, and the AI coach will log it for you.
         </p>
 
@@ -42,7 +42,7 @@
         />
 
         <div class="flex items-center gap-2">
-          <span class="text-[10px] font-black uppercase text-gray-400">Target Meal:</span>
+          <span class="text-xs font-medium text-gray-400">Target Meal:</span>
           <USelect v-model="mealType" :items="mealTypes" size="xs" color="neutral" variant="soft" />
         </div>
 

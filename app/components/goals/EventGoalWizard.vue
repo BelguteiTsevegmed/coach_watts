@@ -6,6 +6,7 @@
         <h3 class="text-xl font-semibold">What are you training for?</h3>
         <UButton
           icon="i-heroicons-x-mark"
+          aria-label="Close goal setup"
           variant="ghost"
           color="neutral"
           size="sm"
@@ -48,6 +49,7 @@
         <div class="flex items-center gap-3">
           <UButton
             icon="i-heroicons-arrow-left"
+            aria-label="Back to goal type"
             variant="ghost"
             size="sm"
             @click="
@@ -60,6 +62,7 @@
         </div>
         <UButton
           icon="i-heroicons-x-mark"
+          aria-label="Close goal setup"
           variant="ghost"
           color="neutral"
           size="sm"
@@ -194,6 +197,7 @@
         </div>
         <UButton
           icon="i-heroicons-x-mark"
+          aria-label="Close goal setup"
           variant="ghost"
           color="neutral"
           size="sm"
@@ -488,6 +492,7 @@
           </UFormField>
         </div>
 
+        <p v-if="saveError" role="alert" class="text-sm text-error">{{ saveError }}</p>
         <div class="pt-6 flex justify-end">
           <UButton
             size="xl"
@@ -526,6 +531,7 @@
   const userEvents = ref<any[]>([])
   const loadingEvents = ref(false)
   const saving = ref(false)
+  const saveError = ref<string | null>(null)
 
   const form = reactive({
     title: '',
@@ -758,6 +764,7 @@
 
   async function saveGoal() {
     saving.value = true
+    saveError.value = null
 
     // Construct AI Context
     let aiContext = `Type: ${selectedType.value}. Goal: ${form.title}. Phase Preference: ${form.phase}.`
@@ -826,7 +833,10 @@
         emit('created')
       }
       emit('close')
-    } catch (error) {
+    } catch (error: any) {
+      saveError.value =
+        error?.data?.message ||
+        'Your goal could not be saved. Your details are still here; try again.'
       console.error('Failed to save goal', error)
     } finally {
       saving.value = false

@@ -7,13 +7,27 @@
         </template>
       </UDashboardNavbar>
 
-      <UDashboardToolbar>
-        <LayoutMobileToolbarTabs
-          :items="settingsTabs"
-          :active-id="activeSettingsTab"
-          select-label="Settings sections"
-          @select="navigateToSettingsTab"
-        />
+      <UDashboardToolbar v-if="route.path !== '/settings'">
+        <div class="flex flex-wrap items-center gap-4 w-full">
+          <NuxtLink
+            to="/settings"
+            class="text-sm min-h-11 inline-flex items-center gap-2 text-muted"
+          >
+            <UIcon name="i-lucide-arrow-left" class="size-4" /> All settings
+          </NuxtLink>
+          <UDropdownMenu
+            :items="settingsTabs.map((tab) => ({ label: tab.label, icon: tab.icon, to: tab.id }))"
+          >
+            <UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-chevron-down"
+              trailing
+              class="ms-auto"
+              >{{ activeSettingsLabel }}</UButton
+            >
+          </UDropdownMenu>
+        </div>
       </UDashboardToolbar>
     </template>
 
@@ -31,21 +45,16 @@
   const route = useRoute()
 
   const settingsTabs = [
-    { id: '/settings/apps', label: 'Connected Apps', icon: 'i-lucide-plug' },
-    { id: '/settings/ai', label: 'AI Coach', icon: 'i-heroicons-sparkles' },
+    { id: '/settings/apps', label: 'Connections', icon: 'i-lucide-plug' },
+    { id: '/settings/ai', label: 'Coach preferences', icon: 'i-heroicons-sparkles' },
     { id: '/settings/billing', label: 'Billing', icon: 'i-heroicons-credit-card' },
     { id: '/settings/developer', label: 'Developer', icon: 'i-heroicons-code-bracket' },
-    { id: '/settings/danger', label: 'Danger Zone', icon: 'i-lucide-alert-triangle' }
+    { id: '/settings/danger', label: 'Account and data', icon: 'i-lucide-alert-triangle' }
   ]
 
-  const activeSettingsTab = computed(() => {
-    const match = settingsTabs.find((tab) => isActive(tab.id))
-    return match?.id || '/settings/apps'
-  })
-
-  function navigateToSettingsTab(path: string) {
-    void navigateTo(path)
-  }
+  const activeSettingsLabel = computed(
+    () => settingsTabs.find((tab) => isActive(tab.id))?.label || 'Settings sections'
+  )
 
   definePageMeta({
     middleware: 'auth'

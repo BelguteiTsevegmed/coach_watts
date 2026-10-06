@@ -1,292 +1,172 @@
 <template>
-  <div class="space-y-6">
-    <!-- Next Fueling Task (The "Next Steps") -->
-    <UCard color="primary" variant="subtle">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-zap" class="size-5 text-primary-500" />
-            <h3 class="text-base font-semibold leading-6">Upcoming Target</h3>
-          </div>
-          <UBadge v-if="loading" color="neutral" variant="subtle" size="xs"> Loading... </UBadge>
-        </div>
-      </template>
-
-      <div v-if="loading" class="space-y-3">
-        <USkeleton class="h-12 w-full" />
-        <USkeleton class="h-10 w-full" />
+  <section class="fueling-next" :aria-busy="loading">
+    <div v-if="loading" class="py-8 space-y-4" role="status">
+      <USkeleton class="h-8 w-2/3" /><USkeleton class="h-5 w-1/2" />
+      <span class="sr-only">{{ t('journey_fueling_loading') }}</span>
+    </div>
+    <div v-else-if="error" class="py-6">
+      <h2 class="fueling-next__title">{{ t('journey_fueling_error_title') }}</h2>
+      <p class="mt-3 text-sm text-muted" role="alert">{{ error }}</p>
+      <UButton class="mt-5" @click="emit('retry')">{{ t('journey_retry') }}</UButton>
+      <UButton :to="journalRoute" class="mt-5 ml-3" color="neutral" variant="link">{{
+        t('journey_open_journal')
+      }}</UButton>
+    </div>
+    <template v-else-if="feed?.nextWindow">
+      <p class="text-sm text-muted">
+        {{ formatWindowType(feed.nextWindow.type) }}
+        <span class="ml-2">{{
+          formatTimeRange(feed.nextWindow.startTime, feed.nextWindow.endTime)
+        }}</span>
+      </p>
+      <h2 class="fueling-next__title mt-3">
+        {{ feed.nextWindow.workoutTitle || t('journey_daily_fueling') }}
+      </h2>
+      <p v-if="feed.nextWindow.lockedMeal" class="mt-4 text-lg">
+        {{ feed.nextWindow.lockedMeal.title }}
+      </p>
+      <p v-else-if="isTimingOnlyWindow || dailyCarbReached" class="mt-4 text-muted leading-relaxed">
+        {{ t('journey_target_reached_description') }}
+      </p>
+      <p v-else class="mt-4 text-muted leading-relaxed">{{ t('journey_next_meal_description') }}</p>
+      <p
+        v-if="Number.isFinite(feed.nextWindow.requiredCarbs) && !isTimingOnlyWindow"
+        class="mt-4 text-sm"
+      >
+        {{ t('journey_carbs_remaining', { carbs: Math.max(0, feed.nextWindow.requiredCarbs) }) }}
+      </p>
+      <div class="mt-6">
+        <UButton
+          v-if="feed.nextWindow.lockedMeal || !canSuggestMeal"
+          :to="journalRoute"
+          size="lg"
+          >{{
+            feed.nextWindow.lockedMeal ? t('journey_view_planned_meal') : t('journey_log_food')
+          }}</UButton
+        >
+        <UButton v-else size="lg" @click="emit('open-ai-helper', displayRecommendation)">{{
+          t('journey_choose_meal')
+        }}</UButton>
       </div>
-
-      <div v-else-if="feed?.nextWindow" class="space-y-4">
-        <div
-          class="p-3 bg-white dark:bg-gray-900 rounded-lg border border-primary-100 dark:border-primary-900/50"
-        >
-          <div class="flex justify-between items-start mb-2">
-            <div>
-              <span class="text-xs font-bold uppercase text-gray-500">{{
-                formatWindowType(feed.nextWindow.type)
-              }}</span>
-              <h4 class="text-sm font-bold">
-                {{ feed.nextWindow.workoutTitle || 'Daily Baseline' }}
-              </h4>
-            </div>
-            <div class="text-right">
-              <span class="text-lg font-black text-primary-600 dark:text-primary-400"
-                >{{ feed.nextWindow.targetCarbs }}g</span
-              >
-              <p class="text-[10px] text-gray-500">
-                {{ isTimingOnlyWindow ? 'Timing Target (Optional)' : 'Carb Target' }}
-              </p>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-2 text-xs text-gray-500">
-            <UIcon name="i-lucide-clock" class="size-3" />
-            <span>{{ formatTimeRange(feed.nextWindow.startTime, feed.nextWindow.endTime) }}</span>
-          </div>
-
-          <div
-            v-if="feed.nextWindow.carryoverCredit > 0 || feed.nextWindow.requiredCarbs >= 0"
-            class="mt-2 text-[11px] space-y-1"
-          >
-            <p
-              v-if="feed.nextWindow.carryoverCredit > 0"
-              class="text-emerald-600 dark:text-emerald-400"
-            >
-              Carryover credit applied: -{{ feed.nextWindow.carryoverCredit }}g
-            </p>
-            <p class="text-gray-500 dark:text-gray-400">
-              Required now: {{ Math.max(0, feed.nextWindow.requiredCarbs || 0) }}g
-            </p>
-          </div>
-
-          <p v-if="isTimingOnlyWindow" class="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
-            Daily carb target already reached ({{ feed.dailyCarbStatus.actual }}/{{
-              feed.dailyCarbStatus.target
-            }}g). This window is timing-focused and optional.
+      <details class="fueling-next__disclosure mt-7">
+        <summary>{{ t('journey_target_detail') }}</summary>
+        <div class="pb-5 space-y-3 text-sm leading-relaxed">
+          <p v-if="Number.isFinite(feed.nextWindow.targetCarbs)">
+            {{ t('journey_carb_target', { carbs: feed.nextWindow.targetCarbs }) }}
           </p>
-        </div>
-
-        <!-- Locked / Planned Meal Display -->
-        <div
-          v-if="feed.nextWindow.lockedMeal"
-          class="p-3 bg-success-50 dark:bg-success-900/10 rounded-lg border border-success-200 dark:border-success-800"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-lock" class="size-4 text-success-500" />
-              <span class="text-xs font-bold text-success-700 dark:text-success-300"
-                >Planned Meal</span
-              >
-            </div>
-            <UButton
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-pencil"
-              @click="
-                () => {
-                  void $emit('open-ai-helper', feed.nextWindow)
-                }
-              "
-            />
-          </div>
-
-          <div class="space-y-2">
-            <p class="text-sm font-bold text-gray-900 dark:text-white">
-              {{ feed.nextWindow.lockedMeal.title }}
+          <p v-if="feed.nextWindow.carryoverCredit > 0">
+            {{ t('journey_carryover', { carbs: feed.nextWindow.carryoverCredit }) }}
+          </p>
+          <p v-if="isTimingOnlyWindow" class="text-muted">{{ t('journey_timing_optional') }}</p>
+          <p v-if="feed.dailyCarbStatus">
+            {{
+              t('journey_daily_carbs', {
+                actual: feed.dailyCarbStatus.actual,
+                target: feed.dailyCarbStatus.target
+              })
+            }}
+          </p>
+          <template v-if="feed.nextWindow.lockedMeal">
+            <p>
+              {{ t('journey_planned_carbs', { carbs: feed.nextWindow.lockedMeal.totals.carbs }) }}
             </p>
-            <div class="flex items-center gap-2">
-              <UBadge color="success" variant="subtle" size="xs">
-                {{ feed.nextWindow.lockedMeal.totals.carbs }}g Carbs
-              </UBadge>
-              <UBadge color="neutral" variant="subtle" size="xs">
-                {{ feed.nextWindow.lockedMeal.absorptionType }}
-              </UBadge>
-            </div>
-            <div class="flex flex-wrap gap-1 mt-1">
-              <span
-                v-for="ing in feed.nextWindow.lockedMeal.ingredients"
-                :key="ing.item"
-                class="text-[10px] text-gray-500 bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded border border-gray-100 dark:border-gray-800"
+            <p v-if="feed.nextWindow.lockedMeal.absorptionType" class="text-muted">
+              {{
+                t('journey_absorption_type', { type: feed.nextWindow.lockedMeal.absorptionType })
+              }}
+            </p>
+            <ul class="space-y-1">
+              <li
+                v-for="ingredient in feed.nextWindow.lockedMeal.ingredients"
+                :key="ingredient.item"
               >
-                {{ ing.quantity }}{{ ing.unit }} {{ ing.item }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div
-          v-else-if="displayRecommendation"
-          class="p-3 bg-primary-50 dark:bg-primary-900/10 rounded-lg border border-dashed border-primary-200 dark:border-primary-800"
-        >
-          <div class="flex items-center gap-2 mb-2">
-            <UIcon name="i-lucide-sparkles" class="size-4 text-primary-500" />
-            <span class="text-xs font-bold text-primary-700 dark:text-primary-300"
-              >AI Suggestion</span
+                {{ ingredient.quantity }}{{ ingredient.unit }} {{ ingredient.item }}
+              </li>
+            </ul>
+            <UButton
+              color="neutral"
+              variant="outline"
+              @click="emit('open-ai-helper', feed.nextWindow)"
+              >{{ t('journey_change_meal') }}</UButton
             >
-          </div>
-
-          <div v-if="feed.mealRecommendation" class="space-y-2">
-            <p class="text-sm font-bold text-gray-900 dark:text-white">
+          </template>
+          <template v-else-if="displayRecommendation">
+            <p v-if="feed.mealRecommendation" class="font-medium">
               {{ feed.mealRecommendation.item }}
             </p>
-            <div class="flex items-center gap-2">
-              <UBadge color="primary" variant="subtle" size="xs">
-                {{ feed.mealRecommendation.carbs }}g Carbs
-              </UBadge>
-              <UBadge color="neutral" variant="subtle" size="xs">
-                {{ feed.mealRecommendation.absorptionType }}
-              </UBadge>
-            </div>
-            <p class="text-[10px] text-gray-500 font-medium uppercase tracking-tight">
-              Timing: {{ feed.mealRecommendation.timing }}
+            <p v-if="Number.isFinite(displayRecommendation.carbs)">
+              {{ t('journey_suggested_carbs', { carbs: displayRecommendation.carbs }) }}
             </p>
-            <p
-              v-if="feed.mealRecommendation.reasoning"
-              class="text-xs text-gray-500 italic leading-relaxed mt-1"
-            >
+            <p v-if="displayRecommendation.absorptionType" class="text-muted">
+              {{ t('journey_absorption_type', { type: displayRecommendation.absorptionType }) }}
+            </p>
+            <p v-if="displayRecommendation.timing" class="text-muted">
+              {{ displayRecommendation.timing }}
+            </p>
+            <p v-if="feed.mealRecommendation?.reasoning" class="text-muted">
               {{ feed.mealRecommendation.reasoning }}
             </p>
+            <UButton v-if="canSuggestMeal" color="neutral" variant="link" :to="journalRoute">{{
+              t('journey_log_food')
+            }}</UButton>
+          </template>
+        </div>
+      </details>
+    </template>
+    <div v-else class="py-5">
+      <h2 class="fueling-next__title">
+        {{ t(feed ? 'journey_no_window_title' : 'journey_no_guidance_title') }}
+      </h2>
+      <p class="mt-4 text-muted leading-relaxed">{{ t('journey_empty_fueling_description') }}</p>
+      <UButton :to="journalRoute" size="lg" class="mt-6">{{ t('journey_open_journal') }}</UButton>
+    </div>
+    <details v-if="feed?.recentItems?.length" class="fueling-next__disclosure mt-5">
+      <summary>{{ t('journey_recent_food') }}</summary>
+      <div class="divide-y divide-default pb-5">
+        <div v-for="item in feed.recentItems" :key="item.id" class="flex items-center gap-3 py-4">
+          <UIcon :name="getMealIcon(item.mealType)" class="size-4 text-muted shrink-0" />
+          <div class="flex-1">
+            <p class="text-sm font-medium">{{ item.name || item.title }}</p>
+            <p class="text-xs text-muted mt-1">
+              {{ formatRelativeTime(item.loggedAt || item.date || item.timestamp) }}
+            </p>
+            <p v-if="Number.isFinite(item.absorptionProgress)" class="text-xs text-muted mt-1">
+              {{ t('journey_absorption_estimate', { percent: item.absorptionProgress }) }}
+            </p>
           </div>
-
-          <p v-else class="text-sm font-medium mb-3">
-            Eat <span class="text-primary-600 font-bold">{{ feed.suggestedIntake.carbs }}g</span> of
-            <span class="lowercase">{{ feed.suggestedIntake.absorptionType }}</span> carbs
-            <span class="text-primary-600">{{ feed.suggestedIntake.timing }}</span
-            >.
-          </p>
-
-          <UButton
-            size="xs"
-            block
-            class="mt-3"
-            color="primary"
-            variant="outline"
-            icon="i-lucide-utensils"
-            @click="
-              () => {
-                void $emit('open-ai-helper', displayRecommendation)
-              }
-            "
+          <span v-if="Number.isFinite(item.carbs)" class="text-sm tabular-nums"
+            >{{ item.carbs }}g</span
           >
-            Get Meal Ideas
-          </UButton>
-        </div>
-
-        <div
-          v-else-if="isTimingOnlyWindow || dailyCarbReached"
-          class="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-dashed border-amber-200 dark:border-amber-800"
-        >
-          <div class="flex items-center gap-2 mb-1">
-            <UIcon name="i-lucide-info" class="size-4 text-amber-500" />
-            <span class="text-xs font-bold text-amber-700 dark:text-amber-300"
-              >Daily Target Reached</span
-            >
-          </div>
-          <p class="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
-            You are at {{ feed.dailyCarbStatus.actual }}/{{ feed.dailyCarbStatus.target }}g today.
-            Remaining window carbs are optional timing support, not additional required intake.
-          </p>
         </div>
       </div>
-
-      <div v-else class="text-center py-6 text-gray-500">
-        <UIcon name="i-lucide-check-circle" class="size-8 mb-2 opacity-20" />
-        <p class="text-sm">All windows complete for today!</p>
-      </div>
-    </UCard>
-
-    <!-- Recent Activity (The "History") -->
-    <UCard>
-      <template #header>
-        <div class="flex items-center gap-2">
-          <UIcon name="i-lucide-history" class="size-5 text-gray-500" />
-          <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
-            Recent Fueling
-          </h3>
-        </div>
-      </template>
-
-      <div v-if="loading" class="space-y-4">
-        <div v-for="i in 3" :key="i" class="flex gap-3">
-          <USkeleton class="size-10 rounded-full" />
-          <div class="flex-1 space-y-2">
-            <USkeleton class="h-4 w-1/2" />
-            <USkeleton class="h-3 w-1/3" />
-          </div>
-        </div>
-      </div>
-
-      <div v-else-if="feed?.recentItems?.length" class="space-y-4">
-        <div v-for="item in feed.recentItems" :key="item.id" class="flex items-center gap-3 group">
-          <div class="relative">
-            <!-- Progress Ring for Absorption -->
-            <svg class="size-10 -rotate-90">
-              <circle
-                cx="20"
-                cy="20"
-                r="18"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                class="text-gray-100 dark:text-gray-800"
-              />
-              <circle
-                cx="20"
-                cy="20"
-                r="18"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-dasharray="113"
-                :stroke-dashoffset="113 - (113 * item.absorptionProgress) / 100"
-                class="text-success-500 transition-all duration-1000"
-              />
-            </svg>
-            <div class="absolute inset-0 flex items-center justify-center">
-              <UIcon :name="getMealIcon(item.mealType)" class="size-4 text-gray-400" />
-            </div>
-          </div>
-
-          <div class="flex-1 min-w-0">
-            <div class="flex justify-between items-start">
-              <h4 class="text-sm font-medium truncate pr-2">{{ item.name }}</h4>
-              <span class="text-xs font-bold text-gray-900 dark:text-white">{{ item.carbs }}g</span>
-            </div>
-            <div class="flex justify-between items-center mt-0.5">
-              <span class="text-[10px] text-gray-500">{{ formatRelativeTime(item.loggedAt) }}</span>
-              <span
-                class="text-[10px] font-medium"
-                :class="item.absorptionProgress === 100 ? 'text-success-500' : 'text-primary-500'"
-              >
-                {{
-                  item.absorptionProgress === 100
-                    ? 'Absorbed'
-                    : `${item.absorptionProgress}% Absorbed`
-                }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div v-else class="text-center py-6 text-gray-500">
-        <p class="text-xs italic">No items logged in the last 24h</p>
-      </div>
-    </UCard>
-  </div>
+    </details>
+  </section>
 </template>
 
 <script setup lang="ts">
   import { formatDistanceToNow } from 'date-fns'
+  import { useTranslate } from '@tolgee/vue'
 
   const props = defineProps<{
     feed: any
     loading: boolean
+    error?: string | null
   }>()
 
-  defineEmits(['open-ai-helper'])
+  const emit = defineEmits(['open-ai-helper', 'retry'])
+  const { t } = useTranslate('nutrition')
+  const { formatDate, formatDateUTC, getUserLocalDate } = useFormat()
+  const journalDate = computed(
+    () =>
+      props.feed?.nextWindow?.dateKey ||
+      (props.feed?.nextWindow?.startTime
+        ? formatDate(props.feed.nextWindow.startTime, 'yyyy-MM-dd')
+        : formatDateUTC(getUserLocalDate(), 'yyyy-MM-dd'))
+  )
+  const journalRoute = computed(() => `/nutrition/${journalDate.value}`)
+  const canSuggestMeal = computed(
+    () => !!displayRecommendation.value && !isTimingOnlyWindow.value && !dailyCarbReached.value
+  )
 
   const displayRecommendation = computed(() => {
     if (props.feed?.mealRecommendation) {
@@ -310,11 +190,13 @@
   )
 
   function formatWindowType(type: string) {
-    return type.replace('_', ' ')
+    const known = ['PRE_WORKOUT', 'INTRA_WORKOUT', 'POST_WORKOUT', 'DAILY_BASE', 'TRANSITION']
+    return known.includes(type)
+      ? t.value(`journey_window_${type.toLowerCase()}`)
+      : String(type).replaceAll('_', ' ').toLowerCase()
   }
 
   function formatTimeRange(start: string, end: string) {
-    const { formatDate } = useFormat()
     return `${formatDate(new Date(start), 'HH:mm')} - ${formatDate(new Date(end), 'HH:mm')}`
   }
 
@@ -337,3 +219,29 @@
     }
   }
 </script>
+
+<style scoped>
+  .fueling-next {
+    padding-block: 1.5rem 2rem;
+  }
+  .fueling-next__title {
+    font-size: clamp(1.5rem, 4vw, 2rem);
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: -0.03em;
+    max-width: 30ch;
+  }
+  .fueling-next__disclosure {
+    border-top: 1px solid var(--ui-border);
+  }
+  .fueling-next__disclosure summary {
+    padding-block: 1.125rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--ui-text-muted);
+  }
+  summary:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 3px;
+  }
+</style>

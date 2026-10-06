@@ -1,198 +1,107 @@
 <template>
-  <div v-if="status" class="space-y-8">
-    <div class="text-center space-y-4 py-4 sm:py-8">
-      <div
-        class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/30 mb-4"
+  <section v-if="status" class="setup-journey">
+    <p class="text-sm text-muted">{{ td('journey_setup_welcome') }}</p>
+    <h1 class="setup-journey__title">{{ heroTitle }}</h1>
+    <p class="setup-journey__description">{{ heroDescription }}</p>
+
+    <div class="mt-8 flex flex-wrap items-center gap-4">
+      <UButton v-if="nextRoute" :to="nextRoute" size="lg">{{ actionLabel }}</UButton>
+      <UButton v-else size="lg" @click="emit('connect-later')">{{ actionLabel }}</UButton>
+      <UButton
+        v-if="setupStep !== 'consent' && setupStep !== 'ready'"
+        color="neutral"
+        variant="link"
+        @click="emit('connect-later')"
       >
-        <UIcon
-          name="i-heroicons-rocket-launch"
-          class="w-8 h-8 text-primary-600 dark:text-primary-400"
-        />
-      </div>
-      <h1 class="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
-        {{ heroTitle }}
-      </h1>
-      <p class="max-w-2xl mx-auto text-lg text-gray-600 dark:text-gray-300">
-        {{ heroDescription }}
-      </p>
+        {{ td('journey_setup_later') }}
+      </UButton>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-      <div class="lg:col-span-2 space-y-6">
-        <UCard v-if="showImportPanel" class="border-2 border-primary-500/20 shadow-lg">
-          <div class="space-y-4">
-            <div class="flex items-start gap-3">
-              <UIcon
-                v-if="status.importState === 'importing'"
-                name="i-heroicons-arrow-path"
-                class="w-6 h-6 text-primary-500 animate-spin shrink-0 mt-1"
-              />
-              <UIcon
-                v-else-if="status.importState === 'failed'"
-                name="i-heroicons-exclamation-triangle"
-                class="w-6 h-6 text-red-500 shrink-0 mt-1"
-              />
-              <UIcon
-                v-else
-                name="i-heroicons-check-circle"
-                class="w-6 h-6 text-green-500 shrink-0 mt-1"
-              />
-              <div>
-                <h3 class="text-lg font-bold text-gray-900 dark:text-white">
-                  {{ importPanelTitle }}
-                </h3>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {{ importPanelDescription }}
-                </p>
-              </div>
-            </div>
+    <div class="setup-journey__path" aria-label="Your training journey">
+      <span :class="{ 'text-primary': status.hasPrimaryGoal }">{{
+        td('journey_setup_goal_step')
+      }}</span>
+      <span class="setup-journey__line" aria-hidden="true" />
+      <span :class="{ 'text-primary': status.hasActivePlan }">{{
+        td('journey_setup_plan_step')
+      }}</span>
+      <span class="setup-journey__line" aria-hidden="true" />
+      <span>{{ td('journey_setup_today_step') }}</span>
+    </div>
 
-            <div class="flex flex-wrap gap-3">
-              <UButton
-                v-if="status.importState === 'failed'"
-                color="primary"
-                icon="i-heroicons-arrow-path"
-                @click="emit('sync')"
-              >
-                {{ t('setup_progress_retry_sync') }}
-              </UButton>
-              <UButton color="neutral" variant="outline" to="/settings/apps">
-                {{ t('setup_connect_another') }}
-              </UButton>
-            </div>
+    <section v-if="showImportPanel" class="setup-journey__import" aria-live="polite">
+      <h2 class="font-medium">{{ importPanelTitle }}</h2>
+      <p class="mt-2 text-sm text-muted leading-relaxed">{{ importPanelDescription }}</p>
+      <UButton
+        v-if="status.importState === 'failed'"
+        class="mt-4"
+        color="neutral"
+        variant="outline"
+        @click="emit('sync')"
+      >
+        {{ t('setup_progress_retry_sync') }}
+      </UButton>
+    </section>
+
+    <details v-if="setupStep !== 'consent'" class="setup-journey__disclosure">
+      <summary>{{ td('journey_setup_import_optional') }}</summary>
+      <div class="pb-7">
+        <p class="text-sm text-muted leading-relaxed mb-5">
+          {{ td('journey_setup_import_description') }}
+        </p>
+        <div
+          v-if="!status.hasIntegration"
+          class="flex flex-wrap items-center justify-between gap-4 py-4 border-b border-default"
+        >
+          <div class="flex items-center gap-3">
+            <img
+              :src="primaryProviderLogo"
+              :alt="primaryProviderLabel"
+              class="size-7 object-contain"
+            />
+            <span class="font-medium text-sm">{{ primaryProviderLabel }}</span>
           </div>
-        </UCard>
-
-        <template v-else>
-          <UCard
-            v-if="showPrimaryProviderCard"
-            class="border-2 border-primary-500/20 shadow-lg relative overflow-hidden"
+          <UButton
+            color="neutral"
+            variant="outline"
+            :disabled="status.primaryProvider === 'strava' && isStravaDisabled"
+            @click="connectPrimaryProvider"
           >
-            <div class="relative z-10 space-y-6">
-              <div class="flex items-start gap-4">
-                <div
-                  class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden"
-                >
-                  <img
-                    :src="primaryProviderLogo"
-                    :alt="primaryProviderLabel"
-                    class="w-8 h-8 object-contain"
-                  />
-                </div>
-                <div>
-                  <h3 class="text-lg font-bold text-gray-900 dark:text-white">
-                    {{ primaryProviderTitle }}
-                  </h3>
-                  <p class="text-gray-600 dark:text-gray-400 mt-1">
-                    {{ primaryProviderDescription }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="flex flex-wrap items-center gap-4">
-                <UButton
-                  size="lg"
-                  color="primary"
-                  class="font-bold px-8"
-                  icon="i-heroicons-link"
-                  @click="connectPrimaryProvider"
-                >
-                  {{ t('connect_now') }}
-                </UButton>
-                <a
-                  v-if="status.primaryProvider === 'intervals'"
-                  href="https://intervals.icu"
-                  target="_blank"
-                  class="text-sm font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 underline decoration-dotted"
-                >
-                  {{ t('what_is_intervals') }}
-                </a>
-              </div>
+            {{ td('journey_setup_connect_provider', { provider: primaryProviderLabel }) }}
+          </UButton>
+        </div>
+        <details class="mt-4">
+          <summary class="text-sm cursor-pointer text-muted py-2">
+            {{ td('journey_setup_other_apps') }}
+          </summary>
+          <div
+            v-for="provider in secondaryProviders"
+            :key="provider.id"
+            class="flex items-center justify-between gap-4 py-4 border-b border-default"
+          >
+            <div class="min-w-0">
+              <p class="font-medium text-sm">{{ provider.label }}</p>
+              <p v-if="provider.disabledReason" class="mt-1 text-xs text-muted">
+                {{ provider.disabledReason }}
+              </p>
             </div>
-          </UCard>
-
-          <div>
-            <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              {{ t('more_ways_to_connect') }}
-            </p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <UCard v-for="provider in secondaryProviders" :key="provider.id" class="h-full">
-                <div class="flex items-center gap-3 mb-3">
-                  <div
-                    class="w-8 h-8 bg-white rounded-md flex items-center justify-center overflow-hidden ring-1 ring-gray-200 dark:ring-gray-700"
-                  >
-                    <img
-                      v-if="provider.logo"
-                      :src="provider.logo"
-                      :alt="provider.label"
-                      class="w-5 h-5 object-contain"
-                    />
-                    <span v-else class="text-[10px] font-semibold text-emerald-700">
-                      {{ provider.label }}
-                    </span>
-                  </div>
-                  <h4 class="font-bold text-gray-900 dark:text-white">{{ provider.label }}</h4>
-                </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2 min-h-10">
-                  {{ t(provider.descriptionKey) }}
-                </p>
-                <p
-                  v-if="provider.disabledReason"
-                  class="text-xs text-amber-600 dark:text-amber-400 mb-3"
-                >
-                  {{ provider.disabledReason }}
-                </p>
-                <UButton
-                  variant="soft"
-                  :color="provider.color"
-                  size="xs"
-                  block
-                  icon="i-heroicons-plus"
-                  :disabled="provider.disabled"
-                  @click="connectSecondaryProvider(provider)"
-                >
-                  {{ provider.disabled ? provider.disabledLabel : t('connect_button') }}
-                </UButton>
-              </UCard>
-            </div>
+            <UButton
+              color="neutral"
+              variant="outline"
+              size="sm"
+              :disabled="provider.disabled"
+              @click="connectSecondaryProvider(provider)"
+            >
+              {{ t('connect_button') }}
+            </UButton>
           </div>
-        </template>
-
-        <UCard class="bg-gray-50 dark:bg-gray-900/40">
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 class="font-bold text-gray-900 dark:text-white">{{ t('fallback_title') }}</h3>
-              <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{{ t('fallback_desc') }}</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <UButton
-                to="/workouts/upload"
-                color="neutral"
-                variant="outline"
-                icon="i-heroicons-cloud-arrow-up"
-              >
-                {{ t('fallback_upload_fit') }}
-              </UButton>
-              <UButton color="neutral" variant="ghost" @click="emit('connect-later')">
-                {{ t('fallback_connect_later') }}
-              </UButton>
-            </div>
-          </div>
-        </UCard>
+        </details>
+        <UButton to="/workouts/upload" color="neutral" variant="link" class="mt-5">{{
+          td('journey_setup_upload')
+        }}</UButton>
       </div>
-
-      <div class="lg:col-span-1">
-        <UCard class="bg-gray-50 dark:bg-gray-800/50 sticky top-4">
-          <template #header>
-            <h3 class="font-bold text-sm uppercase tracking-wider text-gray-500">
-              {{ t('getting_started_header') }}
-            </h3>
-          </template>
-          <DashboardOnboardingChecklist :steps="status.steps" />
-        </UCard>
-      </div>
-    </div>
-  </div>
+    </details>
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -209,6 +118,7 @@
   }>()
 
   const { t } = useTranslate('onboarding')
+  const { t: td } = useTranslate('dashboard')
   const { signIn } = useAuth()
   const { trackSetupHubViewed, trackIntegrationConnectStart } = useAnalytics()
 
@@ -229,19 +139,21 @@
         (props.status.signupMethod !== 'google' && !props.status.hasUsableData))
   )
 
-  const showPrimaryProviderCard = computed(() => !showImportPanel.value)
-
-  const heroTitle = computed(() => {
-    if (showImportPanel.value) return t.value('import_hero_title')
-    if (props.status.signupMethod === 'google') return t.value('google_signup_title')
-    return t.value('welcome_title')
+  const setupStep = computed(() => {
+    if (props.status.hasConsent === false) return 'consent'
+    if (!props.status.hasPrimaryGoal) return 'goal'
+    if (!props.status.hasActivePlan) return 'plan'
+    return 'ready'
   })
-
-  const heroDescription = computed(() => {
-    if (showImportPanel.value) return t.value('import_hero_desc')
-    if (props.status.signupMethod === 'google') return t.value('google_signup_desc')
-    return t.value('welcome_description')
+  const heroTitle = computed(() => td.value(`journey_setup_${setupStep.value}_title`))
+  const heroDescription = computed(() => td.value(`journey_setup_${setupStep.value}_description`))
+  const nextRoute = computed(() => {
+    if (setupStep.value === 'consent') return '/onboarding'
+    if (setupStep.value === 'goal') return '/profile/goals?new=1&returnTo=/dashboard'
+    if (setupStep.value === 'plan') return '/plan?returnTo=/dashboard'
+    return undefined
   })
+  const actionLabel = computed(() => td.value(`journey_setup_${setupStep.value}_action`))
 
   const importPanelTitle = computed(() => {
     if (props.status.importState === 'failed') return t.value('setup_progress_failed_title')
@@ -254,16 +166,6 @@
     if (props.status.importState === 'empty') return t.value('setup_progress_empty_desc')
     if (props.status.importState === 'failed') return t.value('setup_progress_failed_desc')
     return t.value('setup_progress_importing_desc')
-  })
-
-  const primaryProviderTitle = computed(() => {
-    if (props.status.primaryProvider === 'strava') return 'Strava'
-    return t.value('intervals_title')
-  })
-
-  const primaryProviderDescription = computed(() => {
-    if (props.status.primaryProvider === 'strava') return t.value('strava_description')
-    return t.value('intervals_description')
   })
 
   const primaryProviderLabel = computed(() =>
@@ -371,6 +273,7 @@
   function connectPrimaryProvider() {
     const provider = props.status.primaryProvider ?? 'intervals'
     if (provider === 'strava') {
+      if (isStravaDisabled.value) return
       connectFromSetupHub('strava', () => navigateTo('/connect-strava'))
       return
     }
@@ -388,3 +291,53 @@
     }
   }
 </script>
+
+<style scoped>
+  .setup-journey {
+    padding-block: 1.5rem 2rem;
+  }
+  .setup-journey__title {
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.04em;
+    max-width: 20ch;
+    margin-top: 1.25rem;
+  }
+  .setup-journey__description {
+    max-width: 56ch;
+    margin-top: 1.25rem;
+    line-height: 1.75;
+    color: var(--ui-text-muted);
+  }
+  .setup-journey__path {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--ui-text-muted);
+    margin-block: 3.5rem 2.5rem;
+  }
+  .setup-journey__line {
+    height: 1px;
+    width: 2rem;
+    background: var(--ui-border);
+  }
+  .setup-journey__import {
+    border-left: 2px solid var(--ui-primary);
+    padding-left: 1.25rem;
+    margin-block: 2rem;
+  }
+  .setup-journey__disclosure {
+    border-top: 1px solid var(--ui-border);
+  }
+  .setup-journey__disclosure summary {
+    padding-block: 1.25rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  summary:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 4px;
+  }
+</style>

@@ -10,7 +10,7 @@
         @mouseenter="$emit('hover-day', day.date)"
         @mouseleave="$emit('hover-day', null)"
       >
-        <span class="text-xs font-medium text-gray-500 uppercase">{{ formatDay(day.date) }}</span>
+        <span class="text-xs font-medium text-gray-500">{{ formatDay(day.date) }}</span>
         <span class="text-sm font-bold my-1 text-gray-900 dark:text-white">{{
           formatDate(day.date)
         }}</span>
@@ -68,7 +68,7 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <UIcon :name="selectedLegend.icon" class="size-6" :class="selectedLegend.iconColor" />
-            <h3 class="text-lg font-black uppercase tracking-tight text-gray-900 dark:text-white">
+            <h3 class="text-lg font-medium tracking-tight text-gray-900 dark:text-white">
               {{ selectedLegend.label }} Analysis
             </h3>
           </div>
@@ -77,9 +77,7 @@
         <div
           class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800"
         >
-          <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
-            What it means
-          </p>
+          <p class="text-xs font-bold text-gray-400 mb-1">What it means</p>
           <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
             {{ selectedLegend.meaning }}
           </p>
@@ -88,7 +86,7 @@
         <div
           class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800"
         >
-          <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">How to fuel</p>
+          <p class="text-xs font-bold text-gray-400 mb-1">How to fuel</p>
           <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
             {{ selectedLegend.guidance }}
           </p>
@@ -97,11 +95,7 @@
         <div
           class="bg-primary-50 dark:bg-primary-950/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900"
         >
-          <p
-            class="text-xs font-bold uppercase tracking-widest text-primary-700 dark:text-primary-300"
-          >
-            Coach note
-          </p>
+          <p class="text-xs font-bold text-primary-700 dark:text-primary-300">Coach note</p>
           <p class="text-sm text-primary-700 dark:text-primary-300 mt-1 leading-relaxed italic">
             {{ selectedLegend.note }}
           </p>
@@ -111,7 +105,7 @@
           color="neutral"
           variant="soft"
           block
-          class="font-bold uppercase tracking-tight text-xs"
+          class="font-bold tracking-tight text-xs"
           @click="
             () => {
               isLegendModalOpen = false

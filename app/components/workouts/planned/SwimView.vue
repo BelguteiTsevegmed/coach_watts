@@ -1,86 +1,31 @@
 <template>
   <div
     :class="[
-      'p-4 sm:p-6 transition-colors',
+      'p-4 sm:p-6',
       isBlueprint
-        ? 'bg-default/95 border border-default/80 rounded-3xl shadow-sm'
-        : 'bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800'
+        ? 'bg-default/95 border border-default/80 rounded-3xl shadow-none'
+        : 'bg-default rounded-xl border border-default'
     ]"
   >
-    <div class="flex justify-between items-center mb-4">
-      <h3 class="text-lg font-semibold">Swim Session</h3>
-      <div class="flex gap-2">
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-eye"
-          @click="
-            () => {
-              void $emit('view')
-            }
-          "
-        >
-          View
-        </UButton>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-adjustments-horizontal"
-          @click="
-            () => {
-              void $emit('adjust')
-            }
-          "
-        >
-          Adjust
-        </UButton>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-pencil-square"
-          :class="{ 'bg-primary-50 dark:bg-primary-900/20 text-primary': activeTab === 'edit' }"
-          @click="
-            () => {
-              activeTab = activeTab === 'edit' ? 'view' : 'edit'
-            }
-          "
-        >
-          Edit
-        </UButton>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-arrow-path"
-          :loading="generating"
-          @click="
-            () => {
-              void $emit('regenerate')
-            }
-          "
-        >
-          Regenerate
-        </UButton>
-      </div>
+    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <h3 class="text-lg font-semibold">Swim steps</h3>
+      <WorkoutDetailToolsMenu
+        :editing="activeTab === 'edit'"
+        :generating="generating"
+        :allow-edit="allowEdit"
+        edit-label="Edit steps"
+        @view="emit('view')"
+        @adjust="emit('adjust')"
+        @edit="activeTab = activeTab === 'edit' ? 'view' : 'edit'"
+        @regenerate="emit('regenerate')"
+      />
     </div>
 
     <div class="space-y-4">
-      <div v-if="allowEdit" class="flex justify-end mb-2">
-        <UTabs
-          v-model="activeTab"
-          :items="[
-            { label: 'Steps', value: 'view', icon: 'i-heroicons-list-bullet' },
-            { label: 'Edit', value: 'edit', icon: 'i-heroicons-pencil-square' }
-          ]"
-          size="xs"
-          :ui="{ list: 'w-auto' }"
-        />
-      </div>
-
-      <div v-if="activeTab === 'view' && workout.structuredWorkout?.steps" class="space-y-4">
+      <div
+        v-if="activeTab === 'view' && workout.structuredWorkout?.steps?.length"
+        class="space-y-4"
+      >
         <div
           v-for="(step, index) in workout.structuredWorkout.steps"
           :key="index"
@@ -98,8 +43,12 @@
               <span v-else-if="step.durationSeconds || step.duration">{{
                 formatDuration(step.durationSeconds || step.duration)
               }}</span>
-              <span class="mx-2">•</span>
-              <span>{{ step.description || 'Steady' }}</span>
+              <span
+                v-if="step.description && (step.distance || step.durationSeconds || step.duration)"
+                class="mx-2"
+                >•</span
+              >
+              <span v-if="step.description">{{ step.description }}</span>
             </div>
           </div>
         </div>
@@ -117,6 +66,7 @@
 </template>
 
 <script setup lang="ts">
+  import WorkoutDetailToolsMenu from '~/components/workouts/WorkoutDetailToolsMenu.vue'
   import WorkoutStepsEditor from './WorkoutStepsEditor.vue'
   const props = defineProps<{
     workout: any

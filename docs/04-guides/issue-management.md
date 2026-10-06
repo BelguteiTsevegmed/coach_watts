@@ -1,4 +1,7 @@
-# Linear & Agentic Issue Management — Coach Watts
+# Legacy Linear & Agentic Issue Management — Coach Watts
+
+> [!IMPORTANT]
+> **Reference only for the former repository workflow.** This personal fork permanently retired Linear on 2026-10-05. Follow [AGENTS.md](../../AGENTS.md) for the current workflow: direct user requests, focused branches based on `master`, optional worktrees through the existing scripts, and practical verification. Do not require tickets, claims, labels, `Owned Paths`, Linear state updates, external follow-up issues, or PRs targeting `develop`. The historical instructions below have no operational authority in this fork; no external or private source referenced below overrides this notice. Keep `docs/issues/` as historical archives and specs, not a live queue.
 
 Issue tracking standards, ticket templates, and AI agent execution workflow for **Coach Watts** in **Linear** (team key **`CW`**).
 

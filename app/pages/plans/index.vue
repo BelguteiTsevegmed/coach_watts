@@ -1,206 +1,176 @@
 <template>
   <UDashboardPanel id="my-plans">
-    <template #header>
-      <UDashboardNavbar title="My Plans" />
-    </template>
-
     <template #body>
-      <div class="p-0 sm:p-6 space-y-4 sm:space-y-6">
-        <!-- Page Header -->
-        <div class="px-4 sm:px-0">
-          <h1 class="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
-            Plans
-          </h1>
-          <p
-            class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em] mt-1 italic"
+      <div class="mx-auto w-full max-w-[52rem] space-y-10 px-5 py-8 sm:px-10 sm:py-10">
+        <div class="max-w-xl">
+          <h1
+            class="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-4xl"
           >
-            Strategy Repository & Training History
+            Your plans
+          </h1>
+          <p class="mt-3 leading-7 text-gray-600 dark:text-gray-400">
+            Keep your current training close. Revisit earlier plans when they are useful.
           </p>
         </div>
-
-        <!-- Templates Section -->
-        <div>
-          <h3 class="text-lg font-semibold mb-4 flex items-center gap-2 px-4 sm:px-0">
-            <UIcon name="i-heroicons-bookmark" class="w-5 h-5 text-primary" />
-            Templates
-          </h3>
-          <div v-if="templates.length === 0" class="text-muted text-sm italic px-4 sm:px-0">
-            No templates saved yet. Save a plan as a template to reuse it later.
-          </div>
-          <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0 md:gap-4">
-            <UCard
-              v-for="plan in templates"
-              :key="plan.id"
-              :ui="mobileListCardUi"
-              class="relative group hover:border-primary/50 transition-colors cursor-pointer"
-              @click="
-                () => {
-                  void viewPlan(plan.id)
-                }
-              "
-            >
-              <template #header>
-                <div class="flex justify-between items-start gap-2">
-                  <div class="flex-1 min-w-0">
-                    <div class="font-bold truncate">{{ plan.name || 'Untitled Template' }}</div>
-                    <div
-                      v-if="plan.goal?.title"
-                      class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate"
-                    >
-                      {{ plan.goal.title }}
-                    </div>
-                  </div>
-                  <UBadge color="neutral" variant="soft" size="xs" class="shrink-0">{{
-                    plan.strategy
-                  }}</UBadge>
-                </div>
-              </template>
-
-              <div class="space-y-3">
-                <p class="text-sm text-muted line-clamp-2 min-h-[2.5rem]">
-                  {{ plan.description || 'No description provided.' }}
-                </p>
-
-                <!-- Plan Stats -->
-                <div
-                  class="flex flex-wrap gap-3 text-xs text-gray-600 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700"
-                >
-                  <div v-if="plan._count?.blocks" class="flex items-center gap-1">
-                    <UIcon name="i-heroicons-cube-transparent" class="w-3.5 h-3.5" />
-                    <span
-                      >{{ plan._count.blocks }}
-                      {{ plan._count.blocks === 1 ? 'Block' : 'Blocks' }}</span
-                    >
-                  </div>
-                  <div v-if="getTotalWeeks(plan)" class="flex items-center gap-1">
-                    <UIcon name="i-heroicons-calendar-days" class="w-3.5 h-3.5" />
-                    <span
-                      >{{ getTotalWeeks(plan) }}
-                      {{ getTotalWeeks(plan) === 1 ? 'Week' : 'Weeks' }}</span
-                    >
-                  </div>
-                  <div class="flex items-center gap-1">
-                    <UIcon name="i-heroicons-clock" class="w-3.5 h-3.5" />
-                    <span>{{ formatDate(plan.createdAt) }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <template #footer>
-                <div class="flex justify-end gap-2">
-                  <UButton
-                    size="xs"
-                    color="error"
-                    variant="ghost"
-                    icon="i-heroicons-trash"
-                    :loading="deletingId === plan.id"
-                    @click.stop="deleteTemplate(plan.id)"
-                  />
-                  <UButton
-                    size="xs"
-                    color="primary"
-                    variant="ghost"
-                    icon="i-heroicons-play"
-                    :loading="loadingId === plan.id"
-                    @click.stop="useTemplate(plan)"
-                  >
-                    Use
-                  </UButton>
-                </div>
-              </template>
-            </UCard>
-          </div>
+        <p v-if="plansPending" role="status" class="py-6 text-gray-500">Loading your plans…</p>
+        <div v-else-if="plansError" role="alert" class="space-y-3">
+          <p>Your saved plans could not load. Try again to see your training history.</p>
+          <UButton color="neutral" variant="outline" @click="refresh()">Try again</UButton>
         </div>
-
-        <USeparator />
-
-        <!-- Past Plans Section -->
-        <div>
-          <div class="flex items-center justify-between mb-4 px-4 sm:px-0">
-            <h3 class="text-lg font-semibold flex items-center gap-2">
-              <UIcon name="i-heroicons-clock" class="w-5 h-5 text-gray-500" />
-              Plan History
-            </h3>
-            <div
-              v-if="history.length > 3 && !showAllHistory"
-              class="text-sm text-gray-500 dark:text-gray-400"
+        <section
+          v-else
+          class="space-y-5"
+          aria-labelledby="current-plan-title"
+          data-testid="saved-current-plan"
+        >
+          <h2 id="current-plan-title" class="text-xl font-medium">
+            {{ currentPlan ? 'Your current plan' : 'Start with your next goal' }}
+          </h2>
+          <template v-if="currentPlan">
+            <p class="text-2xl font-medium tracking-tight">
+              {{ currentPlan.goal?.title || currentPlan.name || 'Training plan' }}
+            </p>
+            <p v-if="currentPlan.targetDate" class="text-sm text-gray-500">
+              Working toward {{ formatDate(currentPlan.targetDate) }}
+            </p>
+            <UButton to="/plan" color="primary">Continue my plan</UButton>
+          </template>
+          <template v-else>
+            <p class="max-w-xl leading-7 text-gray-500">
+              Choose what you want to work toward and how much time you have. Your plan starts
+              there.
+            </p>
+            <UButton to="/plan" color="primary">Create my plan</UButton>
+          </template>
+        </section>
+        <div
+          class="divide-y divide-gray-200 border-y border-gray-200 dark:divide-gray-800 dark:border-gray-800"
+        >
+          <details class="py-6" data-testid="saved-plan-history">
+            <summary
+              class="cursor-pointer text-lg font-medium focus-visible:outline-2 focus-visible:outline-primary"
             >
-              Showing {{ Math.min(3, history.length) }} of {{ history.length }}
+              Earlier plans<span class="ml-3 text-sm font-normal text-gray-500">{{
+                history.length
+              }}</span>
+            </summary>
+            <div class="mt-5 space-y-4">
+              <p v-if="history.length === 0" class="text-sm leading-6 text-gray-500">
+                Earlier plans will appear here after you finish or archive them.
+              </p>
+              <div v-else class="divide-y divide-gray-100 dark:divide-gray-800">
+                <button
+                  v-for="plan in paginatedHistory"
+                  :key="plan.id"
+                  type="button"
+                  class="flex w-full items-center justify-between gap-5 py-4 text-left focus-visible:outline-2 focus-visible:outline-primary"
+                  @click="viewPlan(plan.id)"
+                >
+                  <span
+                    ><span class="block text-sm font-medium">{{
+                      plan.goal?.title || plan.name || 'Training plan'
+                    }}</span
+                    ><span class="mt-1 block text-xs text-gray-500"
+                      >{{ formatDate(plan.createdAt) }}, {{ formatPlanStatus(plan.status) }}</span
+                    ></span
+                  >
+                  <UIcon
+                    name="i-heroicons-chevron-right"
+                    class="size-4 text-gray-400"
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+              <div v-if="history.length > 3" class="flex items-center gap-3 pt-3">
+                <UButton
+                  v-if="!showAllHistory"
+                  color="neutral"
+                  variant="ghost"
+                  @click="
+                    () => {
+                      showAllHistory = true
+                    }
+                  "
+                  >View all {{ history.length }} plans</UButton
+                >
+                <template v-else>
+                  <UButton
+                    :disabled="currentHistoryPage === 1"
+                    color="neutral"
+                    variant="ghost"
+                    icon="i-heroicons-chevron-left"
+                    aria-label="Previous page"
+                    @click="previousPage()"
+                  />
+                  <span class="text-sm text-gray-500"
+                    >Page {{ currentHistoryPage }} of {{ totalHistoryPages }}</span
+                  >
+                  <UButton
+                    :disabled="currentHistoryPage === totalHistoryPages"
+                    color="neutral"
+                    variant="ghost"
+                    icon="i-heroicons-chevron-right"
+                    aria-label="Next page"
+                    @click="nextPage()"
+                  />
+                </template>
+              </div>
             </div>
-          </div>
-          <div v-if="history.length === 0" class="text-muted text-sm italic px-4 sm:px-0">
-            No plan history found.
-          </div>
-          <div v-else class="space-y-0 sm:space-y-3">
-            <UCard
-              v-for="plan in paginatedHistory"
-              :key="plan.id"
-              :ui="{ ...mobileListCardUi, body: 'p-0' }"
-              class="cursor-pointer hover:border-primary/50 transition-colors"
-              @click="
-                () => {
-                  void viewPlan(plan.id)
-                }
-              "
+          </details>
+          <details class="py-6" data-testid="saved-plan-templates">
+            <summary
+              class="cursor-pointer text-lg font-medium focus-visible:outline-2 focus-visible:outline-primary"
             >
-              <div class="flex items-center justify-between p-3 sm:p-4">
-                <div>
-                  <div class="font-semibold">{{ plan.goal?.title || 'Unnamed Plan' }}</div>
-                  <div class="text-xs text-muted mt-1">
-                    Created {{ new Date(plan.createdAt).toLocaleDateString() }} •
-                    <span :class="getStatusColor(plan.status)">{{ plan.status }}</span>
+              Reusable plans<span class="ml-3 text-sm font-normal text-gray-500">{{
+                templates.length
+              }}</span>
+            </summary>
+            <div class="mt-5 space-y-4">
+              <p v-if="templates.length === 0" class="text-sm leading-6 text-gray-500">
+                Save a plan as a template when you want to use it again.
+              </p>
+              <div v-else class="divide-y divide-gray-100 dark:divide-gray-800">
+                <div
+                  v-for="plan in templates"
+                  :key="plan.id"
+                  class="flex flex-wrap items-center justify-between gap-4 py-5"
+                >
+                  <button
+                    type="button"
+                    class="min-w-0 max-w-xl text-left focus-visible:outline-2 focus-visible:outline-primary"
+                    @click="viewPlan(plan.id)"
+                  >
+                    <span class="block text-sm font-medium">{{
+                      plan.name || 'Saved template'
+                    }}</span
+                    ><span class="mt-1 block text-sm leading-6 text-gray-500">{{
+                      plan.description || plan.goal?.title || 'A plan you can use again.'
+                    }}</span
+                    ><span v-if="getTotalWeeks(plan)" class="mt-1 block text-xs text-gray-500"
+                      >{{ getTotalWeeks(plan) }} weeks</span
+                    >
+                  </button>
+                  <div class="flex items-center gap-1">
+                    <UButton
+                      color="neutral"
+                      variant="outline"
+                      :loading="loadingId === plan.id"
+                      @click="useTemplate(plan)"
+                      >Use this plan</UButton
+                    >
+                    <UButton
+                      color="neutral"
+                      variant="ghost"
+                      icon="i-heroicons-trash"
+                      :aria-label="`Delete ${plan.name || 'saved template'}`"
+                      :loading="deletingId === plan.id"
+                      @click="deleteTemplate(plan.id)"
+                    />
                   </div>
                 </div>
-                <UIcon name="i-heroicons-chevron-right" class="w-5 h-5 text-gray-400" />
-              </div>
-            </UCard>
-
-            <!-- Show More / Pagination -->
-            <div v-if="history.length > 3" class="flex justify-center pt-2 px-4 sm:px-0">
-              <UButton
-                v-if="!showAllHistory"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                @click="
-                  () => {
-                    showAllHistory = true
-                  }
-                "
-              >
-                Show All ({{ history.length }})
-              </UButton>
-              <div v-else class="flex items-center gap-2">
-                <UButton
-                  :disabled="currentHistoryPage === 1"
-                  color="neutral"
-                  variant="ghost"
-                  size="sm"
-                  icon="i-heroicons-chevron-left"
-                  @click="
-                    () => {
-                      void previousPage()
-                    }
-                  "
-                />
-                <span class="text-sm text-gray-600 dark:text-gray-400">
-                  Page {{ currentHistoryPage }} of {{ totalHistoryPages }}
-                </span>
-                <UButton
-                  :disabled="currentHistoryPage === totalHistoryPages"
-                  color="neutral"
-                  variant="ghost"
-                  size="sm"
-                  icon="i-heroicons-chevron-right"
-                  @click="
-                    () => {
-                      void nextPage()
-                    }
-                  "
-                />
               </div>
             </div>
-          </div>
+          </details>
         </div>
       </div>
     </template>
@@ -311,9 +281,7 @@
 </template>
 
 <script setup lang="ts">
-  import MiniWorkoutChart from '~/components/workouts/MiniWorkoutChart.vue'
   import PlanOverviewModal from '~/components/plans/PlanOverviewModal.vue'
-  import { mobileListCardUi } from '~/utils/mobile-surface-ui'
 
   const {
     formatDate: baseFormatDate,
@@ -330,13 +298,28 @@
     title: 'My Plans'
   })
 
-  const { data: plans, refresh } = (await useAsyncData<any[]>('user-plans', () =>
-    ($fetch as any)('/api/plans')
-  )) as any
+  const {
+    data: plans,
+    refresh,
+    pending: plansPending,
+    error: plansError
+  } = (await useAsyncData<any[]>('user-plans', () => ($fetch as any)('/api/plans'))) as any
   const toast = useToast()
 
   const templates = computed(() => plans.value?.filter((p: any) => p.isTemplate) || [])
-  const history = computed(() => plans.value?.filter((p: any) => !p.isTemplate) || [])
+  const currentPlan = computed(
+    () => plans.value?.find((p: any) => !p.isTemplate && p.status === 'ACTIVE') || null
+  )
+  const history = computed(
+    () => plans.value?.filter((p: any) => !p.isTemplate && p.status !== 'ACTIVE') || []
+  )
+  const planStatusLabels: Record<string, string> = {
+    COMPLETED: 'Completed',
+    ABANDONED: 'Abandoned',
+    ARCHIVED: 'Archived',
+    DRAFT: 'Draft'
+  }
+  const formatPlanStatus = (status: string) => planStatusLabels[status] || 'Saved'
 
   const loadingId = ref<string | null>(null)
   const deletingId = ref<string | null>(null)

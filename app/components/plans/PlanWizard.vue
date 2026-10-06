@@ -1,179 +1,30 @@
 <template>
-  <div class="flex flex-col h-full max-h-[70vh]">
+  <div class="flex flex-col h-full max-h-[75vh]">
     <!-- Scrollable Content -->
     <div class="flex-1 overflow-y-auto px-1 py-2 space-y-6">
-      <!-- Progress Indicator -->
-      <p
-        v-if="step <= 5"
-        class="mb-4 text-center text-sm font-semibold text-highlighted sm:hidden"
-        aria-live="polite"
-      >
-        Step {{ step }} of 6 — {{ wizardStepLabels[step - 1] }}
-      </p>
-      <div
-        v-if="step <= 5"
-        ref="wizardProgressRef"
-        class="mb-4 hidden items-center justify-start gap-2 overflow-x-auto pb-2 scroll-smooth sm:flex"
-      >
-        <!-- Step 1 -->
-        <div class="flex items-center flex-shrink-0">
-          <div
-            class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors"
-            :class="
-              step >= 1 ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'
-            "
-          >
-            1
-          </div>
-          <div
-            class="text-xs font-medium ml-2"
-            :class="step >= 1 ? 'text-primary' : 'text-gray-500'"
-          >
-            Goal
-          </div>
-        </div>
-        <div
-          class="w-8 sm:w-12 h-1 bg-gray-200 dark:bg-gray-800 rounded-full mx-2 overflow-hidden flex-shrink-0"
-        >
-          <div
-            class="h-full bg-primary transition-all duration-300"
-            :style="{ width: step >= 2 ? '100%' : '0%' }"
-          />
-        </div>
-
-        <!-- Step 2 -->
-        <div class="flex items-center flex-shrink-0">
-          <div
-            class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors"
-            :class="
-              step >= 2 ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'
-            "
-          >
-            2
-          </div>
-          <div
-            class="text-xs font-medium ml-2"
-            :class="step >= 2 ? 'text-primary' : 'text-gray-500'"
-          >
-            Strategy
-          </div>
-        </div>
-        <div
-          class="w-8 sm:w-12 h-1 bg-gray-200 dark:bg-gray-800 rounded-full mx-2 overflow-hidden flex-shrink-0"
-        >
-          <div
-            class="h-full bg-primary transition-all duration-300"
-            :style="{ width: step >= 3 ? '100%' : '0%' }"
-          />
-        </div>
-
-        <!-- Step 3 (NEW) -->
-        <div class="flex items-center flex-shrink-0">
-          <div
-            class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors"
-            :class="
-              step >= 3 ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'
-            "
-          >
-            3
-          </div>
-          <div
-            class="text-xs font-medium ml-2"
-            :class="step >= 3 ? 'text-primary' : 'text-gray-500'"
-          >
-            Phases
-          </div>
-        </div>
-        <div
-          class="w-8 sm:w-12 h-1 bg-gray-200 dark:bg-gray-800 rounded-full mx-2 overflow-hidden flex-shrink-0"
-        >
-          <div
-            class="h-full bg-primary transition-all duration-300"
-            :style="{ width: step >= 4 ? '100%' : '0%' }"
-          />
-        </div>
-
-        <!-- Step 4 -->
-        <div class="flex items-center flex-shrink-0">
-          <div
-            class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors"
-            :class="
-              step >= 4 ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'
-            "
-          >
-            4
-          </div>
-          <div
-            class="text-xs font-medium ml-2"
-            :class="step >= 4 ? 'text-primary' : 'text-gray-500'"
-          >
-            Schedule
-          </div>
-        </div>
-        <div
-          class="w-8 sm:w-12 h-1 bg-gray-200 dark:bg-gray-800 rounded-full mx-2 overflow-hidden flex-shrink-0"
-        >
-          <div
-            class="h-full bg-primary transition-all duration-300"
-            :style="{ width: step >= 5 ? '100%' : '0%' }"
-          />
-        </div>
-
-        <!-- Step 5 -->
-        <div class="flex items-center flex-shrink-0">
-          <div
-            class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors"
-            :class="
-              step >= 5 ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'
-            "
-          >
-            5
-          </div>
-          <div
-            class="text-xs font-medium ml-2"
-            :class="step >= 5 ? 'text-primary' : 'text-gray-500'"
-          >
-            Details
-          </div>
-        </div>
-        <div
-          class="w-8 sm:w-12 h-1 bg-gray-200 dark:bg-gray-800 rounded-full mx-2 overflow-hidden flex-shrink-0"
-        >
-          <div
-            class="h-full bg-primary transition-all duration-300"
-            :style="{ width: step >= 6 ? '100%' : '0%' }"
-          />
-        </div>
-
-        <!-- Step 6 -->
-        <div class="flex items-center flex-shrink-0">
-          <div
-            class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors"
-            :class="
-              step >= 6 ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'
-            "
-          >
-            6
-          </div>
-          <div
-            class="text-xs font-medium ml-2"
-            :class="step >= 6 ? 'text-primary' : 'text-gray-500'"
-          >
-            Review
-          </div>
-        </div>
+      <div class="space-y-3" aria-live="polite">
+        <p class="text-sm text-gray-500">
+          Step {{ visibleStep }} of 5: {{ wizardStepLabels[visibleStep - 1] }}
+        </p>
+        <UProgress :model-value="visibleStep * 20" size="xs" aria-label="Plan setup progress" />
       </div>
-
       <!-- Step 1: Select Goal -->
       <div v-if="step === 1" class="space-y-6">
-        <h3 class="text-xl font-semibold">Step 1: Choose your Goal</h3>
+        <h3 class="text-xl font-semibold">What are you working toward?</h3>
 
         <div v-if="loadingGoals" class="text-center py-8">
           <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-primary" />
         </div>
 
         <div v-else class="space-y-4">
-          <!-- Create New Goal Option -->
+          <div v-if="goalsLoadError" role="alert" class="space-y-3">
+            <p>Your goals could not load. Try again to choose a goal.</p>
+            <UButton color="neutral" variant="outline" @click="fetchGoals()">Try again</UButton>
+          </div>
+          <p v-else-if="goals.length === 0" class="text-sm leading-6 text-gray-500">
+            Create a goal to give your training a direction.
+          </p>
+          <!-- Create a goal Option -->
           <button
             class="w-full p-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-primary hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors flex items-center justify-center gap-2 text-muted hover:text-primary"
             @click="
@@ -183,7 +34,7 @@
             "
           >
             <UIcon name="i-heroicons-plus" class="w-5 h-5" />
-            <span class="font-medium">Create New Goal</span>
+            <span class="font-medium">Create a goal</span>
           </button>
 
           <!-- Existing Goals -->
@@ -222,479 +73,161 @@
                     <UIcon name="i-heroicons-calendar" class="w-4 h-4" />
                     Target: {{ formatDate(goal.eventDate || goal.targetDate) }}
                   </div>
-
-                  <!-- Events List -->
-                  <div v-if="goal.events?.length > 0" class="mt-3 space-y-1.5">
-                    <div class="text-[10px] uppercase font-bold text-muted tracking-wider">
-                      Associated Events
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                      <div
-                        v-for="event in goal.events"
-                        :key="event.id"
-                        class="flex items-center gap-1.5 px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
-                      >
-                        <UIcon
-                          name="i-heroicons-flag"
-                          class="w-3 h-3"
-                          :class="event.priority === 'A' ? 'text-amber-500' : 'text-gray-400'"
-                        />
-                        <span class="text-[10px] font-medium">{{ event.title }}</span>
-                        <span class="text-[10px] text-muted"
-                          >• {{ formatDateUTC(event.date, 'MMM d') }}</span
-                        >
-                        <UBadge
-                          v-if="event.priority"
-                          size="xs"
-                          variant="soft"
-                          :color="event.priority === 'A' ? 'warning' : 'neutral'"
-                          class="text-[8px] px-1 py-0 h-3"
-                        >
-                          {{ event.priority }}
-                        </UBadge>
-                      </div>
-                    </div>
-                  </div>
                 </div>
                 <UBadge :color="getPriorityColor(goal.priority)">{{ goal.priority }}</UBadge>
               </div>
             </button>
           </div>
+          <details v-if="selectedGoal?.events?.length" class="space-y-3">
+            <summary
+              class="cursor-pointer text-sm text-gray-600 focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              View events for this goal
+            </summary>
+            <ul class="space-y-2 text-sm text-gray-500">
+              <li v-for="event in selectedGoal.events" :key="event.id">
+                {{ event.title }}, {{ formatDateUTC(event.date, 'MMM d')
+                }}<span v-if="event.priority"> ({{ event.priority }})</span>
+              </li>
+            </ul>
+          </details>
         </div>
       </div>
 
-      <!-- Step 2: Plan Strategy & Volume -->
-      <div v-else-if="step === 2" class="space-y-8">
-        <div class="flex items-center gap-3 mb-2">
+      <!-- Goal and availability are settled before generation. -->
+      <div v-else-if="step === 2" class="space-y-7" data-testid="plan-availability">
+        <div class="flex items-center gap-3">
           <UButton
             icon="i-heroicons-arrow-left"
+            aria-label="Back to goal"
+            color="neutral"
             variant="ghost"
-            size="sm"
             @click="
               () => {
                 step = 1
               }
             "
           />
-          <h3 class="text-xl font-semibold">Step 2: Training Strategy</h3>
+          <div>
+            <h3 class="text-xl font-semibold">Make room for training</h3>
+            <p class="mt-2 text-sm leading-6 text-gray-500">
+              Set a time budget you can keep. Your plan will work around it.
+            </p>
+          </div>
         </div>
-
-        <!-- 1. Activity Types -->
-        <div class="space-y-3">
-          <label class="block text-sm font-medium">Which activities should be included?</label>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div
+        <fieldset class="space-y-3">
+          <legend class="text-sm font-medium">Which activities will you train?</legend>
+          <div class="flex flex-wrap gap-2">
+            <button
               v-for="type in availableActivityTypes"
               :key="type.value"
-              class="p-3 rounded-lg border-2 text-center cursor-pointer transition-all select-none"
+              type="button"
+              :aria-pressed="selectedActivityTypes.includes(type.value)"
+              class="rounded-lg border px-4 py-3 text-sm focus-visible:outline-2 focus-visible:outline-primary"
               :class="
                 selectedActivityTypes.includes(type.value)
-                  ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-1 ring-primary/50'
-                  : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-600 opacity-70'
+                  ? 'border-primary text-primary'
+                  : 'border-gray-200 dark:border-gray-700'
               "
-              @click="
-                () => {
-                  void toggleActivityType(type.value)
-                }
-              "
+              @click="toggleActivityType(type.value)"
             >
-              <UIcon
-                :name="type.icon"
-                class="w-6 h-6 mb-1"
-                :class="
-                  selectedActivityTypes.includes(type.value) ? 'text-primary' : 'text-gray-400'
-                "
-              />
-              <div
-                class="text-sm font-medium"
-                :class="
-                  selectedActivityTypes.includes(type.value)
-                    ? 'text-gray-900 dark:text-white'
-                    : 'text-gray-500'
-                "
-              >
-                {{ type.label }}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. Volume -->
-        <div class="space-y-4">
-          <div class="flex justify-between items-end">
-            <label class="block text-sm font-medium">Weekly Volume Target</label>
-            <span class="text-2xl font-bold text-primary tabular-nums"
-              >{{ volumeHours }} <span class="text-sm font-normal text-muted">hrs/week</span></span
-            >
-          </div>
-
-          <USlider v-model="volumeHours" :min="3" :max="20" :step="0.5" color="primary" />
-
-          <div class="flex justify-between text-xs text-muted px-1">
-            <span>Low (3h)</span>
-            <span>Mid (8h)</span>
-            <span>High (15h+)</span>
-          </div>
-
-          <div class="text-xs text-muted bg-gray-50 dark:bg-gray-800/50 p-2 rounded">
-            <UIcon name="i-heroicons-information-circle" class="w-3 h-3 inline mr-1" />
-            Roughly {{ Math.round(volumeHours / 1.5) }} workouts per week based on average duration.
-          </div>
-        </div>
-
-        <!-- 3. Strategy -->
-        <div class="space-y-3">
-          <div class="flex justify-between items-center">
-            <label class="block text-sm font-medium">Training Approach</label>
-            <UButton
-              variant="link"
-              size="xs"
-              color="primary"
-              class="p-0"
-              @click="
-                () => {
-                  void recommendStrategy()
-                }
-              "
-            >
-              Help me choose
-            </UButton>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <button
-              v-for="strat in strategyOptions"
-              :key="strat.value"
-              class="relative p-4 rounded-lg border-2 text-left transition-all group overflow-hidden"
-              :class="
-                strategy === strat.value
-                  ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                  : 'border-gray-200 dark:border-gray-800'
-              "
-              @click="
-                () => {
-                  strategy = strat.value
-                }
-              "
-            >
-              <!-- Selection Indicator -->
-              <div v-if="strategy === strat.value" class="absolute top-2 right-2">
-                <UIcon name="i-heroicons-check-circle" class="w-5 h-5 text-primary" />
-              </div>
-
-              <div class="font-bold mb-1">{{ strat.label }}</div>
-
-              <!-- Mini Visualization -->
-              <div class="h-8 w-full mb-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                <!-- Simple SVG sparklines -->
-                <svg
-                  v-if="strat.value === 'LINEAR'"
-                  viewBox="0 0 100 20"
-                  class="w-full h-full stroke-current text-primary"
-                  fill="none"
-                >
-                  <path d="M0 18 L20 15 L40 12 L60 8 L80 4 L100 0" stroke-width="2" />
-                </svg>
-                <svg
-                  v-else-if="strat.value === 'POLARIZED'"
-                  viewBox="0 0 100 20"
-                  class="w-full h-full stroke-current text-primary"
-                  fill="none"
-                >
-                  <path
-                    d="M0 18 L15 18 L20 2 L25 18 L40 18 L45 2 L50 18 L100 18"
-                    stroke-width="2"
-                  />
-                </svg>
-                <svg
-                  v-else-if="strat.value === 'BLOCK'"
-                  viewBox="0 0 100 20"
-                  class="w-full h-full stroke-current text-primary"
-                  fill="none"
-                >
-                  <path
-                    d="M0 15 L30 15 L30 5 L60 5 L60 15 L90 15 L90 2"
-                    stroke-width="2"
-                    step="after"
-                  />
-                </svg>
-                <svg
-                  v-else-if="strat.value === 'UNDULATING'"
-                  viewBox="0 0 100 20"
-                  class="w-full h-full stroke-current text-primary"
-                  fill="none"
-                >
-                  <path d="M0 10 Q25 0 50 10 T100 10" stroke-width="2" />
-                </svg>
-                <svg
-                  v-else-if="strat.value === 'REVERSE'"
-                  viewBox="0 0 100 20"
-                  class="w-full h-full stroke-current text-primary"
-                  fill="none"
-                >
-                  <path d="M0 0 L20 4 L40 8 L60 12 L80 15 L100 18" stroke-width="2" />
-                </svg>
-                <svg
-                  v-else-if="strat.value === 'MAINTENANCE'"
-                  viewBox="0 0 100 20"
-                  class="w-full h-full stroke-current text-primary"
-                  fill="none"
-                >
-                  <path d="M0 10 L100 10" stroke-width="2" />
-                </svg>
-              </div>
-
-              <div class="text-xs text-muted leading-tight">{{ strat.description }}</div>
+              {{ type.label }}
             </button>
           </div>
-
-          <div
-            v-if="aiRecommendation"
-            class="text-xs text-primary bg-primary/5 p-2 rounded flex gap-2 items-start animate-in fade-in slide-in-from-top-1"
+        </fieldset>
+        <UFormField label="Hours available each week" name="volumeHours">
+          <div class="flex items-center gap-3">
+            <UInput
+              v-model.number="volumeHours"
+              type="number"
+              :min="3"
+              :max="20"
+              :step="0.5"
+              class="w-28"
+            /><span class="text-sm text-gray-500">hours</span>
+          </div>
+          <USlider
+            v-model="volumeHours"
+            :min="3"
+            :max="20"
+            :step="0.5"
+            color="primary"
+            class="mt-4"
+            aria-label="Hours available each week"
+          />
+        </UFormField>
+        <UFormField
+          label="When can you train?"
+          description="Include your available days, rest days and any sessions you want to keep."
+          name="availability"
+        >
+          <UTextarea
+            v-model="customInstructions"
+            :rows="3"
+            placeholder="For example: Tuesdays and Thursdays after work, a long ride on Sunday, and Friday off."
+            class="w-full"
+          />
+        </UFormField>
+        <div class="space-y-4 border-t border-gray-200 pt-5 dark:border-gray-800">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <span class="text-sm font-medium">Plan around an event date</span
+            ><USwitch v-model="isEventBased" aria-label="Plan around an event date" />
+          </div>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <UFormField label="Start date"
+              ><UInput v-model="startDate" type="date" class="w-full"
+            /></UFormField>
+            <UFormField v-if="isEventBased" label="Target date"
+              ><UInput v-model="endDate" type="date" class="w-full"
+            /></UFormField>
+            <UFormField v-else label="Plan duration"
+              ><USelect
+                v-model="durationWeeks"
+                :items="durationOptions"
+                value-key="value"
+                class="w-full"
+            /></UFormField>
+          </div>
+        </div>
+        <details
+          class="space-y-5 border-t border-gray-200 pt-5 dark:border-gray-800"
+          data-testid="plan-expert-options"
+        >
+          <summary
+            class="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary"
           >
-            <UIcon name="i-heroicons-sparkles" class="w-4 h-4 mt-0.5 flex-shrink-0" />
-            <span>{{ aiRecommendation }}</span>
-          </div>
-        </div>
-
-        <!-- 3.5 Recovery Rhythm (NEW) -->
-        <div class="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-          <div class="flex justify-between items-center">
-            <div>
-              <label class="block text-sm font-bold">Recovery Cycle (Rhythm)</label>
-              <p class="text-xs text-muted">How often do you need a rest week?</p>
-            </div>
-            <UBadge v-if="userAge >= 45" color="primary" variant="soft" size="xs"
-              >Recommended for Masters</UBadge
-            >
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              class="p-3 rounded-lg border-2 text-left transition-all flex items-start gap-3"
-              :class="
-                recoveryRhythm === 2
-                  ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                  : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
-              "
-              @click="
-                () => {
-                  recoveryRhythm = 2
-                }
-              "
-            >
-              <div
-                class="w-10 h-10 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0"
-              >
-                <span class="font-black text-lg">1:1</span>
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-bold text-sm">Return to Play</div>
-                <div class="text-[10px] text-muted leading-tight mt-0.5">
-                  1 week build, 1 week recovery. Best for injury recovery or extreme intensity
-                  blocks.
-                </div>
-              </div>
-            </button>
-
-            <button
-              class="p-3 rounded-lg border-2 text-left transition-all flex items-start gap-3"
-              :class="
-                recoveryRhythm === 3
-                  ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                  : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
-              "
-              @click="
-                () => {
-                  recoveryRhythm = 3
-                }
-              "
-            >
-              <div
-                class="w-10 h-10 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0"
-              >
-                <span class="font-black text-lg">2:1</span>
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-bold text-sm">High Recovery</div>
-                <div class="text-[10px] text-muted leading-tight mt-0.5">
-                  2 weeks build, 1 week rest. Ideal for Masters (45+) and high-stress lifestyles.
-                </div>
-              </div>
-            </button>
-
-            <button
-              class="p-3 rounded-lg border-2 text-left transition-all flex items-start gap-3"
-              :class="
-                recoveryRhythm === 4
-                  ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                  : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
-              "
-              @click="
-                () => {
-                  recoveryRhythm = 4
-                }
-              "
-            >
-              <div
-                class="w-10 h-10 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0"
-              >
-                <span class="font-black text-lg">3:1</span>
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-bold text-sm">Standard Build</div>
-                <div class="text-[10px] text-muted leading-tight mt-0.5">
-                  3 weeks build, 1 week rest. The classic standard for most healthy athletes.
-                </div>
-              </div>
-            </button>
-
-            <button
-              class="p-3 rounded-lg border-2 text-left transition-all flex items-start gap-3"
-              :class="
-                recoveryRhythm === 5
-                  ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                  : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
-              "
-              @click="
-                () => {
-                  recoveryRhythm = 5
-                }
-              "
-            >
-              <div
-                class="w-10 h-10 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0"
-              >
-                <span class="font-black text-lg">4:1</span>
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-bold text-sm">Professional</div>
-                <div class="text-[10px] text-muted leading-tight mt-0.5">
-                  4 weeks build, 1 week rest. Advanced pattern for high-volume, full-time athletes.
-                </div>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <!-- 3.6 Starting Readiness (NEW) -->
-        <div class="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-          <div>
-            <label class="block text-sm font-bold">Starting Point</label>
-            <p class="text-xs text-muted">What is your current fitness readiness?</p>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <button
-              class="p-3 rounded-lg border-2 text-left transition-all flex flex-col gap-2"
-              :class="
-                startingPhase === 'BASE'
-                  ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                  : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
-              "
-              @click="
-                () => {
-                  startingPhase = 'BASE'
-                }
-              "
-            >
-              <div class="flex items-center gap-2">
-                <UIcon name="i-heroicons-sparkles" class="w-5 h-5 text-green-500" />
-                <span class="font-bold text-sm">Fresh Start</span>
-              </div>
-              <div class="text-xs text-muted">
-                Start from the beginning with Base training. Best for building aerobic foundation.
-              </div>
-            </button>
-
-            <button
-              class="p-3 rounded-lg border-2 text-left transition-all flex flex-col gap-2"
-              :class="
-                startingPhase === 'BUILD'
-                  ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                  : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
-              "
-              @click="
-                () => {
-                  startingPhase = 'BUILD'
-                }
-              "
-            >
-              <div class="flex items-center gap-2">
-                <UIcon name="i-heroicons-arrow-trending-up" class="w-5 h-5 text-amber-500" />
-                <span class="font-bold text-sm">Development Ready</span>
-              </div>
-              <div class="text-xs text-muted">
-                Skip Base phase. Jump straight into Build (Threshold/VO2) work. For active athletes.
-              </div>
-            </button>
-
-            <button
-              class="p-3 rounded-lg border-2 text-left transition-all flex flex-col gap-2"
-              :class="
-                startingPhase === 'PEAK'
-                  ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                  : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
-              "
-              @click="
-                () => {
-                  startingPhase = 'PEAK'
-                }
-              "
-            >
-              <div class="flex items-center gap-2">
-                <UIcon name="i-heroicons-trophy" class="w-5 h-5 text-red-500" />
-                <span class="font-bold text-sm">Competition Ready</span>
-              </div>
-              <div class="text-xs text-muted">
-                Final preparation only. Focus on race specificity and tapering.
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <!-- 4. Timeline -->
-        <div class="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg space-y-4">
-          <div class="flex items-center justify-between">
-            <label class="block text-sm font-medium">Timeline Mode</label>
-            <div class="flex items-center gap-2">
-              <span
-                class="text-xs text-muted"
-                :class="{ 'text-primary font-medium': !isEventBased }"
-                >Duration</span
-              >
-              <USwitch v-model="isEventBased" size="lg" />
-              <span class="text-xs text-muted" :class="{ 'text-primary font-medium': isEventBased }"
-                >Event Date</span
-              >
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div v-if="isEventBased">
-              <label class="block text-xs font-medium text-muted uppercase mb-1"
-                >Target Event Date</label
-              >
-              <div class="font-bold text-lg">
-                {{ endDate ? formatDate(endDate) : 'Select Goal Event' }}
-              </div>
-              <div class="text-xs text-muted mt-1">AI will backwards plan from this date.</div>
-            </div>
-
-            <div v-else>
-              <label class="block text-xs font-medium text-muted uppercase mb-1">Duration</label>
-              <USelect v-model="durationWeeks" :items="durationOptions" value-key="value" />
-            </div>
-
-            <div>
-              <label class="block text-xs font-medium text-muted uppercase mb-1">Start Date</label>
-              <UInput v-model="startDate" type="date" />
-            </div>
-          </div>
-        </div>
+            Adjust the training approach
+          </summary>
+          <p class="text-sm leading-6 text-gray-500">
+            A steady build is selected to start. Change these details if you have a preferred
+            approach.
+          </p>
+          <UFormField label="Training approach"
+            ><USelect v-model="strategy" :items="strategyOptions" value-key="value" class="w-full"
+          /></UFormField>
+          <UButton color="neutral" variant="link" @click="recommendStrategy()"
+            >Help me choose</UButton
+          >
+          <p v-if="aiRecommendation" class="text-sm leading-6 text-gray-500">
+            {{ aiRecommendation }}
+          </p>
+          <UFormField label="Build and recovery rhythm"
+            ><USelect
+              v-model="recoveryRhythm"
+              :items="recoveryOptions"
+              value-key="value"
+              class="w-full"
+          /></UFormField>
+          <UFormField label="Your starting point"
+            ><USelect
+              v-model="startingPhase"
+              :items="startingPhaseOptions"
+              value-key="value"
+              class="w-full"
+          /></UFormField>
+        </details>
       </div>
-
-      <!-- Step 3: Review Timeline -->
+      <!-- Review your training phases -->
       <div v-else-if="step === 3" class="space-y-6">
         <div class="flex items-center gap-3 mb-2">
           <UButton
@@ -707,7 +240,7 @@
               }
             "
           />
-          <h3 class="text-xl font-semibold">Step 3: Review Timeline</h3>
+          <h3 class="text-xl font-semibold">Review your training phases</h3>
         </div>
 
         <div v-if="generatedPlan" class="space-y-6">
@@ -763,9 +296,7 @@
                     v-if="getEventsInBlock(block).length > 0"
                     class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 space-y-2"
                   >
-                    <div class="text-[10px] font-bold uppercase text-muted tracking-wider">
-                      Key Events
-                    </div>
+                    <div class="text-[10px] font-bold text-muted tracking-wider">Key Events</div>
                     <div
                       v-for="event in getEventsInBlock(block)"
                       :key="event.id"
@@ -807,7 +338,7 @@
               }
             "
           />
-          <h3 class="text-xl font-semibold">Step 4: Review Schedule</h3>
+          <h3 class="text-xl font-semibold">Keep your existing sessions</h3>
         </div>
 
         <div class="space-y-4">
@@ -837,7 +368,7 @@
               <div
                 class="bg-gray-50 dark:bg-gray-800/50 p-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center"
               >
-                <span class="text-xs font-medium uppercase text-muted ml-2">Workouts</span>
+                <span class="text-xs font-medium text-muted ml-2">Workouts</span>
                 <UButton
                   size="xs"
                   color="neutral"
@@ -879,7 +410,7 @@
                         :class="anchorWorkoutIds.includes(workout.id) ? 'text-primary' : ''"
                         >{{ workout.title }}</span
                       >
-                      <span class="text-xs text-muted font-mono">{{
+                      <span class="text-xs text-muted tabular-nums">{{
                         formatDate(workout.date)
                       }}</span>
                     </div>
@@ -911,8 +442,8 @@
         </div>
       </div>
 
-      <!-- Step 5: Custom Instructions -->
-      <div v-else-if="step === 5" class="space-y-6">
+      <!-- Step 6: Final Review -->
+      <div v-else-if="step === 6" class="space-y-6">
         <div class="flex items-center gap-3 mb-2">
           <UButton
             icon="i-heroicons-arrow-left"
@@ -924,48 +455,24 @@
               }
             "
           />
-          <h3 class="text-xl font-semibold">Step 5: Custom Details</h3>
+          <h3 class="text-xl font-semibold">Ready to start?</h3>
         </div>
 
-        <div class="space-y-4">
-          <p class="text-sm text-muted">
-            Add any specific requirements, availability constraints, or personal preferences you'd
-            like the AI to consider when building your plan.
+        <div class="space-y-3 border-y border-gray-200 py-5 dark:border-gray-800">
+          <p class="text-sm font-medium">{{ volumeHours }} hours each week</p>
+          <p class="text-sm leading-6 text-gray-500">
+            {{ customInstructions || 'No additional availability constraints.' }}
           </p>
-
-          <UFormField label="Custom Instructions (Optional)">
-            <UTextarea
-              v-model="customInstructions"
-              placeholder="e.g. 'Plan with interval sessions on Tuesday and Thursday, long rides on the weekend, gym sessions on Monday and Friday, and keep Wednesday as a rest day.'"
-              :rows="6"
-              class="w-full"
-            />
-          </UFormField>
-
-          <div class="bg-primary/5 p-4 rounded-lg flex items-start gap-3">
-            <UIcon name="i-heroicons-light-bulb" class="w-5 h-5 text-primary mt-0.5" />
-            <div class="text-xs text-primary/80 leading-relaxed">
-              <strong>Tip:</strong> Mentioning things like "No training on Fridays" or "Focus more
-              on climbing power" helps the AI tailor the plan to your lifestyle and goals.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 6: Final Review -->
-      <div v-else-if="step === 6" class="space-y-6">
-        <div class="flex items-center gap-3 mb-2">
           <UButton
-            icon="i-heroicons-arrow-left"
-            variant="ghost"
-            size="sm"
+            color="neutral"
+            variant="link"
             @click="
               () => {
-                step = 5
+                step = 2
               }
             "
-          />
-          <h3 class="text-xl font-semibold">Step 6: Review Your Plan</h3>
+            >Change my availability</UButton
+          >
         </div>
 
         <div v-if="generatedPlan" class="space-y-6">
@@ -996,7 +503,7 @@
           >
             <UIcon name="i-heroicons-information-circle" class="w-5 h-5 flex-shrink-0 mt-0.5" />
             <div>
-              <strong>Note:</strong> Once you click "Start Training", the AI will begin generating
+              <strong>Note:</strong> Once you click "Start training", the AI will begin generating
               detailed workouts for your first block in the background. This may take a minute.
             </div>
           </div>
@@ -1074,7 +581,7 @@
             }
           "
         >
-          Next: Plan Strategy
+          Set my availability
         </UButton>
       </template>
 
@@ -1091,7 +598,7 @@
             }
           "
         >
-          Generate Phases
+          Build my plan
         </UButton>
       </template>
 
@@ -1106,7 +613,7 @@
             }
           "
         >
-          Next: Schedule Review
+          Check my schedule
         </UButton>
       </template>
 
@@ -1117,26 +624,11 @@
           icon="i-heroicons-arrow-right"
           @click="
             () => {
-              step = 5
-            }
-          "
-        >
-          Next: Custom Details
-        </UButton>
-      </template>
-
-      <template v-else-if="step === 5">
-        <UButton
-          size="xl"
-          color="primary"
-          icon="i-heroicons-arrow-right"
-          @click="
-            () => {
               step = 6
             }
           "
         >
-          Review Plan
+          Review my plan
         </UButton>
       </template>
 
@@ -1145,7 +637,7 @@
           variant="ghost"
           @click="
             () => {
-              step = 5
+              step = 4
             }
           "
           >Back</UButton
@@ -1161,7 +653,7 @@
             }
           "
         >
-          Start Training
+          Start training
         </UButton>
       </template>
     </div>
@@ -1180,14 +672,16 @@
 
   // State
   const step = ref(1)
-  const wizardProgressRef = ref<HTMLElement | null>(null)
-  const wizardStepLabels = ['Goal', 'Strategy', 'Phases', 'Schedule', 'Details', 'Review']
-
-  watch(step, async () => {
-    await nextTick()
-    wizardProgressRef.value?.scrollTo({ left: 0, behavior: 'smooth' })
-  })
+  const visibleStep = computed(() => (step.value === 6 ? 5 : step.value))
+  const wizardStepLabels = [
+    'Goal',
+    'Availability',
+    'Training phases',
+    'Existing sessions',
+    'Review'
+  ]
   const loadingGoals = ref(false)
+  const goalsLoadError = ref(false)
   const showCreateGoal = ref(false)
   const goals = ref<any[]>([])
   const selectedGoal = ref<any>(null)
@@ -1235,6 +729,18 @@
   const strategy = ref('LINEAR')
   const recoveryRhythm = ref(4) // Default 3:1
   const startingPhase = ref('BASE')
+
+  const recoveryOptions = [
+    { label: '1 build week, 1 recovery week', value: 2 },
+    { label: '2 build weeks, 1 recovery week', value: 3 },
+    { label: '3 build weeks, 1 recovery week', value: 4 },
+    { label: '4 build weeks, 1 recovery week', value: 5 }
+  ]
+  const startingPhaseOptions = [
+    { label: 'Build a foundation', value: 'BASE' },
+    { label: 'Develop existing fitness', value: 'BUILD' },
+    { label: 'Prepare for competition', value: 'PEAK' }
+  ]
 
   // Determine age-based recommendation
   const userAge = computed(() => {
@@ -1369,10 +875,12 @@
   // Methods
   async function fetchGoals() {
     loadingGoals.value = true
+    goalsLoadError.value = false
     try {
       const data: any = await $fetch<any, string & {}>('/api/goals')
       goals.value = data.goals || []
     } catch (error) {
+      goalsLoadError.value = true
       console.error('Error fetching goals', error)
     } finally {
       loadingGoals.value = false
@@ -1499,6 +1007,14 @@
       initializing.value = false
       return
     }
+
+    const availableHours = Number(volumeHours.value)
+    if (!Number.isFinite(availableHours) || availableHours < 3 || availableHours > 20) {
+      toast.add({ title: 'Choose between 3 and 20 hours per week', color: 'error' })
+      initializing.value = false
+      return
+    }
+    volumeHours.value = availableHours
 
     // Calculate end date if duration mode
     let finalEndDate = endDate.value

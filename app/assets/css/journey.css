@@ -1,0 +1,295 @@
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/public-sans-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/public-sans-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* The athlete's next action is the visual center of the personal app. */
+.athlete-theme,
+.journey-app {
+  --journey-canvas: #f6f9fa;
+  --journey-surface: #ffffff;
+  --journey-ink: #183b35;
+  --journey-muted: #586e72;
+  --journey-action: #23675e;
+  --journey-border: #d7e3e4;
+  --ui-bg: var(--journey-surface);
+  --ui-bg-muted: var(--journey-canvas);
+  --ui-bg-elevated: var(--journey-surface);
+  --ui-text: var(--journey-ink);
+  --ui-text-highlighted: var(--journey-ink);
+  --ui-text-muted: var(--journey-muted);
+  --ui-border: var(--journey-border);
+  --ui-primary: var(--journey-action);
+  color: var(--journey-ink);
+  background: var(--journey-canvas);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.dark .athlete-theme,
+.dark .journey-app {
+  --journey-canvas: #152523;
+  --journey-surface: #1b2d2a;
+  --journey-ink: #edf5f2;
+  --journey-muted: #a7bbb5;
+  --journey-action: #93c9bc;
+  --journey-border: #354e47;
+}
+
+.journey-header {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-shrink: 0;
+  padding: 0.625rem clamp(1rem, 3vw, 3rem);
+  border-bottom: 1px solid var(--journey-border);
+  background: var(--journey-surface);
+}
+
+.journey-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  color: var(--journey-ink);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+}
+
+.journey-primary-nav,
+.journey-context-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.journey-primary-nav a,
+.journey-context-nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+  color: var(--journey-muted);
+  border-radius: 0.375rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.journey-primary-nav a.is-active {
+  color: var(--journey-action);
+  background: var(--journey-canvas);
+  font-weight: 600;
+}
+
+.journey-context-nav {
+  flex-shrink: 0;
+  padding: 0.125rem clamp(1rem, 3vw, 3rem);
+  border-bottom: 1px solid var(--journey-border);
+  background: var(--journey-surface);
+  overflow-x: auto;
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.journey-context-nav a.is-active {
+  color: var(--journey-action);
+  box-shadow: inset 0 -2px var(--journey-action);
+  border-radius: 0;
+}
+
+.journey-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  margin-inline-start: auto;
+}
+
+.journey-icon-button,
+.journey-coach-button,
+.journey-theme-button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.journey-stage {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.journey-stage > [data-slot='root'] {
+  min-height: 0;
+}
+
+.journey-app .journey-sidebar-toggle {
+  display: none;
+}
+
+.journey-app .quick-capture-inset {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.journey-app .uppercase,
+.journey-app .font-athletic,
+.athlete-theme [role='dialog'] .uppercase,
+.athlete-theme [role='dialog'] .font-athletic {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.journey-app .font-athletic {
+  font-family: var(--font-sans);
+  font-style: normal;
+}
+
+.athlete-theme [role='dialog'] {
+  font-family: var(--font-sans);
+}
+
+.journey-app :is(button, [role='button']) {
+  touch-action: manipulation;
+}
+
+.journey-app .font-black,
+.journey-app .font-extrabold {
+  font-weight: 600;
+}
+
+.journey-app :is(.tracking-widest, .tracking-wider, .tracking-wide) {
+  letter-spacing: normal;
+}
+
+.journey-app :is([class*='text-[9px]'], [class*='text-[10px]'], [class*='text-[11px]']) {
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.journey-app :is(.shadow, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl) {
+  box-shadow: none;
+}
+
+.journey-app [data-slot='body'] {
+  scrollbar-gutter: stable;
+}
+
+.journey-app details > summary {
+  cursor: pointer;
+  min-height: 2.75rem;
+  align-content: center;
+}
+
+.journey-app :is(button, a, summary, input, textarea, select):focus-visible,
+.journey-tools-dialog :is(button, a, summary):focus-visible {
+  outline: 2px solid var(--ui-primary, #23675e);
+  outline-offset: 3px;
+}
+
+.journey-skip-link {
+  position: absolute;
+  z-index: 100;
+  inset-inline-start: 1rem;
+  top: -5rem;
+  padding: 0.75rem 1rem;
+  color: var(--journey-surface);
+  background: var(--journey-ink);
+  border-radius: 0.375rem;
+}
+
+.journey-skip-link:focus {
+  top: 0.75rem;
+}
+
+.journey-tools-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--ui-border);
+}
+
+@media (max-width: 767px) {
+  .journey-header {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.375rem 0.75rem 0;
+  }
+
+  .journey-brand {
+    margin-inline-start: 0.25rem;
+  }
+
+  .journey-primary-nav {
+    order: 3;
+    width: 100%;
+    justify-content: space-around;
+  }
+
+  .journey-primary-nav a {
+    flex: 1;
+    background: transparent;
+    border-radius: 0;
+  }
+
+  .journey-primary-nav a.is-active {
+    background: transparent;
+    box-shadow: inset 0 -2px var(--journey-action);
+  }
+
+  .journey-context-nav {
+    padding-inline: 0.75rem;
+  }
+
+  .journey-context-nav a {
+    padding-inline: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-app *,
+  .journey-app *::before,
+  .journey-app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .journey-header,
+  .journey-context-nav,
+  .journey-skip-link {
+    display: none;
+  }
+
+  .journey-stage {
+    display: block;
+    overflow: visible;
+  }
+}

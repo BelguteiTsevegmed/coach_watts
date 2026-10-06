@@ -1,14 +1,14 @@
 <template>
-  <div class="space-y-3 sm:space-y-6">
+  <div class="space-y-8">
     <!-- Header / Overview -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
       <div>
-        <h2 class="text-2xl font-bold">{{ plan.goal?.title || plan.name || 'Untitled Plan' }}</h2>
+        <h2 class="text-2xl font-bold">{{ plan.goal?.title || plan.name || 'Untitled plan' }}</h2>
         <div class="flex items-center gap-2 text-muted mt-1">
           <UIcon name="i-heroicons-calendar" class="w-4 h-4" />
-          <span>Target: {{ formatDateUTC(plan.targetDate) }}</span>
+          <span v-if="plan.targetDate">Target: {{ formatDateUTC(plan.targetDate) }}</span>
           <span class="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">{{
-            plan.strategy
+            strategyLabel
           }}</span>
         </div>
       </div>
@@ -16,75 +16,18 @@
         class="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-end w-full sm:w-auto border-t sm:border-t-0 border-gray-100 dark:border-gray-800 pt-3 sm:pt-0"
       >
         <div class="flex flex-col items-start sm:items-end">
-          <div class="text-sm text-muted">Current Phase</div>
+          <div class="text-sm text-muted">Current phase</div>
           <div class="font-bold text-lg text-primary">{{ currentBlock?.name || 'Prep' }}</div>
         </div>
-        <div class="flex gap-2 justify-end mt-0 sm:mt-1">
+        <UDropdownMenu :items="planActionItems">
           <UButton
-            size="xs"
             color="neutral"
             variant="ghost"
-            icon="i-heroicons-list-bullet"
-            @click="
-              () => {
-                showOverview = true
-              }
-            "
+            icon="i-heroicons-ellipsis-horizontal"
+            aria-label="Plan options"
+            >Plan options</UButton
           >
-            <span class="hidden sm:inline">Overview</span>
-          </UButton>
-          <UButton
-            size="xs"
-            color="primary"
-            variant="ghost"
-            icon="i-heroicons-squares-plus"
-            @click="
-              () => {
-                showTimelineEditor = true
-              }
-            "
-          >
-            <span class="hidden sm:inline">Edit Structure</span>
-          </UButton>
-          <UButton
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            icon="i-heroicons-adjustments-horizontal"
-            @click="
-              () => {
-                showAdaptModal = true
-              }
-            "
-          >
-            <span class="hidden sm:inline">Adapt</span>
-          </UButton>
-          <UButton
-            v-if="!plan.isTemplate && !plan.hasBeenSavedAsTemplate"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            icon="i-heroicons-bookmark"
-            @click="
-              () => {
-                showSaveTemplateModal = true
-              }
-            "
-          >
-            <span class="hidden sm:inline">Save</span>
-          </UButton>
-          <UButton
-            size="xs"
-            color="error"
-            variant="ghost"
-            icon="i-heroicons-trash"
-            @click="
-              () => {
-                showAbandonModal = true
-              }
-            "
-          />
-        </div>
+        </UDropdownMenu>
       </div>
     </div>
 
@@ -271,169 +214,15 @@
     <!-- Plan Overview Modal -->
     <PlanOverviewModal v-model:open="showOverview" :plan="plan" />
 
-    <!-- Plan Timeline (Proportional) -->
-    <div class="space-y-2">
-      <div class="flex justify-between items-end px-1">
-        <h3 class="text-xs font-bold uppercase tracking-widest text-muted">Season Timeline</h3>
-        <div class="text-[10px] text-muted font-mono">{{ totalWeeksInPlan }} Weeks Total</div>
-      </div>
-
-      <div
-        class="relative w-full h-14 bg-gray-100/50 dark:bg-gray-900/50 rounded-xl overflow-hidden flex shadow-inner border border-gray-200 dark:border-gray-800 group/timeline"
-      >
-        <div
-          v-for="block in plan.blocks"
-          :key="block.id"
-          class="h-full relative border-r last:border-r-0 border-gray-200/50 dark:border-gray-800/50 transition-all cursor-pointer group bg-white/40 dark:bg-gray-800/20 hover:bg-white/60 dark:hover:bg-gray-800/40"
-          :style="{ flex: block.durationWeeks }"
-          :class="[selectedBlockId === block.id ? 'z-10' : '']"
-          @click="
-            () => {
-              selectedBlockId = block.id
-            }
-          "
-        >
-          <!-- Content Container (Side-by-side) -->
-          <div class="absolute inset-0 flex items-center justify-between px-2 pb-2">
-            <!-- Text Info -->
-            <div class="flex flex-col min-w-0 justify-center">
-              <span
-                class="text-[10px] sm:text-xs font-black uppercase tracking-tight truncate"
-                :class="
-                  selectedBlockId === block.id
-                    ? 'text-primary-600 dark:text-primary-400'
-                    : 'text-gray-600 dark:text-gray-400'
-                "
-              >
-                {{ block.name.split(' ')[0] }}
-              </span>
-              <span
-                class="text-[8px] sm:text-[9px] font-bold text-gray-400 dark:text-gray-500 tabular-nums"
-              >
-                {{ block.durationWeeks }}W
-              </span>
-            </div>
-
-            <!-- Sparkline Rhythm -->
-            <div
-              class="flex items-end gap-0.5 h-6 self-center opacity-60 group-hover:opacity-100 transition-opacity"
-            >
-              <div
-                v-for="w in block.durationWeeks"
-                :key="w"
-                class="w-1 rounded-t-sm"
-                :style="{
-                  height:
-                    w % (block.recoveryWeekIndex || 4) === 0
-                      ? '4px'
-                      : 6 + (w % (block.recoveryWeekIndex || 4)) * 2 + 'px',
-                  backgroundColor:
-                    w % (block.recoveryWeekIndex || 4) === 0
-                      ? 'rgba(16, 185, 129, 0.6)'
-                      : 'rgba(59, 130, 246, 0.5)'
-                }"
-              />
-            </div>
-          </div>
-
-          <!-- Bottom Accent Bar -->
-          <div
-            class="absolute bottom-0 left-0 right-0 transition-all duration-300"
-            :style="{
-              backgroundColor: getBlockTypeColor(block.type),
-              height: selectedBlockId === block.id ? '6px' : '4px'
-            }"
-            :class="
-              selectedBlockId === block.id ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'
-            "
-          />
-
-          <!-- Selection Glow -->
-          <div
-            v-if="selectedBlockId === block.id"
-            class="absolute inset-0 ring-2 ring-inset ring-primary-500/20 pointer-events-none"
-          />
-        </div>
-
-        <!-- Event Markers -->
-        <template v-for="event in eventMarkers" :key="event.id">
-          <div
-            class="absolute bottom-1 w-px z-20 pointer-events-auto shadow-sm group/event transition-all duration-300"
-            :style="{
-              left: `${event.position}%`,
-              top: '30px',
-              backgroundColor:
-                event.priority === 'A' ? '#fbbf24' : event.priority === 'B' ? '#94a3b8' : '#cd7f32'
-            }"
-          >
-            <div
-              class="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full border border-white dark:border-gray-900 shadow-sm transition-transform group-hover/timeline:scale-110"
-              :style="{
-                backgroundColor:
-                  event.priority === 'A'
-                    ? '#fbbf24'
-                    : event.priority === 'B'
-                      ? '#94a3b8'
-                      : '#cd7f32'
-              }"
-            />
-            <!-- Hover Label -->
-            <div
-              class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/timeline:opacity-100 transition-all duration-300 pointer-events-none"
-            >
-              <div
-                class="text-[8px] text-white px-1.5 py-0.5 rounded shadow-sm font-bold uppercase tracking-wider whitespace-nowrap"
-                :style="{
-                  backgroundColor:
-                    event.priority === 'A'
-                      ? '#fbbf24'
-                      : event.priority === 'B'
-                        ? '#94a3b8'
-                        : '#cd7f32'
-                }"
-              >
-                {{ event.priority || 'Event' }}: {{ event.title }}
-              </div>
-            </div>
-          </div>
-        </template>
-
-        <!-- "Now" indicator overlay -->
-        <div
-          v-if="currentBlockPosition !== null"
-          class="absolute bottom-1 w-[1.5px] bg-blue-600 dark:bg-blue-500 z-30 shadow-[0_0_10px_rgba(37,99,235,0.5)] transition-all duration-300"
-          :style="{
-            left: `${currentBlockPosition}%`,
-            top: '30px'
-          }"
-        >
-          <div
-            class="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-blue-600 dark:bg-blue-500 rounded-full border border-white dark:border-gray-900"
-          />
-          <!-- Hover Label -->
-          <div
-            class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/timeline:opacity-100 transition-opacity duration-200 pointer-events-none"
-          >
-            <div
-              class="bg-blue-600 text-[8px] text-white px-1.5 py-0.5 rounded shadow-sm font-bold uppercase tracking-wider whitespace-nowrap"
-            >
-              Today
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Active Week View -->
-    <div
-      v-if="selectedBlock"
-      class="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700"
-    >
+    <div v-if="selectedBlock" class="space-y-6">
       <!-- Header -->
       <div
         class="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4"
       >
-        <h3 class="font-semibold text-lg">{{ selectedBlock.name }} - Overview</h3>
+        <h3 class="font-semibold text-lg">
+          {{ selectedWeek ? `Week ${selectedWeek.weekNumber}` : selectedBlock.name }}
+        </h3>
 
         <div
           v-if="selectedBlock.weeks?.length > 0"
@@ -464,7 +253,7 @@
           <UButton
             size="xs"
             color="primary"
-            variant="soft"
+            variant="solid"
             class="sm:flex-none justify-center"
             @click="
               () => {
@@ -475,7 +264,7 @@
             <template #leading>
               <UIcon name="i-heroicons-sparkles" class="w-4 h-4" />
             </template>
-            <span class="hidden sm:inline ml-1">Plan with AI</span>
+            <span class="ml-1">Plan this week</span>
           </UButton>
           <div class="flex overflow-x-auto pb-1 sm:pb-0 gap-1 flex-1 sm:flex-none">
             <UButton
@@ -531,245 +320,396 @@
 
         <!-- 2. Case: Block has weeks, show Active Week -->
         <div v-else-if="selectedWeek" class="space-y-3 sm:space-y-4">
-          <!-- Week Stats (Interactive Tuning) -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-3 sm:mb-4">
-            <!-- 1. Focus Tuning -->
-            <UPopover :ui="{ content: 'w-64 p-4' }">
-              <div
-                class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg cursor-pointer hover:ring-1 hover:ring-primary-500/50 transition-all group"
+          <p class="leading-7 text-gray-600 dark:text-gray-400">
+            {{ selectedWeek.focusLabel || selectedWeek.focus || selectedBlock.primaryFocus }}.
+            {{ Math.round((selectedWeek.volumeTargetMinutes / 60) * 10) / 10 }} hours planned for
+            this week.
+          </p>
+          <div class="divide-y divide-gray-200 dark:divide-gray-800" data-testid="plan-week-agenda">
+            <button
+              v-for="workout in visibleWorkouts"
+              :key="workout.id"
+              type="button"
+              class="flex w-full items-center justify-between gap-5 py-4 text-left focus-visible:outline-2 focus-visible:outline-primary"
+              @click="navigateToWorkout(workout.id)"
+            >
+              <span
+                ><span class="block text-xs text-gray-500">{{ formatDay(workout.date) }}</span
+                ><span class="mt-1 block text-sm font-medium">{{ workout.title }}</span></span
               >
-                <div class="flex justify-between items-center mb-0.5">
-                  <div class="text-[10px] uppercase font-bold text-muted tracking-wider">Focus</div>
-                  <UIcon
-                    name="i-heroicons-pencil"
-                    class="w-3 h-3 text-primary-500 opacity-0 group-hover:opacity-100"
-                  />
-                </div>
-                <div class="font-bold text-sm sm:text-base truncate">
-                  {{ selectedWeek.focusLabel || selectedWeek.focus || selectedBlock.primaryFocus }}
-                </div>
-              </div>
-
-              <template #content>
-                <div class="space-y-3">
-                  <div class="font-bold text-xs uppercase tracking-widest text-muted">
-                    Change Week Focus
-                  </div>
-                  <USelect
-                    :model-value="selectedWeek.focusKey || selectedWeek.focus"
-                    :items="TRAINING_BLOCK_FOCUSES"
-                    value-key="value"
-                    size="sm"
-                    class="w-full"
-                    @update:model-value="updateWeekFocus"
-                  />
-                  <p class="text-[10px] italic text-muted leading-tight">
-                    Changing the focus will help the AI design better workouts when you next "Plan
-                    with AI".
-                  </p>
-                </div>
-              </template>
-            </UPopover>
-
-            <!-- 2. Volume Tuning -->
-            <UPopover :ui="{ content: 'w-48 p-4' }">
-              <div
-                class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg cursor-pointer hover:ring-1 hover:ring-primary-500/50 transition-all group"
+              <span class="text-sm text-gray-500"
+                >{{
+                  workout.type === 'Rest'
+                    ? 'Rest'
+                    : `${Math.round((workout.durationSec || 0) / 60)} min`
+                }}<span class="ml-3">{{ workout.completed ? 'Completed' : 'Planned' }}</span></span
               >
-                <div class="flex justify-between items-center mb-0.5">
-                  <div class="text-[10px] uppercase font-bold text-muted tracking-wider">
-                    Volume
+            </button>
+          </div>
+          <details class="space-y-4">
+            <summary
+              class="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              Adjust this week's targets
+            </summary>
+            <!-- Week Stats (Interactive Tuning) -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-3 sm:mb-4">
+              <!-- 1. Focus Tuning -->
+              <UPopover :ui="{ content: 'w-64 p-4' }">
+                <button
+                  type="button"
+                  class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg cursor-pointer hover:ring-1 hover:ring-primary-500/50 transition-all group"
+                >
+                  <div class="flex justify-between items-center mb-0.5">
+                    <div class="text-[10px] font-bold text-muted tracking-wider">Focus</div>
+                    <UIcon
+                      name="i-heroicons-pencil"
+                      class="w-3 h-3 text-primary-500 opacity-0 group-hover:opacity-100"
+                    />
                   </div>
-                  <UIcon
-                    name="i-heroicons-pencil"
-                    class="w-3 h-3 text-primary-500 opacity-0 group-hover:opacity-100"
-                  />
-                </div>
-                <div class="font-bold text-sm sm:text-base tabular-nums">
-                  {{ Math.round((selectedWeek.volumeTargetMinutes / 60) * 10) / 10 }}h
-                </div>
-              </div>
+                  <div class="font-bold text-sm sm:text-base truncate">
+                    {{
+                      selectedWeek.focusLabel || selectedWeek.focus || selectedBlock.primaryFocus
+                    }}
+                  </div>
+                </button>
 
-              <template #content>
-                <div class="space-y-3">
-                  <div class="font-bold text-xs uppercase tracking-widest text-muted">
-                    Target Hours
+                <template #content>
+                  <div class="space-y-3">
+                    <div class="font-bold text-xs tracking-normal text-muted">
+                      Change Week Focus
+                    </div>
+                    <USelect
+                      :model-value="selectedWeek.focusKey || selectedWeek.focus"
+                      :items="TRAINING_BLOCK_FOCUSES"
+                      value-key="value"
+                      size="sm"
+                      class="w-full"
+                      @update:model-value="updateWeekFocus"
+                    />
+                    <p class="text-[10px] italic text-muted leading-tight">
+                      Changing the focus will help the AI design better workouts when you next "Plan
+                      with AI".
+                    </p>
                   </div>
-                  <div class="flex items-center gap-2">
+                </template>
+              </UPopover>
+
+              <!-- 2. Volume Tuning -->
+              <UPopover :ui="{ content: 'w-48 p-4' }">
+                <button
+                  type="button"
+                  class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg cursor-pointer hover:ring-1 hover:ring-primary-500/50 transition-all group"
+                >
+                  <div class="flex justify-between items-center mb-0.5">
+                    <div class="text-[10px] font-bold text-muted tracking-wider">Volume</div>
+                    <UIcon
+                      name="i-heroicons-pencil"
+                      class="w-3 h-3 text-primary-500 opacity-0 group-hover:opacity-100"
+                    />
+                  </div>
+                  <div class="font-bold text-sm sm:text-base tabular-nums">
+                    {{ Math.round((selectedWeek.volumeTargetMinutes / 60) * 10) / 10 }}h
+                  </div>
+                </button>
+
+                <template #content>
+                  <div class="space-y-3">
+                    <div class="font-bold text-xs tracking-normal text-muted">Target Hours</div>
+                    <div class="flex items-center gap-2">
+                      <UInput
+                        :model-value="Math.round((selectedWeek.volumeTargetMinutes / 60) * 10) / 10"
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        size="sm"
+                        class="flex-1"
+                        @update:model-value="(v) => updateWeekVolume(Number(v))"
+                      />
+                      <span class="text-xs font-bold text-muted">HRS</span>
+                    </div>
+                  </div>
+                </template>
+              </UPopover>
+
+              <!-- 3. TSS Tuning -->
+              <UPopover :ui="{ content: 'w-48 p-4' }">
+                <button
+                  type="button"
+                  class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg cursor-pointer hover:ring-1 hover:ring-primary-500/50 transition-all group"
+                >
+                  <div class="flex justify-between items-center mb-0.5">
+                    <div class="text-[10px] font-bold text-muted tracking-wider">TSS</div>
+                    <UIcon
+                      name="i-heroicons-pencil"
+                      class="w-3 h-3 text-primary-500 opacity-0 group-hover:opacity-100"
+                    />
+                  </div>
+                  <div class="font-bold text-sm sm:text-base tabular-nums">
+                    {{ selectedWeek.tssTarget }}
+                  </div>
+                </button>
+
+                <template #content>
+                  <div class="space-y-3">
+                    <div class="font-bold text-xs tracking-normal text-muted">Target TSS</div>
                     <UInput
-                      :model-value="Math.round((selectedWeek.volumeTargetMinutes / 60) * 10) / 10"
+                      :model-value="selectedWeek.tssTarget"
                       type="number"
-                      step="0.5"
                       min="0"
                       size="sm"
-                      class="flex-1"
-                      @update:model-value="(v) => updateWeekVolume(Number(v))"
+                      class="w-full"
+                      @update:model-value="(v) => updateWeekTss(Number(v))"
                     />
-                    <span class="text-xs font-bold text-muted">HRS</span>
                   </div>
-                </div>
-              </template>
-            </UPopover>
+                </template>
+              </UPopover>
 
-            <!-- 3. TSS Tuning -->
-            <UPopover :ui="{ content: 'w-48 p-4' }">
-              <div
-                class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg cursor-pointer hover:ring-1 hover:ring-primary-500/50 transition-all group"
+              <!-- 4. Type Tuning -->
+              <button
+                type="button"
+                class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg cursor-pointer hover:ring-1 hover:ring-primary-500/50 transition-all group select-none"
+                @click="
+                  () => {
+                    void toggleWeekRecovery()
+                  }
+                "
               >
                 <div class="flex justify-between items-center mb-0.5">
-                  <div class="text-[10px] uppercase font-bold text-muted tracking-wider">TSS</div>
+                  <div class="text-[10px] font-bold text-muted tracking-wider">Type</div>
                   <UIcon
-                    name="i-heroicons-pencil"
+                    name="i-heroicons-arrows-right-left"
                     class="w-3 h-3 text-primary-500 opacity-0 group-hover:opacity-100"
                   />
                 </div>
-                <div class="font-bold text-sm sm:text-base tabular-nums">
-                  {{ selectedWeek.tssTarget }}
-                </div>
-              </div>
-
-              <template #content>
-                <div class="space-y-3">
-                  <div class="font-bold text-xs uppercase tracking-widest text-muted">
-                    Target TSS
-                  </div>
-                  <UInput
-                    :model-value="selectedWeek.tssTarget"
-                    type="number"
-                    min="0"
-                    size="sm"
-                    class="w-full"
-                    @update:model-value="(v) => updateWeekTss(Number(v))"
-                  />
-                </div>
-              </template>
-            </UPopover>
-
-            <!-- 4. Type Tuning -->
-            <div
-              class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg cursor-pointer hover:ring-1 hover:ring-primary-500/50 transition-all group select-none"
-              @click="
-                () => {
-                  void toggleWeekRecovery()
-                }
-              "
-            >
-              <div class="flex justify-between items-center mb-0.5">
-                <div class="text-[10px] uppercase font-bold text-muted tracking-wider">Type</div>
-                <UIcon
-                  name="i-heroicons-arrows-right-left"
-                  class="w-3 h-3 text-primary-500 opacity-0 group-hover:opacity-100"
-                />
-              </div>
-              <div
-                class="font-bold text-sm sm:text-base"
-                :class="
-                  selectedWeek.isRecovery
-                    ? 'text-green-500'
-                    : 'text-primary-600 dark:text-primary-400'
-                "
-              >
-                {{ selectedWeek.isRecovery ? 'Recovery' : 'Training' }}
-              </div>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-2 text-xs text-muted mb-2 px-1">
-            <UIcon name="i-heroicons-information-circle" class="w-4 h-4" />
-            <span>Tip: Drag and drop rows to reorder workouts within the week.</span>
-          </div>
-
-          <!-- Workouts Table (Desktop) -->
-          <div class="hidden sm:block overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 dark:bg-gray-900 text-muted">
-                <tr>
-                  <th class="w-8" />
-                  <th class="px-4 py-2 text-left w-10" />
-                  <th class="px-4 py-2 text-left">Day</th>
-                  <th class="px-4 py-2 text-left">Workout</th>
-                  <th class="px-4 py-2 text-left">Targets</th>
-                  <th class="px-4 py-2 text-center">
-                    <div class="flex items-center justify-center gap-1">
-                      <UIcon
-                        name="i-heroicons-chart-bar"
-                        class="w-4 h-4 inline"
-                        title="Structured Workout"
-                      />
-                      <UButton
-                        v-if="visibleWorkouts.some((w: any) => !w.structuredWorkout)"
-                        size="xs"
-                        color="primary"
-                        variant="ghost"
-                        icon="i-heroicons-sparkles"
-                        title="Generate structure for all workouts in this week"
-                        :loading="generatingAllStructures"
-                        @click="
-                          () => {
-                            void generateAllStructureForWeek()
-                          }
-                        "
-                      />
-                    </div>
-                  </th>
-                  <th class="px-4 py-2 text-right">Status</th>
-                  <th class="w-10 px-2 py-2" />
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                <tr
-                  v-for="workout in visibleWorkouts"
-                  :key="workout.id"
-                  class="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group"
-                  draggable="true"
-                  :class="{
-                    'opacity-50': draggingId === workout.id,
-                    'bg-independent-stripes': workout.isIndependent,
-                    'opacity-60 italic text-muted': workout.type === 'Rest'
-                  }"
-                  @dragstart="onDragStart($event, workout)"
-                  @dragover.prevent
-                  @drop="onDrop($event, workout)"
-                  @click="
-                    () => {
-                      void navigateToWorkout(workout.id)
-                    }
+                <div
+                  class="font-bold text-sm sm:text-base"
+                  :class="
+                    selectedWeek.isRecovery
+                      ? 'text-green-500'
+                      : 'text-primary-600 dark:text-primary-400'
                   "
                 >
-                  <td class="pl-2 text-center cursor-move text-gray-300 group-hover:text-gray-500">
-                    <UTooltip v-if="workout.isIndependent" text="Link to Plan">
-                      <UButton
-                        :icon="
-                          hoveredLinkId === workout.id
-                            ? 'i-heroicons-link'
-                            : 'i-heroicons-link-slash'
-                        "
-                        color="neutral"
-                        variant="ghost"
-                        size="xs"
-                        @mouseenter="hoveredLinkId = workout.id"
-                        @mouseleave="hoveredLinkId = null"
-                        @click.stop="linkWorkout(workout)"
+                  {{ selectedWeek.isRecovery ? 'Recovery' : 'Training' }}
+                </div>
+              </button>
+            </div>
+          </details>
+          <details class="space-y-4">
+            <summary
+              class="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              Edit sessions and compare targets
+            </summary>
+            <div class="flex items-center gap-2 text-xs text-muted mb-2 px-1">
+              <UIcon name="i-heroicons-information-circle" class="w-4 h-4" />
+              <span>Tip: Drag and drop rows to reorder workouts within the week.</span>
+            </div>
+
+            <!-- Workouts Table (Desktop) -->
+            <div class="hidden sm:block overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-gray-50 dark:bg-gray-900 text-muted">
+                  <tr>
+                    <th class="w-8" />
+                    <th class="px-4 py-2 text-left w-10" />
+                    <th class="px-4 py-2 text-left">Day</th>
+                    <th class="px-4 py-2 text-left">Workout</th>
+                    <th class="px-4 py-2 text-left">Targets</th>
+                    <th class="px-4 py-2 text-center">
+                      <div class="flex items-center justify-center gap-1">
+                        <UIcon
+                          name="i-heroicons-chart-bar"
+                          class="w-4 h-4 inline"
+                          title="Structured Workout"
+                        />
+                        <UButton
+                          v-if="visibleWorkouts.some((w: any) => !w.structuredWorkout)"
+                          size="xs"
+                          color="primary"
+                          variant="ghost"
+                          icon="i-heroicons-sparkles"
+                          title="Generate structure for all workouts in this week"
+                          :loading="generatingAllStructures"
+                          @click="
+                            () => {
+                              void generateAllStructureForWeek()
+                            }
+                          "
+                        />
+                      </div>
+                    </th>
+                    <th class="px-4 py-2 text-right">Status</th>
+                    <th class="w-10 px-2 py-2" />
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                  <tr
+                    v-for="workout in visibleWorkouts"
+                    :key="workout.id"
+                    class="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors group"
+                    draggable="true"
+                    :class="{
+                      'opacity-50': draggingId === workout.id,
+                      'bg-independent-stripes': workout.isIndependent,
+                      'opacity-60 italic text-muted': workout.type === 'Rest'
+                    }"
+                    @dragstart="onDragStart($event, workout)"
+                    @dragover.prevent
+                    @drop="onDrop($event, workout)"
+                    @click="
+                      () => {
+                        void navigateToWorkout(workout.id)
+                      }
+                    "
+                  >
+                    <td
+                      class="pl-2 text-center cursor-move text-gray-300 group-hover:text-gray-500"
+                    >
+                      <UTooltip v-if="workout.isIndependent" text="Link to Plan">
+                        <UButton
+                          :icon="
+                            hoveredLinkId === workout.id
+                              ? 'i-heroicons-link'
+                              : 'i-heroicons-link-slash'
+                          "
+                          color="neutral"
+                          variant="ghost"
+                          size="xs"
+                          @mouseenter="hoveredLinkId = workout.id"
+                          @mouseleave="hoveredLinkId = null"
+                          @click.stop="linkWorkout(workout)"
+                        />
+                      </UTooltip>
+                      <UTooltip v-else text="Unlink from Plan">
+                        <UButton
+                          :icon="
+                            hoveredLinkId === workout.id
+                              ? 'i-heroicons-link-slash'
+                              : 'i-heroicons-link'
+                          "
+                          color="neutral"
+                          variant="ghost"
+                          size="xs"
+                          @mouseenter="hoveredLinkId = workout.id"
+                          @mouseleave="hoveredLinkId = null"
+                          @click.stop="unlinkWorkout(workout)"
+                        />
+                      </UTooltip>
+                    </td>
+                    <td
+                      class="px-4 py-3 text-center border-l-4"
+                      :class="getSportColorClass(workout.type)"
+                    >
+                      <UIcon
+                        :name="getWorkoutIcon(workout.type)"
+                        class="w-5 h-5"
+                        :class="getIconColorClass(workout.type)"
                       />
-                    </UTooltip>
-                    <UTooltip v-else text="Unlink from Plan">
-                      <UButton
-                        :icon="
-                          hoveredLinkId === workout.id
-                            ? 'i-heroicons-link-slash'
-                            : 'i-heroicons-link'
+                    </td>
+                    <td class="px-4 py-3 font-medium hidden sm:table-cell">
+                      {{ formatDay(workout.date) }}
+                    </td>
+                    <td class="px-4 py-3">
+                      <div class="font-semibold">{{ workout.title }}</div>
+                      <div class="text-xs text-muted">{{ workout.type }}</div>
+                    </td>
+                    <td class="px-4 py-3">
+                      <div v-if="workout.type === 'Rest'" class="text-xs">Rest Day</div>
+                      <div v-else-if="workout.type === 'Ride' || workout.type === 'VirtualRide'">
+                        {{ Math.round(workout.durationSec / 60) }}m
+                      </div>
+                      <div v-else-if="workout.type === 'Run'">
+                        {{ Math.round(workout.durationSec / 60) }}m
+                        <span v-if="workout.distanceMeters"
+                          >/ {{ Math.round((workout.distanceMeters / 1000) * 10) / 10 }} km</span
+                        >
+                      </div>
+                      <div v-else-if="workout.type === 'Swim'">
+                        {{ Math.round(workout.distanceMeters || 0) }}m
+                      </div>
+                      <div v-else-if="workout.type === 'Gym' || workout.type === 'WeightTraining'">
+                        {{ Math.round(workout.durationSec / 60) }}m
+                        <div v-if="workout.targetArea" class="text-xs text-muted mt-0.5">
+                          Focus: {{ workout.targetArea }}
+                        </div>
+                      </div>
+                      <div v-else>-</div>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                      <div class="flex justify-center">
+                        <MiniWorkoutChart
+                          v-if="workout.structuredWorkout && workout.type !== 'Rest'"
+                          :workout="workout"
+                        />
+                        <UButton
+                          v-else-if="workout.type !== 'Rest'"
+                          size="xs"
+                          color="neutral"
+                          variant="ghost"
+                          icon="i-heroicons-sparkles"
+                          :loading="generatingStructureForWorkoutId === workout.id"
+                          title="Generate Structured Workout"
+                          @click.stop="generateStructureForWorkout(workout.id)"
+                        />
+                      </div>
+                    </td>
+                    <td class="px-4 py-3 text-right whitespace-nowrap">
+                      <UBadge :color="workout.completed ? 'success' : 'neutral'" size="xs">
+                        {{ workout.completed ? 'Done' : 'Planned' }}
+                      </UBadge>
+                    </td>
+                    <td class="px-2 py-3 text-center w-10">
+                      <UTooltip
+                        :text="
+                          isLocalWorkout(workout)
+                            ? 'Publish to Intervals.icu'
+                            : 'Update on Intervals.icu'
                         "
-                        color="neutral"
-                        variant="ghost"
-                        size="xs"
-                        @mouseenter="hoveredLinkId = workout.id"
-                        @mouseleave="hoveredLinkId = null"
-                        @click.stop="unlinkWorkout(workout)"
-                      />
-                    </UTooltip>
-                  </td>
-                  <td
-                    class="px-4 py-3 text-center border-l-4"
+                      >
+                        <UButton
+                          v-if="workout.type !== 'Rest' && workout.type !== 'Active Recovery'"
+                          size="xs"
+                          color="neutral"
+                          variant="ghost"
+                          :icon="
+                            isLocalWorkout(workout)
+                              ? 'i-heroicons-cloud-arrow-up'
+                              : 'i-heroicons-arrow-path'
+                          "
+                          :loading="publishingId === workout.id"
+                          @click.stop="publishWorkout(workout)"
+                        />
+                      </UTooltip>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Workouts List (Mobile) -->
+            <div class="block sm:hidden space-y-2">
+              <div
+                v-for="workout in visibleWorkouts"
+                :key="workout.id"
+                class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700 w-full"
+                :data-mobile-workout-id="workout.id"
+                :class="{
+                  'bg-independent-stripes border-dashed': workout.isIndependent,
+                  'opacity-60 italic grayscale text-muted': workout.type === 'Rest',
+                  'ring-2 ring-primary-500/40': mobileDropTargetId === workout.id && draggingId,
+                  'opacity-50': draggingId === workout.id
+                }"
+                @click="
+                  () => {
+                    void navigateToWorkout(workout.id)
+                  }
+                "
+              >
+                <div class="flex items-start gap-3">
+                  <!-- Sport Icon & Color Strip -->
+                  <div
+                    class="w-10 h-10 rounded-full bg-gray-50 dark:bg-gray-900 border flex-shrink-0 flex items-center justify-center border-l-4"
                     :class="getSportColorClass(workout.type)"
                   >
                     <UIcon
@@ -777,234 +717,125 @@
                       class="w-5 h-5"
                       :class="getIconColorClass(workout.type)"
                     />
-                  </td>
-                  <td class="px-4 py-3 font-medium hidden sm:table-cell">
-                    {{ formatDay(workout.date) }}
-                  </td>
-                  <td class="px-4 py-3">
-                    <div class="font-semibold">{{ workout.title }}</div>
-                    <div class="text-xs text-muted">{{ workout.type }}</div>
-                  </td>
-                  <td class="px-4 py-3">
-                    <div v-if="workout.type === 'Rest'" class="text-xs">Rest Day</div>
-                    <div v-else-if="workout.type === 'Ride' || workout.type === 'VirtualRide'">
-                      {{ Math.round(workout.durationSec / 60) }}m
-                    </div>
-                    <div v-else-if="workout.type === 'Run'">
-                      {{ Math.round(workout.durationSec / 60) }}m
-                      <span v-if="workout.distanceMeters"
-                        >/ {{ Math.round((workout.distanceMeters / 1000) * 10) / 10 }} km</span
-                      >
-                    </div>
-                    <div v-else-if="workout.type === 'Swim'">
-                      {{ Math.round(workout.distanceMeters || 0) }}m
-                    </div>
-                    <div v-else-if="workout.type === 'Gym' || workout.type === 'WeightTraining'">
-                      {{ Math.round(workout.durationSec / 60) }}m
-                      <div v-if="workout.targetArea" class="text-xs text-muted mt-0.5">
-                        Focus: {{ workout.targetArea }}
+                  </div>
+
+                  <!-- Info Column -->
+                  <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-start mb-0.5">
+                      <span class="text-xs font-bold text-gray-500 tracking-wide">
+                        {{ formatDay(workout.date) }}
+                      </span>
+                      <div class="flex items-center gap-1.5 ml-2">
+                        <UButton
+                          icon="i-heroicons-bars-3"
+                          color="neutral"
+                          variant="ghost"
+                          size="xs"
+                          aria-label="Drag workout"
+                          class="touch-none"
+                          @click.stop.prevent
+                          @touchstart.stop.prevent="onMobileDragStart($event, workout)"
+                          @touchmove.stop.prevent="onMobileDragMove($event)"
+                          @touchend.stop.prevent="onMobileDragEnd"
+                          @touchcancel.stop.prevent="onMobileDragCancel"
+                        />
+                        <UButton
+                          v-if="workout.isIndependent"
+                          icon="i-heroicons-link-slash"
+                          color="neutral"
+                          variant="ghost"
+                          size="xs"
+                          @click.stop="linkWorkout(workout)"
+                        />
+                        <UButton
+                          v-else
+                          icon="i-heroicons-link"
+                          color="neutral"
+                          variant="ghost"
+                          size="xs"
+                          @click.stop="unlinkWorkout(workout)"
+                        />
+                        <UBadge
+                          :color="workout.completed ? 'success' : 'neutral'"
+                          size="xs"
+                          variant="subtle"
+                          class="text-[10px]"
+                        >
+                          {{ workout.completed ? 'Done' : 'Planned' }}
+                        </UBadge>
+                        <UButton
+                          v-if="workout.type !== 'Rest' && workout.type !== 'Active Recovery'"
+                          size="xs"
+                          color="neutral"
+                          variant="ghost"
+                          :icon="
+                            isLocalWorkout(workout)
+                              ? 'i-heroicons-cloud-arrow-up'
+                              : 'i-heroicons-arrow-path'
+                          "
+                          :loading="publishingId === workout.id"
+                          @click.stop="publishWorkout(workout)"
+                        />
                       </div>
                     </div>
-                    <div v-else>-</div>
-                  </td>
-                  <td class="px-4 py-3 text-center">
-                    <div class="flex justify-center">
-                      <MiniWorkoutChart
-                        v-if="workout.structuredWorkout && workout.type !== 'Rest'"
-                        :workout="workout"
-                      />
+
+                    <div class="font-bold text-sm text-gray-900 dark:text-white leading-snug">
+                      {{ workout.title }}
+                    </div>
+
+                    <div class="text-xs text-muted mt-1 flex flex-wrap items-center gap-x-1.5">
+                      <template v-if="workout.type === 'Rest'">
+                        <span>Rest Day</span>
+                      </template>
+                      <template
+                        v-else-if="workout.type === 'Ride' || workout.type === 'VirtualRide'"
+                      >
+                        <span>{{ Math.round(workout.durationSec / 60) }}m</span>
+                        <span class="text-gray-300 dark:text-gray-600">•</span>
+                        <span class="font-medium">{{ workout.type }}</span>
+                      </template>
+                      <span v-else-if="workout.type === 'Run'"
+                        >{{ Math.round(workout.durationSec / 60) }}m
+                        <span v-if="workout.distanceMeters"
+                          >/ {{ Math.round((workout.distanceMeters / 1000) * 10) / 10 }} km</span
+                        >
+                        <span class="text-gray-300 dark:text-gray-600">•</span>
+                        <span class="font-medium">{{ workout.type }}</span>
+                      </span>
+                      <template v-else>
+                        <span>{{ Math.round(workout.durationSec / 60) }}m</span>
+                        <span class="text-gray-300 dark:text-gray-600">•</span>
+                        <span class="font-medium">{{ workout.type }}</span>
+                      </template>
+                    </div>
+
+                    <!-- Mini Chart / Secondary Info Row -->
+                    <div
+                      v-if="workout.structuredWorkout && workout.type !== 'Rest'"
+                      class="mt-2.5"
+                      @click.stop
+                    >
+                      <MiniWorkoutChart :workout="workout" class="h-10 w-full" />
+                    </div>
+                    <div
+                      v-else-if="workout.type !== 'Rest' && workout.type !== 'Active Recovery'"
+                      class="mt-2 text-left"
+                    >
                       <UButton
-                        v-else-if="workout.type !== 'Rest'"
                         size="xs"
                         color="neutral"
                         variant="ghost"
+                        label="AI structure"
                         icon="i-heroicons-sparkles"
                         :loading="generatingStructureForWorkoutId === workout.id"
-                        title="Generate Structured Workout"
                         @click.stop="generateStructureForWorkout(workout.id)"
                       />
                     </div>
-                  </td>
-                  <td class="px-4 py-3 text-right whitespace-nowrap">
-                    <UBadge :color="workout.completed ? 'success' : 'neutral'" size="xs">
-                      {{ workout.completed ? 'Done' : 'Planned' }}
-                    </UBadge>
-                  </td>
-                  <td class="px-2 py-3 text-center w-10">
-                    <UTooltip
-                      :text="
-                        isLocalWorkout(workout)
-                          ? 'Publish to Intervals.icu'
-                          : 'Update on Intervals.icu'
-                      "
-                    >
-                      <UButton
-                        v-if="workout.type !== 'Rest' && workout.type !== 'Active Recovery'"
-                        size="xs"
-                        color="neutral"
-                        variant="ghost"
-                        :icon="
-                          isLocalWorkout(workout)
-                            ? 'i-heroicons-cloud-arrow-up'
-                            : 'i-heroicons-arrow-path'
-                        "
-                        :loading="publishingId === workout.id"
-                        @click.stop="publishWorkout(workout)"
-                      />
-                    </UTooltip>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Workouts List (Mobile) -->
-          <div class="block sm:hidden space-y-2">
-            <div
-              v-for="workout in visibleWorkouts"
-              :key="workout.id"
-              class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700 w-full"
-              :data-mobile-workout-id="workout.id"
-              :class="{
-                'bg-independent-stripes border-dashed': workout.isIndependent,
-                'opacity-60 italic grayscale text-muted': workout.type === 'Rest',
-                'ring-2 ring-primary-500/40': mobileDropTargetId === workout.id && draggingId,
-                'opacity-50': draggingId === workout.id
-              }"
-              @click="
-                () => {
-                  void navigateToWorkout(workout.id)
-                }
-              "
-            >
-              <div class="flex items-start gap-3">
-                <!-- Sport Icon & Color Strip -->
-                <div
-                  class="w-10 h-10 rounded-full bg-gray-50 dark:bg-gray-900 border flex-shrink-0 flex items-center justify-center border-l-4"
-                  :class="getSportColorClass(workout.type)"
-                >
-                  <UIcon
-                    :name="getWorkoutIcon(workout.type)"
-                    class="w-5 h-5"
-                    :class="getIconColorClass(workout.type)"
-                  />
-                </div>
-
-                <!-- Info Column -->
-                <div class="flex-1 min-w-0">
-                  <div class="flex justify-between items-start mb-0.5">
-                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                      {{ formatDay(workout.date) }}
-                    </span>
-                    <div class="flex items-center gap-1.5 ml-2">
-                      <UButton
-                        icon="i-heroicons-bars-3"
-                        color="neutral"
-                        variant="ghost"
-                        size="xs"
-                        aria-label="Drag workout"
-                        class="touch-none"
-                        @click.stop.prevent
-                        @touchstart.stop.prevent="onMobileDragStart($event, workout)"
-                        @touchmove.stop.prevent="onMobileDragMove($event)"
-                        @touchend.stop.prevent="onMobileDragEnd"
-                        @touchcancel.stop.prevent="onMobileDragCancel"
-                      />
-                      <UButton
-                        v-if="workout.isIndependent"
-                        icon="i-heroicons-link-slash"
-                        color="neutral"
-                        variant="ghost"
-                        size="xs"
-                        @click.stop="linkWorkout(workout)"
-                      />
-                      <UButton
-                        v-else
-                        icon="i-heroicons-link"
-                        color="neutral"
-                        variant="ghost"
-                        size="xs"
-                        @click.stop="unlinkWorkout(workout)"
-                      />
-                      <UBadge
-                        :color="workout.completed ? 'success' : 'neutral'"
-                        size="xs"
-                        variant="subtle"
-                        class="text-[10px]"
-                      >
-                        {{ workout.completed ? 'Done' : 'Planned' }}
-                      </UBadge>
-                      <UButton
-                        v-if="workout.type !== 'Rest' && workout.type !== 'Active Recovery'"
-                        size="xs"
-                        color="neutral"
-                        variant="ghost"
-                        :icon="
-                          isLocalWorkout(workout)
-                            ? 'i-heroicons-cloud-arrow-up'
-                            : 'i-heroicons-arrow-path'
-                        "
-                        :loading="publishingId === workout.id"
-                        @click.stop="publishWorkout(workout)"
-                      />
-                    </div>
-                  </div>
-
-                  <div class="font-bold text-sm text-gray-900 dark:text-white leading-snug">
-                    {{ workout.title }}
-                  </div>
-
-                  <div class="text-xs text-muted mt-1 flex flex-wrap items-center gap-x-1.5">
-                    <template v-if="workout.type === 'Rest'">
-                      <span>Rest Day</span>
-                    </template>
-                    <template v-else-if="workout.type === 'Ride' || workout.type === 'VirtualRide'">
-                      <span>{{ Math.round(workout.durationSec / 60) }}m</span>
-                      <span class="text-gray-300 dark:text-gray-600">•</span>
-                      <span class="font-medium">{{ workout.type }}</span>
-                    </template>
-                    <span v-else-if="workout.type === 'Run'"
-                      >{{ Math.round(workout.durationSec / 60) }}m
-                      <span v-if="workout.distanceMeters"
-                        >/ {{ Math.round((workout.distanceMeters / 1000) * 10) / 10 }} km</span
-                      >
-                      <span class="text-gray-300 dark:text-gray-600">•</span>
-                      <span class="font-medium">{{ workout.type }}</span>
-                    </span>
-                    <template v-else>
-                      <span>{{ Math.round(workout.durationSec / 60) }}m</span>
-                      <span class="text-gray-300 dark:text-gray-600">•</span>
-                      <span class="font-medium">{{ workout.type }}</span>
-                    </template>
-                  </div>
-
-                  <!-- Mini Chart / Secondary Info Row -->
-                  <div
-                    v-if="workout.structuredWorkout && workout.type !== 'Rest'"
-                    class="mt-2.5"
-                    @click.stop
-                  >
-                    <MiniWorkoutChart :workout="workout" class="h-10 w-full" />
-                  </div>
-                  <div
-                    v-else-if="workout.type !== 'Rest' && workout.type !== 'Active Recovery'"
-                    class="mt-2 text-left"
-                  >
-                    <UButton
-                      size="xs"
-                      color="neutral"
-                      variant="ghost"
-                      label="AI structure"
-                      icon="i-heroicons-sparkles"
-                      :loading="generatingStructureForWorkoutId === workout.id"
-                      @click.stop="generateStructureForWorkout(workout.id)"
-                    />
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-
+          </details>
           <!-- Empty State (Shared) -->
           <div
             v-if="selectedWeek.workouts.length === 0"
@@ -1042,28 +873,208 @@
         </div>
       </div>
 
-      <!-- Zone Distribution Chart -->
-      <WeeklyZoneSummary
-        v-if="selectedWeek"
-        :workouts="visibleWorkouts"
-        :loading="generatingAllStructures"
-        @generate="generateAllStructureForWeek"
-      />
-
-      <!-- Week Explanation / Coach's Note -->
-      <div
-        v-if="selectedWeek?.explanation"
-        class="mt-4 p-4 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20"
+      <details
+        class="mt-6 border-t border-gray-200 pt-5 dark:border-gray-800"
+        @toggle="toggleWeekEvidence"
       >
-        <div class="flex items-center gap-2 mb-2 text-primary font-semibold">
-          <UIcon name="i-heroicons-chat-bubble-left-right" class="w-5 h-5" />
-          <h3>Coach's Note</h3>
+        <summary
+          class="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          Understand this week's intensity and focus
+        </summary>
+        <div v-if="showWeekEvidence" class="mt-5 space-y-5">
+          <!-- Zone Distribution Chart -->
+          <WeeklyZoneSummary
+            v-if="selectedWeek"
+            :workouts="visibleWorkouts"
+            :loading="generatingAllStructures"
+            @generate="generateAllStructureForWeek"
+          />
+
+          <!-- Week Explanation / Coach's Note -->
+          <div
+            v-if="selectedWeek?.explanation"
+            class="mt-4 p-4 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20"
+          >
+            <div class="flex items-center gap-2 mb-2 text-primary font-semibold">
+              <UIcon name="i-heroicons-chat-bubble-left-right" class="w-5 h-5" />
+              <h3>Coach's Note</h3>
+            </div>
+            <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+              {{ selectedWeek.explanation }}
+            </p>
+          </div>
         </div>
-        <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-          {{ selectedWeek.explanation }}
-        </p>
-      </div>
+      </details>
     </div>
+    <details class="border-t border-gray-200 pt-6 dark:border-gray-800">
+      <summary
+        class="cursor-pointer text-base font-medium focus-visible:outline-2 focus-visible:outline-primary"
+      >
+        Explore your season
+      </summary>
+      <div class="mt-5">
+        <div class="space-y-2">
+          <div class="flex justify-between items-end px-1">
+            <h3 class="text-xs font-bold tracking-normal text-muted">Season timeline</h3>
+            <div class="text-[10px] text-muted tabular-nums">
+              {{ totalWeeksInPlan }} weeks in this plan
+            </div>
+          </div>
+
+          <div
+            class="relative w-full h-14 bg-gray-100/50 dark:bg-gray-900/50 rounded-xl overflow-hidden flex shadow-inner border border-gray-200 dark:border-gray-800 group/timeline"
+          >
+            <div
+              v-for="block in plan.blocks"
+              :key="block.id"
+              class="h-full relative border-r last:border-r-0 border-gray-200/50 dark:border-gray-800/50 transition-all cursor-pointer group bg-white/40 dark:bg-gray-800/20 hover:bg-white/60 dark:hover:bg-gray-800/40"
+              :style="{ flex: block.durationWeeks }"
+              :class="[selectedBlockId === block.id ? 'z-10' : '']"
+              @click="
+                () => {
+                  selectedBlockId = block.id
+                }
+              "
+            >
+              <!-- Content Container (Side-by-side) -->
+              <div class="absolute inset-0 flex items-center justify-between px-2 pb-2">
+                <!-- Text Info -->
+                <div class="flex flex-col min-w-0 justify-center">
+                  <span
+                    class="text-[10px] sm:text-xs font-semibold tracking-tight truncate"
+                    :class="
+                      selectedBlockId === block.id
+                        ? 'text-primary-600 dark:text-primary-400'
+                        : 'text-gray-600 dark:text-gray-400'
+                    "
+                  >
+                    {{ block.name.split(' ')[0] }}
+                  </span>
+                  <span
+                    class="text-[8px] sm:text-[9px] font-bold text-gray-400 dark:text-gray-500 tabular-nums"
+                  >
+                    {{ block.durationWeeks }}W
+                  </span>
+                </div>
+
+                <!-- Sparkline Rhythm -->
+                <div
+                  class="flex items-end gap-0.5 h-6 self-center opacity-60 group-hover:opacity-100 transition-opacity"
+                >
+                  <div
+                    v-for="w in block.durationWeeks"
+                    :key="w"
+                    class="w-1 rounded-t-sm"
+                    :style="{
+                      height:
+                        w % (block.recoveryWeekIndex || 4) === 0
+                          ? '4px'
+                          : 6 + (w % (block.recoveryWeekIndex || 4)) * 2 + 'px',
+                      backgroundColor:
+                        w % (block.recoveryWeekIndex || 4) === 0
+                          ? 'rgba(16, 185, 129, 0.6)'
+                          : 'rgba(59, 130, 246, 0.5)'
+                    }"
+                  />
+                </div>
+              </div>
+
+              <!-- Bottom Accent Bar -->
+              <div
+                class="absolute bottom-0 left-0 right-0 transition-all duration-300"
+                :style="{
+                  backgroundColor: getBlockTypeColor(block.type),
+                  height: selectedBlockId === block.id ? '6px' : '4px'
+                }"
+                :class="
+                  selectedBlockId === block.id
+                    ? 'opacity-100'
+                    : 'opacity-60 group-hover:opacity-100'
+                "
+              />
+
+              <!-- Selection Glow -->
+              <div
+                v-if="selectedBlockId === block.id"
+                class="absolute inset-0 ring-2 ring-inset ring-primary-500/20 pointer-events-none"
+              />
+            </div>
+
+            <!-- Event Markers -->
+            <template v-for="event in eventMarkers" :key="event.id">
+              <div
+                class="absolute bottom-1 w-px z-20 pointer-events-auto shadow-sm group/event transition-all duration-300"
+                :style="{
+                  left: `${event.position}%`,
+                  top: '30px',
+                  backgroundColor:
+                    event.priority === 'A'
+                      ? '#fbbf24'
+                      : event.priority === 'B'
+                        ? '#94a3b8'
+                        : '#cd7f32'
+                }"
+              >
+                <div
+                  class="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full border border-white dark:border-gray-900 shadow-sm transition-transform group-hover/timeline:scale-110"
+                  :style="{
+                    backgroundColor:
+                      event.priority === 'A'
+                        ? '#fbbf24'
+                        : event.priority === 'B'
+                          ? '#94a3b8'
+                          : '#cd7f32'
+                  }"
+                />
+                <!-- Hover Label -->
+                <div
+                  class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/timeline:opacity-100 transition-all duration-300 pointer-events-none"
+                >
+                  <div
+                    class="text-[8px] text-white px-1.5 py-0.5 rounded shadow-sm font-bold tracking-wider whitespace-nowrap"
+                    :style="{
+                      backgroundColor:
+                        event.priority === 'A'
+                          ? '#fbbf24'
+                          : event.priority === 'B'
+                            ? '#94a3b8'
+                            : '#cd7f32'
+                    }"
+                  >
+                    {{ event.priority || 'Event' }}: {{ event.title }}
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- "Now" indicator overlay -->
+            <div
+              v-if="currentBlockPosition !== null"
+              class="absolute bottom-1 w-[1.5px] bg-blue-600 dark:bg-blue-500 z-30 shadow-[0_0_10px_rgba(37,99,235,0.5)] transition-all duration-300"
+              :style="{
+                left: `${currentBlockPosition}%`,
+                top: '30px'
+              }"
+            >
+              <div
+                class="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-blue-600 dark:bg-blue-500 rounded-full border border-white dark:border-gray-900"
+              />
+              <!-- Hover Label -->
+              <div
+                class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/timeline:opacity-100 transition-opacity duration-200 pointer-events-none"
+              >
+                <div
+                  class="bg-blue-600 text-[8px] text-white px-1.5 py-0.5 rounded shadow-sm font-bold tracking-wider whitespace-nowrap"
+                >
+                  Today
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
   </div>
 </template>
 
@@ -1089,6 +1100,20 @@
     shouldAutoGenerate?: boolean
   }>()
 
+  const strategyLabels: Record<string, string> = {
+    LINEAR: 'Steady build',
+    POLARIZED: 'Polarized training',
+    BLOCK: 'Block training',
+    UNDULATING: 'Varied daily focus',
+    REVERSE: 'Intensity before volume',
+    MAINTENANCE: 'Maintain fitness'
+  }
+  const strategyLabel = computed(() => strategyLabels[props.plan.strategy] || props.plan.strategy)
+  const showWeekEvidence = ref(false)
+  function toggleWeekEvidence(event: Event) {
+    showWeekEvidence.value = (event.currentTarget as HTMLDetailsElement).open
+  }
+
   const emit = defineEmits(['refresh', 'generation-started'])
 
   const selectedBlockId = ref<string | null>(null)
@@ -1100,6 +1125,51 @@
   const showAbandonModal = ref(false)
   const showAIPlanModal = ref(false)
   const showOverview = ref(false)
+  const planActionItems = computed(() => [
+    [
+      {
+        label: 'Plan overview',
+        icon: 'i-heroicons-list-bullet',
+        onSelect: () => {
+          showOverview.value = true
+        }
+      },
+      {
+        label: 'Edit season structure',
+        icon: 'i-heroicons-squares-plus',
+        onSelect: () => {
+          showTimelineEditor.value = true
+        }
+      },
+      {
+        label: 'Adapt my schedule',
+        icon: 'i-heroicons-adjustments-horizontal',
+        onSelect: () => {
+          showAdaptModal.value = true
+        }
+      },
+      ...(!props.plan.isTemplate && !props.plan.hasBeenSavedAsTemplate
+        ? [
+            {
+              label: 'Save as a template',
+              icon: 'i-heroicons-bookmark',
+              onSelect: () => {
+                showSaveTemplateModal.value = true
+              }
+            }
+          ]
+        : []),
+      {
+        label: 'Abandon this plan',
+        icon: 'i-heroicons-trash',
+        color: 'error' as const,
+        onSelect: () => {
+          showAbandonModal.value = true
+        }
+      }
+    ]
+  ])
+
   const templateName = ref('')
   const templateDescription = ref('')
   const savingTemplate = ref(false)

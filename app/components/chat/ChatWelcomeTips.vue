@@ -1,52 +1,25 @@
 <template>
-  <div
-    class="flex flex-col items-center justify-center h-full text-center p-6 text-gray-500 dark:text-gray-400"
-  >
-    <div class="mb-6 p-4 rounded-full bg-primary-50 dark:bg-primary-900/20">
-      <UIcon name="i-heroicons-sparkles" class="w-10 h-10 text-primary-500" />
-    </div>
-    <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">{{ t('welcome_title') }}</h2>
-    <p class="max-w-sm mb-8 text-sm">
+  <div class="flex h-full min-h-64 flex-col justify-center py-10 sm:py-16">
+    <h2 class="text-2xl sm:text-3xl font-semibold text-highlighted leading-tight">
+      {{ t('welcome_title') }}
+    </h2>
+    <p class="mt-4 max-w-prose text-base text-muted leading-relaxed">
       {{ t('welcome_description') }}
     </p>
-
-    <div class="grid gap-4 max-w-sm w-full text-left">
-      <div
-        class="flex items-start gap-3 p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:border-primary-200 dark:hover:border-primary-800 transition-colors"
+    <details class="mt-6 max-w-prose">
+      <summary
+        class="min-h-11 cursor-pointer py-3 text-sm text-primary rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
       >
-        <div class="p-2 rounded-lg bg-primary-50 dark:bg-primary-950/50 shrink-0">
-          <UIcon name="i-heroicons-chat-bubble-left-right" class="w-5 h-5 text-primary-500" />
-        </div>
-        <div>
-          <span class="font-bold text-gray-900 dark:text-white block text-sm mb-0.5">{{
-            t('welcome_tip_fresh_title')
-          }}</span>
-          <span class="text-xs leading-relaxed">{{ t('welcome_tip_fresh_desc') }}</span>
-        </div>
+        {{ t('welcome_guidance') }}
+      </summary>
+      <div class="space-y-4 pb-3 text-sm text-muted leading-relaxed">
+        <p>{{ t('welcome_tip_specific_desc') }}</p>
+        <p>{{ t('welcome_tip_fresh_desc') }}</p>
       </div>
-
-      <div
-        class="flex items-start gap-3 p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:border-primary-200 dark:hover:border-primary-800 transition-colors"
-      >
-        <div class="p-2 rounded-lg bg-primary-50 dark:bg-primary-950/50 shrink-0">
-          <UIcon name="i-heroicons-bolt" class="w-5 h-5 text-primary-500" />
-        </div>
-        <div>
-          <span class="font-bold text-gray-900 dark:text-white block text-sm mb-0.5">{{
-            t('welcome_tip_specific_title')
-          }}</span>
-          <span class="text-xs leading-relaxed">{{ t('welcome_tip_specific_desc') }}</span>
-        </div>
-      </div>
-
-      <!-- Disclaimer -->
-      <div
-        class="mt-4 flex items-center gap-2 p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 text-orange-600 dark:text-orange-400"
-      >
-        <UIcon name="i-heroicons-exclamation-triangle" class="w-4 h-4 shrink-0" />
-        <span class="text-[10px] leading-tight text-left">{{ t('welcome_disclaimer') }}</span>
-      </div>
-    </div>
+    </details>
+    <p class="mt-8 max-w-prose text-xs text-muted leading-relaxed">
+      {{ t('welcome_disclaimer') }}
+    </p>
   </div>
 </template>
 

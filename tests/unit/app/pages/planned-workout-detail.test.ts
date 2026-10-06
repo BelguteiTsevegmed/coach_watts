@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
-import { flushPromises } from '@vue/test-utils'
+import { flushPromises, type VueWrapper } from '@vue/test-utils'
 import { nextTick, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
@@ -39,8 +39,10 @@ mockNuxtImport('useUpgradeModal', () => () => ({
 }))
 
 const WORKOUT_ID = 'workout-1'
+const mountedPages: VueWrapper[] = []
 
 function buildWorkoutResponse(overrides: Record<string, any> = {}) {
+  const { workout: workoutOverrides, ...responseOverrides } = overrides
   return {
     workout: {
       id: WORKOUT_ID,
@@ -52,7 +54,7 @@ function buildWorkoutResponse(overrides: Record<string, any> = {}) {
       structuredWorkout: null,
       trainingWeek: null,
       syncConflict: false,
-      ...overrides.workout
+      ...workoutOverrides
     },
     userFtp: 250,
     llmUsageId: null,
@@ -62,7 +64,7 @@ function buildWorkoutResponse(overrides: Record<string, any> = {}) {
     settingsStaleness: null,
     structureGenerationInFlight: false,
     hasRenderableStructure: true,
-    ...overrides
+    ...responseOverrides
   }
 }
 
@@ -90,10 +92,15 @@ async function mountPage() {
         UDashboardNavbar: {
           template:
             '<div><slot name="title" /><slot name="leading" /><slot name="right" /><slot /></div>'
+        },
+        UButton: {
+          props: ['label', 'disabled'],
+          template: '<button type="button" :disabled="disabled"><slot>{{ label }}</slot></button>'
         }
       }
     }
   })
+  mountedPages.push(wrapper)
 
   await flushPromises()
   await nextTick()
@@ -125,6 +132,7 @@ describe('Planned workout detail generation state restoration (CW-5)', () => {
   })
 
   afterEach(() => {
+    mountedPages.splice(0).forEach((wrapper) => wrapper.unmount())
     vi.unstubAllGlobals()
   })
 
@@ -184,5 +192,71 @@ describe('Planned workout detail generation state restoration (CW-5)', () => {
 
     expect(wrapper.text()).not.toContain('Structure generation running')
     expect(wrapper.text()).toContain('Build Structure')
+  })
+
+  it('keeps targets and generation details closed while the session purpose leads', async () => {
+    fetchMock.mockResolvedValueOnce(
+      buildWorkoutResponse({
+        workout: {
+          description: 'Build aerobic endurance while keeping the effort comfortable.',
+          structuredWorkout: { steps: [{ duration: 3600, power: { value: 0.7 } }] }
+        }
+      })
+    )
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('h1').text()).toBe('Sweet Spot Intervals')
+    expect(wrapper.text()).toContain(
+      'Build aerobic endurance while keeping the effort comfortable.'
+    )
+    expect(wrapper.find('#session-plan').exists()).toBe(true)
+    const targets = wrapper
+      .findAll('details')
+      .find((details) => details.find('summary').text() === 'Session targets')
+    expect(targets).toBeDefined()
+    expect(targets!.attributes('open')).toBeUndefined()
+    expect(wrapper.text()).toContain('Review session')
+    expect(wrapper.text()).toContain('Send to training app')
+    expect(wrapper.text()).toContain('Download for device')
+  })
+
+  it('keeps publishing and device export reachable after preparation', async () => {
+    fetchMock.mockResolvedValueOnce(
+      buildWorkoutResponse({
+        workout: { structuredWorkout: { steps: [{ duration: 3600, power: { value: 0.7 } }] } }
+      })
+    )
+    const wrapper = await mountPage()
+    const publish = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Send to training app')
+    expect(publish).toBeDefined()
+    await publish!.trigger('click')
+    await nextTick()
+    expect(wrapper.find('u-modal-stub[title="Publish to Intervals.icu"]').exists()).toBe(true)
+
+    const download = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Download for device')
+    expect(download).toBeDefined()
+    await download!.trigger('click')
+    await nextTick()
+    expect(wrapper.find('u-modal-stub[title="Download Workout"]').exists()).toBe(true)
+  })
+
+  it('keeps the sync guard visible and disables publishing when the structure is not ready', async () => {
+    fetchMock.mockResolvedValueOnce(
+      buildWorkoutResponse({
+        workout: { structuredWorkout: { steps: [{ duration: 3600, power: { value: 0.7 } }] } },
+        structureGenerationInFlight: true
+      })
+    )
+    const wrapper = await mountPage()
+    const publish = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Send to training app')
+    expect(publish).toBeDefined()
+    expect((publish!.element as HTMLButtonElement).disabled).toBe(true)
+    expect(wrapper.text()).toContain('Structure generation is still running.')
   })
 })

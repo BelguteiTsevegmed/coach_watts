@@ -1,5 +1,7 @@
 <template>
   <div
+    role="region"
+    :aria-label="t('quick_capture_preview_header')"
     class="fixed left-1/2 -translate-x-1/2 z-40 transition-[width,opacity,transform,bottom,border-radius] ease-[cubic-bezier(0.4,0,0.2,1)] flex flex-col items-center max-w-2xl"
     :class="[
       !isVisible ? 'opacity-0 translate-y-10 pointer-events-none' : 'opacity-100 translate-y-0',
@@ -50,6 +52,7 @@
             />
             <UButton
               icon="i-heroicons-x-mark"
+              :aria-label="t('quick_capture_close')"
               color="neutral"
               variant="ghost"
               size="xs"
@@ -69,6 +72,9 @@
           </div>
 
           <template v-else>
+            <p v-if="chatMessages.length === 0" class="text-sm text-muted leading-relaxed">
+              {{ t('quick_capture_empty') }}
+            </p>
             <div
               v-for="message in chatMessages"
               :key="message.id"
@@ -125,7 +131,9 @@
         "
       >
         <UInput
+          ref="captureInput"
           v-model="input"
+          :aria-label="t('quick_capture_placeholder_ask')"
           :placeholder="
             isExpanded ? t('quick_capture_placeholder_reply') : t('quick_capture_placeholder_ask')
           "
@@ -168,6 +176,7 @@
               </kbd>
               <UButton
                 v-else
+                :aria-label="t('quick_capture_send')"
                 :icon="isExpanded ? 'i-heroicons-paper-airplane' : 'i-heroicons-arrow-up-right'"
                 color="primary"
                 variant="solid"
@@ -209,6 +218,13 @@
   import { DefaultChatTransport } from 'ai'
   import { useBreakpoints, breakpointsTailwind, useEventListener } from '@vueuse/core'
 
+  const props = defineProps<{ manual?: boolean }>()
+  const emit = defineEmits<{ close: [] }>()
+  const captureInput = useTemplateRef('captureInput')
+  function focusInput() {
+    captureInput.value?.inputRef?.focus()
+  }
+  defineExpose({ focusInput })
   const { t } = useTranslate('common')
   const breakpoints = useBreakpoints(breakpointsTailwind)
   const isMobile = breakpoints.smaller('sm')
@@ -232,7 +248,7 @@
 
   const input = ref('')
   const isVisible = ref(false)
-  const isExpanded = ref(false)
+  const isExpanded = ref(!!props.manual)
   const isHovered = ref(false)
   const isFocused = ref(false)
   const currentRoomId = ref('')
@@ -285,7 +301,8 @@
     () => route.path,
     (path) => {
       isVisible.value =
-        enabledPages.some((p) => path === p || path.startsWith(p + '/')) && path !== '/chat'
+        props.manual ||
+        (enabledPages.some((p) => path === p || path.startsWith(p + '/')) && path !== '/chat')
     },
     { immediate: true }
   )
@@ -304,13 +321,22 @@
   )
 
   async function closeChat() {
+    chatInstance.value?.stop?.()
     isExpanded.value = false
+    if (props.manual) emit('close')
     // Reset state so the next interaction starts a fresh room
     setTimeout(() => {
       currentRoomId.value = ''
       chatInstance.value = null
     }, 500) // Wait for transition to finish
   }
+
+  onMounted(async () => {
+    if (props.manual) {
+      await nextTick()
+      focusInput()
+    }
+  })
 
   function toggleExpand() {
     if (chatMessages.value.length > 0) {

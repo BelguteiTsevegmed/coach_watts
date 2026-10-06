@@ -1,116 +1,51 @@
 <template>
   <div
     :class="[
-      'px-0 py-4 sm:p-6 transition-colors',
+      'p-4 sm:p-6',
       isBlueprint
-        ? 'bg-default/95 border-x-0 border-y border-default/80 rounded-none shadow-sm sm:border sm:rounded-3xl'
-        : 'bg-white dark:bg-gray-900 border-x-0 border-y border-gray-100 shadow-sm dark:border-gray-800 rounded-none sm:border sm:rounded-xl'
+        ? 'bg-default/95 border-x-0 border-y border-default/80 rounded-none shadow-none sm:border sm:rounded-3xl'
+        : 'bg-default rounded-xl border border-default'
     ]"
   >
-    <div
-      class="mb-4 flex flex-col gap-3 px-4 sm:px-0 sm:flex-row sm:items-center sm:justify-between"
-    >
-      <h3 class="text-base font-semibold sm:text-lg">Strength Training</h3>
-      <div class="grid grid-cols-2 gap-2 sm:flex">
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-eye"
-          @click="
-            () => {
-              void $emit('view')
-            }
-          "
-        >
-          View
-        </UButton>
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-adjustments-horizontal"
-          @click="
-            () => {
-              void $emit('adjust')
-            }
-          "
-        >
-          Adjust
-        </UButton>
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-pencil-square"
-          :class="{ 'bg-primary-50 dark:bg-primary-900/20 text-primary': activeTab === 'edit' }"
-          @click="
-            () => {
-              activeTab = activeTab === 'edit' ? 'view' : 'edit'
-            }
-          "
-        >
-          Edit
-        </UButton>
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-arrow-path"
-          :loading="generating"
-          @click="
-            () => {
-              void $emit('regenerate')
-            }
-          "
-        >
-          Regenerate
-        </UButton>
-      </div>
+    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <h3 class="text-lg font-semibold">Strength session</h3>
+      <WorkoutDetailToolsMenu
+        :editing="activeTab === 'edit'"
+        :generating="generating"
+        :allow-edit="allowEdit"
+        edit-label="Edit exercises"
+        @view="emit('view')"
+        @adjust="emit('adjust')"
+        @edit="activeTab = activeTab === 'edit' ? 'view' : 'edit'"
+        @regenerate="emit('regenerate')"
+      />
     </div>
 
-    <div
-      class="mb-5 flex gap-2 overflow-x-auto px-4 pb-1 sm:grid sm:px-0 sm:gap-3 sm:grid-cols-2 xl:grid-cols-5"
-    >
-      <div
-        class="min-w-[112px] rounded-xl border border-default/70 bg-muted/10 p-2.5 sm:min-w-0 sm:p-3"
-      >
-        <div class="text-[11px] uppercase tracking-[0.18em] text-muted">Blocks</div>
-        <div class="mt-1 text-lg font-semibold text-highlighted sm:text-xl">
-          {{ summary.blockCount }}
+    <details class="mb-6 border-t border-default pt-3">
+      <summary class="min-h-11 cursor-pointer py-3 text-sm text-muted">Session overview</summary>
+      <dl class="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
+        <div>
+          <dt class="text-muted">Blocks</dt>
+          <dd class="mt-1 font-medium">{{ summary.blockCount }}</dd>
         </div>
-      </div>
-      <div
-        class="min-w-[112px] rounded-xl border border-default/70 bg-muted/10 p-2.5 sm:min-w-0 sm:p-3"
-      >
-        <div class="text-[11px] uppercase tracking-[0.18em] text-muted">Exercises</div>
-        <div class="mt-1 text-lg font-semibold text-highlighted sm:text-xl">
-          {{ summary.exerciseCount }}
+        <div>
+          <dt class="text-muted">Exercises</dt>
+          <dd class="mt-1 font-medium">{{ summary.exerciseCount }}</dd>
         </div>
-      </div>
-      <div
-        class="min-w-[112px] rounded-xl border border-default/70 bg-muted/10 p-2.5 sm:min-w-0 sm:p-3"
-      >
-        <div class="text-[11px] uppercase tracking-[0.18em] text-muted">Sets</div>
-        <div class="mt-1 text-lg font-semibold text-highlighted sm:text-xl">
-          {{ summary.totalSets }}
+        <div>
+          <dt class="text-muted">Sets</dt>
+          <dd class="mt-1 font-medium">{{ summary.totalSets }}</dd>
         </div>
-      </div>
-      <div
-        class="min-w-[132px] rounded-xl border border-default/70 bg-muted/10 p-2.5 sm:min-w-0 sm:p-3"
-      >
-        <div class="text-[11px] uppercase tracking-[0.18em] text-muted">Duration</div>
-        <div class="mt-1 text-lg font-semibold text-highlighted sm:text-xl">
-          {{ formatDuration(displayDurationSec) }}
+        <div>
+          <dt class="text-muted">Duration</dt>
+          <dd class="mt-1 font-medium">{{ formatDuration(displayDurationSec) }}</dd>
         </div>
-      </div>
-      <div
-        class="min-w-[112px] rounded-xl border border-default/70 bg-muted/10 p-2.5 sm:min-w-0 sm:p-3"
-      >
-        <div class="text-[11px] uppercase tracking-[0.18em] text-muted">TSS</div>
-        <div class="mt-1 text-lg font-semibold text-highlighted sm:text-xl">{{ displayTss }}</div>
-      </div>
-    </div>
+        <div>
+          <dt class="text-muted">Training load</dt>
+          <dd class="mt-1 font-medium">{{ displayTss }}</dd>
+        </div>
+      </dl>
+    </details>
 
     <div v-if="activeTab === 'edit' && allowEdit" class="space-y-4">
       <StrengthExercisesEditor
@@ -127,16 +62,16 @@
       <div
         v-for="(block, blockIndex) in blocks"
         :key="block.id"
-        class="overflow-hidden rounded-none border-x-0 border-y border-default/70 bg-default/70 shadow-sm sm:rounded-2xl sm:border"
+        class="overflow-hidden rounded-none border-x-0 border-y border-default/70 bg-default/70 shadow-none sm:rounded-2xl sm:border"
       >
         <div class="border-b border-default/70 bg-muted/20 px-4 py-3 sm:px-5 sm:py-4">
           <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
             <div class="space-y-2">
               <div class="flex flex-wrap items-center gap-2">
-                <UBadge color="primary" variant="soft" size="sm" class="uppercase tracking-wide">
+                <UBadge color="primary" variant="soft" size="sm" class="tracking-wide">
                   {{ blockTypeLabel(block.type) }}
                 </UBadge>
-                <div class="text-xs uppercase tracking-[0.18em] text-muted">
+                <div class="text-xs text-muted">
                   {{ block.steps.length }} exercise{{ block.steps.length === 1 ? '' : 's' }}
                 </div>
               </div>
@@ -154,12 +89,6 @@
             v-for="(step, stepIndex) in block.steps"
             :key="step.id"
             class="rounded-none bg-gray-50 px-3 py-4 transition-colors dark:bg-gray-950 sm:rounded-xl sm:p-4"
-            :class="allowEdit ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900' : ''"
-            @click="
-              () => {
-                void openStepDetails(blockIndex, stepIndex)
-              }
-            "
           >
             <div class="space-y-4 xl:grid xl:grid-cols-[320px_minmax(0,1fr)] xl:gap-6 xl:space-y-0">
               <div class="space-y-4">
@@ -173,6 +102,14 @@
                     <div class="flex flex-wrap items-center gap-2">
                       <div class="font-medium text-gray-900 dark:text-white">{{ step.name }}</div>
                       <UButton
+                        color="neutral"
+                        variant="ghost"
+                        icon="i-heroicons-information-circle"
+                        class="min-h-11 min-w-11"
+                        :aria-label="`View details for ${step.name || 'exercise'}`"
+                        @click="openStepDetails(blockIndex, stepIndex)"
+                      />
+                      <UButton
                         v-if="step.name"
                         :to="getYouTubeSearchUrl(step.name)"
                         target="_blank"
@@ -181,6 +118,7 @@
                         variant="ghost"
                         size="xs"
                         icon="i-simple-icons-youtube"
+                        class="min-h-11 min-w-11"
                         aria-label="Search YouTube for this exercise"
                         @click.stop
                       />
@@ -189,7 +127,7 @@
                         color="primary"
                         variant="soft"
                         size="sm"
-                        class="uppercase tracking-wide"
+                        class="tracking-wide"
                       >
                         Saved Exercise
                       </UBadge>
@@ -245,25 +183,19 @@
                   </colgroup>
                   <thead class="bg-muted/10">
                     <tr>
-                      <th
-                        class="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
-                      >
-                        Set
-                      </th>
+                      <th class="px-3 py-2 text-left text-xs font-semibold text-muted">Set</th>
                       <th
                         v-if="step.loadMode !== 'none'"
-                        class="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
+                        class="px-3 py-2 text-left text-xs font-semibold text-muted"
                       >
                         {{ loadModeLabel(step.loadMode) }}
                       </th>
-                      <th
-                        class="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
-                      >
+                      <th class="px-3 py-2 text-left text-xs font-semibold text-muted">
                         {{ prescriptionColumnLabel(step.prescriptionMode) }}
                       </th>
                       <th
                         v-if="step.showRestColumn"
-                        class="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
+                        class="px-3 py-2 text-left text-xs font-semibold text-muted"
                       >
                         Rest
                       </th>
@@ -322,15 +254,13 @@
 
           <div class="grid gap-3 md:grid-cols-2">
             <div class="rounded-xl border border-default/70 bg-muted/10 p-4">
-              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-                Movement Pattern
-              </div>
+              <div class="text-xs font-semibold text-muted">Movement Pattern</div>
               <div class="mt-2 text-sm text-highlighted">
                 {{ selectedStep.movementPattern || '--' }}
               </div>
             </div>
             <div class="rounded-xl border border-default/70 bg-muted/10 p-4">
-              <div class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Intent</div>
+              <div class="text-xs font-semibold text-muted">Intent</div>
               <div class="mt-2 text-sm text-highlighted">{{ selectedStep.intent || '--' }}</div>
             </div>
           </div>
@@ -360,25 +290,19 @@
             <table class="min-w-full divide-y divide-default/70 text-sm">
               <thead class="bg-muted/10">
                 <tr>
-                  <th
-                    class="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
-                  >
-                    Set
-                  </th>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-muted">Set</th>
                   <th
                     v-if="selectedStep.loadMode !== 'none'"
-                    class="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
+                    class="px-3 py-2 text-left text-xs font-semibold text-muted"
                   >
                     {{ loadModeLabel(selectedStep.loadMode) }}
                   </th>
-                  <th
-                    class="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
-                  >
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-muted">
                     {{ prescriptionColumnLabel(selectedStep.prescriptionMode) }}
                   </th>
                   <th
                     v-if="selectedStep.showRestColumn"
-                    class="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted"
+                    class="px-3 py-2 text-left text-xs font-semibold text-muted"
                   >
                     Rest
                   </th>
@@ -412,6 +336,7 @@
 </template>
 
 <script setup lang="ts">
+  import WorkoutDetailToolsMenu from '~/components/workouts/WorkoutDetailToolsMenu.vue'
   import StrengthExercisesEditor from './StrengthExercisesEditor.vue'
   import {
     normalizeStrengthBlocks,

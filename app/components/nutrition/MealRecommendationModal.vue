@@ -15,10 +15,10 @@
             <UIcon name="i-lucide-utensils" class="w-5 h-5 text-primary-500" />
           </div>
           <div>
-            <h3 class="text-lg font-black uppercase tracking-tight leading-tight">
+            <h3 class="text-lg font-medium tracking-tight leading-tight">
               Fueling Recommendations
             </h3>
-            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+            <p class="text-xs font-bold text-gray-500">
               {{ recommendationSubtitle }}
             </p>
           </div>
@@ -59,26 +59,24 @@
           <div
             class="rounded-xl border border-gray-200 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-900/30"
           >
-            <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">
-              Daily Impact Preview
-            </p>
+            <p class="text-xs font-medium text-gray-500">Daily Impact Preview</p>
             <div class="mt-2 grid grid-cols-3 gap-2 text-xs">
               <div>
-                <p class="text-[10px] uppercase text-gray-500">Target</p>
-                <p class="font-black">{{ dayTargetCarbs }}g</p>
+                <p class="text-xs text-gray-500">Target</p>
+                <p class="font-medium">{{ dayTargetCarbs }}g</p>
               </div>
               <div>
-                <p class="text-[10px] uppercase text-gray-500">Planned (now)</p>
-                <p class="font-black">{{ dayPlannedCarbs }}g</p>
+                <p class="text-xs text-gray-500">Planned (now)</p>
+                <p class="font-medium">{{ dayPlannedCarbs }}g</p>
               </div>
               <div>
-                <p class="text-[10px] uppercase text-gray-500">Projected</p>
-                <p class="font-black text-primary-600 dark:text-primary-400">
+                <p class="text-xs text-gray-500">Projected</p>
+                <p class="font-medium text-primary-600 dark:text-primary-400">
                   {{ projectedDayCarbs }}g
                 </p>
               </div>
             </div>
-            <p class="mt-1 text-[10px] text-gray-500">
+            <p class="mt-1 text-xs text-gray-500">
               Remaining after apply: <span class="font-bold">{{ projectedRemainingCarbs }}g</span>
               <span v-if="isMergedAssignment" class="ml-1"
                 >• split across {{ assignmentCount }} windows</span
@@ -165,7 +163,7 @@
     <template #footer>
       <div class="flex justify-between items-center w-full">
         <div v-if="selectedOption" class="text-left">
-          <p class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Selected</p>
+          <p class="text-xs font-medium text-gray-400">Selected</p>
           <p class="text-xs font-bold truncate max-w-[200px]">{{ selectedOption.title }}</p>
         </div>
         <div v-else></div>

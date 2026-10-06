@@ -1,106 +1,30 @@
 <template>
-  <div class="space-y-6">
-    <!-- Fuel State Banner -->
-    <div
-      v-if="!hideBanner"
-      class="rounded-xl p-4 sm:p-6 shadow-sm border transition-all duration-500"
-      :class="[
-        fuelState === 3
-          ? 'bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/50'
-          : fuelState === 2
-            ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900/50'
-            : 'bg-blue-50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900/50'
-      ]"
-    >
-      <div class="flex items-start justify-between">
-        <div class="space-y-1">
-          <div class="flex items-center gap-2">
-            <h2
-              class="text-lg sm:text-xl font-black uppercase tracking-tight"
-              :class="[
-                fuelState === 3
-                  ? 'text-red-600 dark:text-red-400'
-                  : fuelState === 2
-                    ? 'text-orange-600 dark:text-orange-400'
-                    : 'text-blue-600 dark:text-blue-400'
-              ]"
-            >
-              Fuel State {{ fuelState }}: {{ stateLabel }}
-            </h2>
-            <UTooltip v-if="isLocked" text="Manual Lock Enabled: AI recommendations are static">
-              <UIcon name="i-heroicons-lock-closed" class="w-5 h-5 text-gray-400" />
-            </UTooltip>
-          </div>
-          <p class="text-sm text-gray-600 dark:text-gray-400 font-medium">
-            {{ stateDescription }}
-          </p>
-        </div>
-
-        <!-- Goal Profile Offset -->
-        <div v-if="goalAdjustment !== 0" class="text-right">
-          <div class="text-[10px] font-bold uppercase text-gray-400 tracking-wider mb-1">
-            Goal Offset
-          </div>
-          <UBadge
-            variant="soft"
-            :color="goalAdjustment < 0 ? 'error' : 'success'"
-            class="font-black"
-          >
-            {{ goalAdjustment > 0 ? '+' : '' }}{{ goalAdjustment }}%
-          </UBadge>
-        </div>
-      </div>
+  <section>
+    <div v-if="!hideBanner" class="mb-6">
+      <h2 class="text-lg font-medium">{{ stateLabel }}</h2>
+      <p class="text-sm text-muted mt-2">{{ stateDescription }}</p>
+      <p v-if="isLocked" class="text-sm text-muted mt-2">{{ t('detail_manual_lock') }}</p>
+      <p v-if="goalAdjustment" class="text-sm mt-2">
+        {{ t('journey_goal_adjustment', { percent: goalAdjustment }) }}
+      </p>
     </div>
-
-    <!-- Macro Summary Charts -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 px-4 sm:px-0">
-      <div
+    <div class="divide-y divide-default">
+      <button
         v-for="macro in macros"
         :key="macro.label"
-        class="bg-white dark:bg-gray-900 p-3 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden relative group cursor-pointer hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
-        @click="
-          () => {
-            void showMacroExplain(macro)
-          }
-        "
+        type="button"
+        class="macro-total"
+        @click="showMacroExplain(macro)"
       >
-        <div class="flex items-center justify-between mb-2 sm:mb-3">
-          <div class="flex items-center gap-1.5 sm:gap-2">
-            <UIcon :name="macro.icon" class="w-4 h-4 sm:w-5 sm:h-5" :class="macro.iconColor" />
-            <span class="text-[10px] sm:text-xs font-bold uppercase text-gray-500 tracking-wider">{{
-              macro.label
-            }}</span>
-          </div>
-          <span class="text-[9px] sm:text-[10px] font-bold" :class="macro.statusColor"
-            >{{ macro.percentage }}%</span
-          >
-        </div>
-
-        <div class="flex items-baseline gap-1 mb-1 sm:mb-2">
-          <span class="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">{{
-            Math.round(macro.actual)
-          }}</span>
-          <span class="text-[10px] sm:text-sm font-bold text-gray-400"
-            >/ {{ Math.round(macro.target) }}{{ macro.unit }}</span
-          >
-        </div>
-
-        <!-- Progress Bar -->
-        <div class="h-2 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-          <div
-            class="h-full transition-all duration-1000 ease-out rounded-full"
-            :class="macro.barColor"
-            :style="{ width: `${Math.min(macro.percentage, 100)}%` }"
-          />
-        </div>
-
-        <!-- Hover indicator -->
-        <div
-          class="absolute bottom-0 left-0 h-0.5 bg-primary-500 w-full transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"
-        />
-      </div>
+        <span class="flex-1 text-left text-sm">{{ macro.label }}</span>
+        <span class="tabular-nums font-medium">{{ Math.round(macro.actual) }}{{ macro.unit }}</span>
+        <span v-if="macro.target > 0" class="text-sm text-muted tabular-nums"
+          >/ {{ Math.round(macro.target) }}{{ macro.unit }}</span
+        >
+        <span v-else class="text-sm text-muted">{{ t('journey_no_target') }}</span>
+        <UIcon name="i-heroicons-chevron-right" class="size-4 text-muted" />
+      </button>
     </div>
-
     <NutritionMacroExplainModal
       v-if="selectedMacro"
       v-model="isExplainOpen"
@@ -113,10 +37,12 @@
       :weight="weight"
       :fueling-plan="fuelingPlan"
     />
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
+  import { useTranslate } from '@tolgee/vue'
+  const { t } = useTranslate('nutrition')
   const props = withDefaults(
     defineProps<{
       fuelState: number
@@ -230,3 +156,17 @@
     return 'text-gray-400'
   }
 </script>
+
+<style scoped>
+  .macro-total {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 0.875rem;
+    padding-block: 1.125rem;
+  }
+  .macro-total:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 3px;
+  }
+</style>

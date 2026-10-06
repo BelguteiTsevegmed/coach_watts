@@ -257,7 +257,8 @@
       >
         <button
           type="button"
-          class="flex min-w-0 flex-1 items-center gap-2 text-left"
+          class="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          :aria-current="currentRoomId === room.roomId ? 'true' : undefined"
           @click="
             () => {
               void emit('select', room.roomId)
@@ -292,7 +293,8 @@
             color="neutral"
             variant="ghost"
             size="xs"
-            class="-mr-1 opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100"
+            class="-mr-1 min-h-11 min-w-11"
+            :aria-label="t('sidebar_chat_options', { name: room.roomName })"
             @click.stop
           />
         </UDropdownMenu>
@@ -302,7 +304,7 @@
         v-if="hasMoreRooms"
         variant="ghost"
         color="neutral"
-        class="mt-2 w-full justify-center"
+        class="mt-2 min-h-11 w-full justify-center"
         @click="
           () => {
             showAllRooms = !showAllRooms

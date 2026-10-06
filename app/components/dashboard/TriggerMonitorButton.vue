@@ -6,6 +6,7 @@
       size="sm"
       class="font-bold"
       icon="i-heroicons-cpu-chip"
+      :aria-label="t('navbar_tasks_tooltip')"
       @click="
         () => {
           void toggle()

@@ -1,45 +1,12 @@
 <template>
   <div
-    class="relative flex min-h-[calc(100vh-4rem)] items-center justify-center overflow-x-clip bg-[oklch(12%_0.015_155)] px-4 py-10 sm:px-6 lg:py-16"
+    class="relative flex min-h-[calc(100vh-4rem)] items-center justify-center overflow-x-clip bg-[#152523] px-4 py-10 sm:px-6 lg:py-16"
   >
-    <UContainer class="relative z-10 w-full max-w-6xl">
-      <div
-        class="grid overflow-hidden rounded-2xl border border-white/10 bg-[oklch(14%_0.018_155)] lg:grid-cols-12"
-      >
-        <aside
-          class="relative hidden flex-col justify-between border-r border-white/8 p-10 lg:col-span-5 lg:flex lg:p-12"
-        >
-          <div>
-            <p class="text-xs font-bold uppercase tracking-widest text-primary-400">Coach Watts</p>
-            <h2
-              class="font-athletic mt-6 text-3xl font-bold uppercase leading-[0.95] tracking-tight text-white"
-            >
-              {{ joinHeroTitle }}
-              <span class="text-primary-400">{{ joinHeroTitleAccent }}</span>
-            </h2>
-            <p class="mt-4 text-sm font-medium leading-relaxed text-gray-400">
-              {{ joinTagline }}
-            </p>
-          </div>
-
-          <div class="mt-10 border-t border-white/8 pt-8">
-            <blockquote class="text-sm font-medium leading-relaxed text-gray-300">
-              “Precision endurance coaching backed by live biometric load & readiness analytics.”
-            </blockquote>
-            <div class="mt-4 flex items-center gap-3">
-              <span class="h-2 w-2 rounded-full bg-primary-400" />
-              <span class="text-xs font-bold uppercase tracking-widest text-gray-400"
-                >Adaptive Intelligence</span
-              >
-            </div>
-          </div>
-        </aside>
-
-        <div class="flex flex-col justify-center p-8 sm:p-12 lg:col-span-7 lg:p-16">
+    <UContainer class="relative z-10 w-full max-w-lg">
+      <div class="grid overflow-hidden rounded-2xl border border-white/10 bg-[#1b2d2a]">
+        <div class="flex flex-col justify-center p-6 sm:p-10">
           <div class="mx-auto w-full max-w-md">
-            <h1
-              class="font-athletic text-4xl font-bold uppercase leading-[0.9] tracking-tight text-white sm:text-5xl"
-            >
+            <h1 class="text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl">
               {{ joinTitle }}
               <span class="text-primary-400">{{ joinSubtitle }}</span>
             </h1>
@@ -55,7 +22,7 @@
                 icon="i-simple-icons-apple"
                 color="neutral"
                 variant="solid"
-                class="h-14 min-w-full rounded-xl bg-black text-xs font-bold uppercase tracking-[0.15em] text-white hover:bg-neutral-900"
+                class="h-14 min-w-full rounded-xl bg-black text-sm font-medium text-white hover:bg-neutral-900"
                 :loading="loadingApple"
                 @click="
                   () => {
@@ -72,7 +39,7 @@
                 icon="i-simple-icons-google"
                 color="primary"
                 variant="solid"
-                class="h-14 min-w-full rounded-xl text-xs font-bold uppercase tracking-[0.15em]"
+                class="h-14 min-w-full rounded-xl text-sm font-medium"
                 :loading="loading"
                 @click="
                   () => {
@@ -83,46 +50,49 @@
                 {{ joinGoogle }}
               </UButton>
 
-              <UButton
-                block
-                size="xl"
-                color="neutral"
-                variant="outline"
-                class="h-14 min-w-full rounded-xl border-white/10 text-xs font-bold uppercase tracking-[0.12em]"
-                :loading="loadingStrava"
-                @click="
-                  () => {
-                    void handleStravaLogin()
-                  }
-                "
-              >
-                <template #leading>
-                  <UIcon name="i-simple-icons-strava" class="h-5 w-5 text-[#FC4C02]" />
-                </template>
-                {{ joinStrava }}
-              </UButton>
+              <details class="auth-more-options">
+                <summary>{{ moreSignInOptions }}</summary>
+                <UButton
+                  block
+                  size="xl"
+                  color="neutral"
+                  variant="outline"
+                  class="h-14 min-w-full rounded-xl border-white/10 text-sm font-medium"
+                  :loading="loadingStrava"
+                  @click="
+                    () => {
+                      void handleStravaLogin()
+                    }
+                  "
+                >
+                  <template #leading>
+                    <UIcon name="i-simple-icons-strava" class="h-5 w-5 text-[#FC4C02]" />
+                  </template>
+                  {{ joinStrava }}
+                </UButton>
 
-              <UButton
-                block
-                size="xl"
-                color="neutral"
-                variant="outline"
-                class="h-14 min-w-full rounded-xl border-white/10 text-xs font-bold uppercase tracking-[0.12em]"
-                :loading="loadingIntervals"
-                @click="
-                  () => {
-                    void handleIntervalsLogin()
-                  }
-                "
-              >
-                <template #leading>
-                  <img src="/images/logos/intervals.png" alt="" class="h-5 w-5" />
-                </template>
-                {{ joinIntervals }}
-              </UButton>
+                <UButton
+                  block
+                  size="xl"
+                  color="neutral"
+                  variant="outline"
+                  class="h-14 min-w-full rounded-xl border-white/10 text-sm font-medium"
+                  :loading="loadingIntervals"
+                  @click="
+                    () => {
+                      void handleIntervalsLogin()
+                    }
+                  "
+                >
+                  <template #leading>
+                    <img src="/images/logos/intervals.png" alt="" class="h-5 w-5" />
+                  </template>
+                  {{ joinIntervals }}
+                </UButton>
+              </details>
             </div>
 
-            <p class="mt-5 text-xs font-bold uppercase tracking-widest text-primary-400">
+            <p class="mt-5 text-xs font-medium text-primary-300">
               {{ joinFreeForeverNote }}
             </p>
 
@@ -134,7 +104,7 @@
                     ? '/login'
                     : `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
                 "
-                class="ml-1 font-bold uppercase tracking-widest text-primary-400 transition-colors hover:text-primary-300"
+                class="ml-1 font-medium text-primary-300 transition-colors hover:text-primary-300"
                 >{{ joinLogin }}</NuxtLink
               >
             </p>
@@ -173,6 +143,10 @@
       return translated === key || invalidValues.includes(translated) ? fallback : translated
     })
 
+  const moreSignInOptions = computed(() => {
+    const value = t.value('join.more_options')
+    return value === 'join.more_options' ? 'More sign-in options' : value
+  })
   const { signIn } = useAuth()
   const route = useRoute()
   const toast = useToast()
@@ -374,3 +348,24 @@
     }
   }
 </script>
+
+<style scoped>
+  .auth-more-options {
+    border-top: 1px solid #354e47;
+    padding-top: 0.75rem;
+  }
+  .auth-more-options summary {
+    color: #a7bbb5;
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 0;
+  }
+  .auth-more-options summary:focus-visible {
+    outline: 2px solid #93c9bc;
+    outline-offset: 4px;
+  }
+  .auth-more-options :deep(button) {
+    margin-top: 0.75rem;
+  }
+</style>

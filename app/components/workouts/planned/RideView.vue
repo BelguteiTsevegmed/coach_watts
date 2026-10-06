@@ -1,87 +1,28 @@
 <template>
   <div
     :class="[
-      'p-4 sm:p-6 transition-colors',
+      'p-4 sm:p-6',
       isBlueprint
-        ? 'bg-default/95 border border-default/80 rounded-3xl shadow-sm'
-        : 'bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800'
+        ? 'bg-default/95 border border-default/80 rounded-3xl shadow-none'
+        : 'bg-default rounded-xl border border-default'
     ]"
   >
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-      <h3 class="text-lg font-semibold">Power Profile</h3>
-      <div class="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-chat-bubble-left-right"
-          class="whitespace-nowrap"
-          @click="
-            () => {
-              void $emit('add-messages')
-            }
-          "
-        >
-          <span class="hidden sm:inline">Add Messages</span>
-          <span class="inline sm:hidden">Messages</span>
-        </UButton>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-eye"
-          @click="
-            () => {
-              void $emit('view')
-            }
-          "
-        >
-          View
-        </UButton>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-adjustments-horizontal"
-          @click="
-            () => {
-              void $emit('adjust')
-            }
-          "
-        >
-          Adjust
-        </UButton>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-pencil-square"
-          :class="{ 'bg-primary-50 dark:bg-primary-900/20 text-primary': activeTab === 'edit' }"
-          @click="
-            () => {
-              activeTab = activeTab === 'edit' ? 'view' : 'edit'
-            }
-          "
-        >
-          Edit
-        </UButton>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-arrow-path"
-          :loading="generating"
-          @click="
-            () => {
-              void $emit('regenerate')
-            }
-          "
-        >
-          <span class="hidden sm:inline">Regenerate</span>
-          <span class="inline sm:hidden">Redo</span>
-        </UButton>
-      </div>
+    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <h3 class="text-lg font-semibold">Ride intervals</h3>
+      <WorkoutDetailToolsMenu
+        :editing="activeTab === 'edit'"
+        :generating="generating"
+        :allow-edit="allowEdit"
+        edit-label="Edit intervals"
+        :has-messages="true"
+        @view="emit('view')"
+        @adjust="emit('adjust')"
+        @edit="activeTab = activeTab === 'edit' ? 'view' : 'edit'"
+        @regenerate="emit('regenerate')"
+        @add-messages="emit('add-messages')"
+      />
     </div>
+
     <WorkoutChart
       v-model:steps-tab="activeTab"
       :workout="workout"
@@ -94,6 +35,7 @@
 </template>
 
 <script setup lang="ts">
+  import WorkoutDetailToolsMenu from '~/components/workouts/WorkoutDetailToolsMenu.vue'
   import WorkoutChart from '~/components/workouts/WorkoutChart.vue'
 
   const props = defineProps<{

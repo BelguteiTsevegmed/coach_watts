@@ -1,42 +1,88 @@
 <template>
-  <div
-    class="relative min-h-screen overflow-x-clip bg-[oklch(12%_0.015_155)] selection:bg-primary-500/30"
-  >
-    <div class="pointer-events-none fixed inset-0 z-10 opacity-[0.02] grain-overlay" />
-    <LandingHero class="mb-8 sm:mb-12" />
-    <LandingNutritionExplainer class="py-16 sm:py-20" />
-    <LandingHowItWorks class="py-20 sm:py-28" />
-    <LandingIntegrations class="py-16 sm:py-20" />
-    <LandingDeepDiveArchitecture class="py-20 sm:py-24" />
-    <LandingFeatureBento class="py-16 sm:py-24" />
-    <LandingFeatureGoals class="py-20 sm:py-28" />
-    <LandingCommunity class="py-16 sm:py-20" />
-    <LandingPricing class="py-20 sm:py-24" />
-
-    <!-- Closing band — left-biased, not another centered SaaS CTA -->
-    <section class="border-t border-white/8 bg-[oklch(14%_0.018_155)] px-6 py-16 sm:py-20 lg:px-8">
-      <div
-        class="mx-auto flex max-w-[88rem] flex-col gap-8 lg:flex-row lg:items-end lg:justify-between"
-      >
-        <div class="max-w-xl">
-          <h2
-            class="font-athletic text-3xl font-bold uppercase tracking-tight text-white sm:text-4xl"
-          >
-            {{ t('cta.headline') }}
-          </h2>
-          <p class="mt-4 text-lg leading-8 text-gray-400">
-            {{ t('cta.description') }}
-          </p>
-        </div>
-        <div class="flex flex-wrap items-center gap-4">
-          <UButton size="xl" to="/join" color="primary" class="whitespace-nowrap">{{
-            t('cta.primary')
-          }}</UButton>
-          <UButton size="xl" to="/stories" color="neutral" variant="ghost" class="whitespace-nowrap"
-            >{{ t('cta.secondary') }} <span aria-hidden="true">→</span></UButton
-          >
-        </div>
+  <div class="journey-entry">
+    <section class="journey-entry__intro">
+      <p class="text-sm text-primary-300">Coach Watts</p>
+      <h1>{{ tr('journey_entry_title', 'A clear next step for your training.') }}</h1>
+      <p class="journey-entry__lead">
+        {{
+          tr(
+            'journey_entry_description',
+            'Check in, prepare for today, and learn from each session. Your coach keeps the bigger picture in view.'
+          )
+        }}
+      </p>
+      <UButton to="/join" color="primary" size="xl">{{
+        tr('journey_entry_action', 'Start your journey')
+      }}</UButton>
+      <NuxtLink to="/login" class="journey-entry__signin">{{
+        tr('nav.sign_in', 'Sign in')
+      }}</NuxtLink>
+    </section>
+    <section
+      id="how-it-works"
+      class="journey-entry__steps"
+      :aria-label="tr('nav.how_it_works', 'How it works')"
+    >
+      <div>
+        <span class="text-sm text-muted">01</span>
+        <h2>{{ tr('journey_entry_today', 'Begin with today') }}</h2>
+        <p>
+          {{
+            tr(
+              'journey_entry_today_description',
+              'Share how you feel. See the next useful action for your day.'
+            )
+          }}
+        </p>
       </div>
+      <div>
+        <span class="text-sm text-muted">02</span>
+        <h2>{{ tr('journey_entry_prepare', 'Prepare, then train') }}</h2>
+        <p>
+          {{
+            tr(
+              'journey_entry_prepare_description',
+              'Understand the purpose of your session. Open fueling and training details when you need them.'
+            )
+          }}
+        </p>
+      </div>
+      <div>
+        <span class="text-sm text-muted">03</span>
+        <h2>{{ tr('journey_entry_reflect', 'Reflect and move forward') }}</h2>
+        <p>
+          {{
+            tr(
+              'journey_entry_reflect_description',
+              'Leave a short reflection and see how your training develops over time.'
+            )
+          }}
+        </p>
+      </div>
+    </section>
+    <section class="journey-entry__depth">
+      <details>
+        <summary>{{ tr('journey_entry_more', 'Explore what your coach can help with') }}</summary>
+        <LandingNutritionExplainer /><LandingFeatureGoals /><LandingFeatureBento />
+      </details>
+      <details>
+        <summary>
+          {{ tr('journey_entry_connections', 'Connect the tools you already use') }}
+        </summary>
+        <LandingIntegrations />
+      </details>
+      <details id="pricing" :open="route.hash === '#pricing'">
+        <summary>{{ tr('journey_entry_membership', 'Plans and membership') }}</summary>
+        <LandingPricing />
+      </details>
+      <details>
+        <summary>{{ tr('journey_entry_stories', 'Stories from the community') }}</summary>
+        <LandingCommunity />
+      </details>
+      <details>
+        <summary>{{ tr('journey_entry_architecture', 'How Coach Watts works') }}</summary>
+        <LandingDeepDiveArchitecture />
+      </details>
     </section>
   </div>
 </template>
@@ -46,6 +92,10 @@
 
   const { t } = useTranslate('common')
   const { status } = useAuth()
+  function tr(key: string, fallback: string) {
+    const value = t.value(key)
+    return value === key ? fallback : value
+  }
 
   definePageMeta({
     layout: 'home',
@@ -74,3 +124,77 @@
     }
   })
 </script>
+
+<style scoped>
+  .journey-entry {
+    background: #152523;
+    color: #edf5f2;
+    padding: 4rem 1.5rem;
+  }
+  .journey-entry__intro,
+  .journey-entry__steps,
+  .journey-entry__depth {
+    max-width: 50rem;
+    margin-inline: auto;
+  }
+  .journey-entry__intro {
+    padding-block: 1rem 4rem;
+  }
+  h1 {
+    font-size: clamp(2.25rem, 5vw, 4rem);
+    line-height: 1.12;
+    letter-spacing: -0.04em;
+    font-weight: 600;
+    max-width: 14ch;
+    margin-top: 1.5rem;
+  }
+  .journey-entry__lead {
+    color: #a7bbb5;
+    font-size: 1.125rem;
+    line-height: 1.7;
+    max-width: 40rem;
+    margin-block: 1.5rem 2rem;
+  }
+  .journey-entry__signin {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    margin-inline-start: 1.5rem;
+    color: #a7bbb5;
+  }
+  .journey-entry__steps > div {
+    padding: 2rem 0;
+    border-top: 1px solid #354e47;
+  }
+  h2 {
+    font-size: 1.375rem;
+    font-weight: 500;
+    margin-block: 0.5rem;
+  }
+  .journey-entry__steps p {
+    color: #a7bbb5;
+    max-width: 40rem;
+    line-height: 1.7;
+  }
+  .journey-entry__depth {
+    margin-top: 3rem;
+  }
+  details {
+    border-top: 1px solid #354e47;
+  }
+  details > summary {
+    padding: 1.25rem 0;
+    cursor: pointer;
+    color: #a7bbb5;
+  }
+  a:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid #93c9bc;
+    outline-offset: 4px;
+  }
+  @media (max-width: 640px) {
+    .journey-entry {
+      padding: 2rem 1.25rem;
+    }
+  }
+</style>

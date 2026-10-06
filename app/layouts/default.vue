@@ -2,6 +2,11 @@
   import { useTranslate, useTolgee } from '@tolgee/vue'
   import type { NavigationMenuItem } from '@nuxt/ui'
   import { useAppLogout } from '#imports'
+  import {
+    athletePrimaryNavigation,
+    getAthleteArea,
+    getAthleteContextNavigation
+  } from '#shared/athlete-navigation'
   import { useCoachingRole } from '~/components/navigation/useCoachingRole'
 
   const { t } = useTranslate('common')
@@ -22,6 +27,7 @@
   provide('isTReady', isTReady)
 
   const config = useRuntimeConfig()
+  const colorMode = useColorMode()
   const { data, refresh } = useAuth()
   const { logout } = useAppLogout()
   const user = computed(() => data.value?.user)
@@ -42,7 +48,7 @@
   })
 
   const userStore = useUserStore()
-  const { formatDate, getUserLocalDate } = useFormat()
+  const { formatDate } = useFormat()
   const nutritionEnabled = computed(
     () =>
       userStore.profile?.nutritionTrackingEnabled !== false &&
@@ -448,304 +454,6 @@
     })
 
     return [wrapNavItems(primaryLinks)]
-  })
-
-  const mobileNavSections = computed(() => {
-    const label = navLabel
-    const closeSidebar = () => {
-      open.value = false
-    }
-    const item = (entry: NavigationMenuItem): NavigationMenuItem => {
-      const path =
-        typeof entry.to === 'string'
-          ? entry.to
-          : entry.to && typeof entry.to === 'object' && 'path' in entry.to
-            ? String(entry.to.path)
-            : '/'
-      const itemLabel = String(entry.label || path)
-      const originalOnSelect = entry.onSelect
-
-      return {
-        ...entry,
-        onSelect: (event: Event) => {
-          trackNavClick(path, itemLabel)
-          originalOnSelect?.(event)
-          closeSidebar()
-        },
-        children: entry.children
-          ? entry.children.map((child) => item(child as NavigationMenuItem))
-          : undefined
-      }
-    }
-    const sectionItems = (entries: NavigationMenuItem[]) => entries.map((entry) => item(entry))
-
-    const sections: Array<{
-      id: string
-      label: string
-      defaultOpen?: boolean
-      items: NavigationMenuItem[]
-    }> = [
-      {
-        id: 'primary',
-        label: label('navigation_section_primary', 'Main'),
-        defaultOpen: true,
-        items: sectionItems([
-          {
-            label: label('navigation_dashboard', 'Dashboard'),
-            icon: 'i-lucide-layout-dashboard',
-            to: '/dashboard'
-          },
-          {
-            label: label('navigation_activities', 'Activities'),
-            icon: 'i-lucide-calendar-days',
-            to: '/activities'
-          },
-          ...(nutritionEnabled.value
-            ? [
-                {
-                  label: label('navigation_nutrition', 'Nutrition'),
-                  icon: 'i-lucide-utensils',
-                  to: '/nutrition'
-                }
-              ]
-            : []),
-          {
-            label: label('navigation_training_plan', 'Training Plan'),
-            icon: 'i-lucide-calendar',
-            to: '/plan'
-          },
-          {
-            label: label('navigation_workouts', 'Workouts'),
-            icon: 'i-lucide-activity',
-            to: '/workouts'
-          },
-          {
-            label: label('navigation_chat', 'AI Chat'),
-            icon: 'i-lucide-message-circle',
-            to: '/chat'
-          }
-        ])
-      },
-      {
-        id: 'today',
-        label: label('navigation_section_today', 'Today'),
-        defaultOpen: route.query.focus === 'checkin' || route.query.focus === 'wellness',
-        items: sectionItems([
-          {
-            label: label('navigation_morning_checkin', 'Morning Check-in'),
-            icon: 'i-lucide-sunrise',
-            to: { path: '/dashboard', query: { focus: 'checkin' } }
-          },
-          {
-            label: label('navigation_todays_wellness', "Today's Wellness"),
-            icon: 'i-lucide-heart-pulse',
-            to: { path: '/dashboard', query: { focus: 'wellness' } }
-          }
-        ])
-      },
-      {
-        id: 'analysis',
-        label: label('navigation_section_analysis', 'Analysis'),
-        defaultOpen: [
-          '/performance',
-          '/fitness',
-          '/reports',
-          '/recommendations',
-          '/profile/goals',
-          '/events'
-        ].some((path) => route.path.startsWith(path)),
-        items: sectionItems([
-          {
-            label: label('navigation_performance', 'Performance'),
-            icon: 'i-lucide-trending-up',
-            to: '/performance'
-          },
-          {
-            label: label('navigation_fitness', 'Fitness'),
-            icon: 'i-lucide-heart-pulse',
-            to: '/fitness'
-          },
-          {
-            label: label('navigation_reports', 'Reports'),
-            icon: 'i-lucide-file-text',
-            to: '/reports'
-          },
-          {
-            label: label('navigation_recommendations', 'Recommendations'),
-            icon: 'i-lucide-sparkles',
-            to: '/recommendations'
-          },
-          {
-            label: label('navigation_goals', 'Goals'),
-            icon: 'i-lucide-trophy',
-            to: '/profile/goals'
-          },
-          {
-            label: label('navigation_events', 'Events'),
-            icon: 'i-lucide-flag',
-            to: '/events'
-          }
-        ])
-      },
-      {
-        id: 'library',
-        label: label('navigation_library', 'Library'),
-        defaultOpen: route.path.includes('library') || route.path.includes('analytics/browse'),
-        items: sectionItems([
-          {
-            label: label('navigation_library', 'Library'),
-            icon: 'i-lucide-library',
-            defaultOpen: route.path.includes('library') || route.path.includes('analytics/browse'),
-            children: [
-              {
-                label: 'Workouts',
-                icon: 'i-lucide-activity',
-                to: '/library/workouts'
-              },
-              {
-                label: 'Exercises',
-                icon: 'i-lucide-dumbbell',
-                to: '/library/exercises'
-              },
-              {
-                label: label('navigation_library_plans', 'Plans'),
-                icon: 'i-lucide-scroll-text',
-                to: '/library/plans'
-              },
-              {
-                label: label('navigation_charts', 'Charts'),
-                icon: 'i-lucide-area-chart',
-                to: '/analytics/browse'
-              }
-            ]
-          }
-        ])
-      },
-      {
-        id: 'coaching',
-        label: label('navigation_coaching', 'Coaching'),
-        defaultOpen: route.path.startsWith('/coaching') || route.path === '/analytics',
-        items: sectionItems(
-          showFullCoachingSuite.value
-            ? [
-                {
-                  label: label('navigation_coaching', 'Coaching'),
-                  icon: 'i-lucide-users',
-                  defaultOpen: route.path.startsWith('/coaching') || route.path === '/analytics',
-                  children: [
-                    {
-                      label: label('navigation_coaching_overview', 'Overview'),
-                      icon: 'i-lucide-layout-dashboard',
-                      to: '/coaching',
-                      exact: true
-                    },
-                    {
-                      label: label('navigation_coaching_calendar', 'Calendar'),
-                      icon: 'i-lucide-calendar-days',
-                      to: '/coaching/calendar'
-                    },
-                    {
-                      label: label('navigation_coaching_athletes', 'Athletes'),
-                      icon: 'i-lucide-users-round',
-                      to: '/coaching/athletes'
-                    },
-                    {
-                      label: label('navigation_analytics', 'Analytics'),
-                      icon: 'i-lucide-bar-chart-3',
-                      to: '/analytics'
-                    },
-                    {
-                      label: label('navigation_coaching_team', 'My Coaches'),
-                      icon: 'i-lucide-building-2',
-                      to: '/coaching/team'
-                    }
-                  ]
-                }
-              ]
-            : [
-                {
-                  label: label('navigation_coaching_team', 'My Coaches'),
-                  icon: 'i-lucide-users',
-                  to: '/coaching/team'
-                }
-              ]
-        )
-      },
-      {
-        id: 'account',
-        label: label('navigation_section_account', 'Account'),
-        defaultOpen:
-          route.path.includes('settings') ||
-          route.path.includes('help-center') ||
-          route.path.startsWith('/admin'),
-        items: sectionItems([
-          {
-            label: label('navigation_help_center', 'Help Center'),
-            icon: 'i-heroicons-question-mark-circle',
-            to: '/help-center'
-          },
-          ...((user.value as any)?.isAdmin
-            ? [
-                {
-                  label: label('navigation_admin', 'Admin'),
-                  icon: 'i-lucide-shield-check',
-                  to: '/admin'
-                }
-              ]
-            : []),
-          {
-            label: label('navigation_settings_title', 'Settings'),
-            icon: 'i-lucide-settings',
-            defaultOpen: route.path.includes('settings') || route.path.includes('profile/settings'),
-            children: [
-              {
-                label: label('navigation_settings_profile', 'Profile'),
-                icon: 'i-lucide-user',
-                to: '/profile/settings'
-              },
-              {
-                label: label('navigation_settings_ai_coach', 'AI Coach'),
-                icon: 'i-lucide-sparkles',
-                to: '/settings/ai'
-              },
-              ...(config.public.stripePublishableKey
-                ? [
-                    {
-                      label: label('navigation_settings_billing', 'Billing'),
-                      icon: 'i-lucide-credit-card',
-                      to: '/settings/billing'
-                    }
-                  ]
-                : []),
-              {
-                label: label('navigation_settings_apps', 'Apps'),
-                icon: 'i-lucide-layout-grid',
-                to: '/settings/apps'
-              },
-              {
-                label: label('navigation_settings_developer', 'Developer'),
-                icon: 'i-lucide-code-2',
-                to: '/settings/developer'
-              },
-              {
-                label: label('navigation_settings_danger_zone', 'Danger Zone'),
-                icon: 'i-lucide-trash-2',
-                to: '/settings/danger'
-              }
-            ]
-          }
-        ])
-      }
-    ]
-
-    return sections
-  })
-
-  const mobileSidebarNavRef = ref<{ refresh: () => void } | null>(null)
-
-  watch(open, (isOpen) => {
-    if (!isOpen) return
-    nextTick(() => mobileSidebarNavRef.value?.refresh())
   })
 
   // Command Palette Groups
@@ -1172,265 +880,302 @@
       key: 'upcoming-workouts-search'
     }
   )
+
+  const activeArea = computed(() => getAthleteArea(route.path))
+  const primaryNavigation = computed(() =>
+    athletePrimaryNavigation.map((item) => ({
+      ...item,
+      label: navLabel(`journey_nav_${item.key}`, item.label)
+    }))
+  )
+  const contextNavigation = computed(() =>
+    getAthleteContextNavigation(activeArea.value).map((item) => ({
+      ...item,
+      label: navLabel(`journey_nav_${item.key}`, item.label)
+    }))
+  )
+  const showQuickCapture = ref(false)
+  const quickCapture = ref<{ focusInput: () => void } | null>(null)
+  function onToolsCloseAutoFocus(event: Event) {
+    if (showQuickCapture.value) {
+      event.preventDefault()
+      void nextTick(() => quickCapture.value?.focusInput())
+    }
+  }
+  const tools = computed(() =>
+    links.value.flat().filter((item) => {
+      const path = typeof item.to === 'string' ? item.to : ''
+      return (
+        !['/dashboard', '/activities', '/performance', '/chat'].includes(path) &&
+        item.label !== navLabel('navigation_settings_title', 'Settings')
+      )
+    })
+  )
+  const accountItems = computed(() => [
+    [{ label: user.value?.name || navLabel('journey_account', 'Account'), type: 'label' as const }],
+    [
+      {
+        label: navLabel('journey_tools', 'Explore tools'),
+        icon: 'i-lucide-compass',
+        onSelect: () => {
+          open.value = true
+        }
+      },
+      {
+        label: navLabel('journey_profile', 'Your profile'),
+        icon: 'i-lucide-user',
+        to: '/profile/settings'
+      },
+      {
+        label: navLabel('journey_connections', 'Connections'),
+        icon: 'i-lucide-link',
+        to: '/settings/apps'
+      },
+      {
+        label: navLabel('journey_preferences', 'Coach preferences'),
+        icon: 'i-lucide-sliders-horizontal',
+        to: '/settings/ai'
+      },
+      ...(config.public.stripePublishableKey
+        ? [
+            {
+              label: navLabel('navigation_settings_billing', 'Billing'),
+              icon: 'i-lucide-credit-card',
+              to: '/settings/billing'
+            }
+          ]
+        : []),
+      {
+        label: navLabel('journey_settings', 'All settings'),
+        icon: 'i-lucide-settings',
+        to: '/settings'
+      },
+      {
+        label:
+          colorMode.value === 'dark'
+            ? navLabel('journey_light_theme', 'Switch to light theme')
+            : navLabel('journey_dark_theme', 'Switch to dark theme'),
+        icon: colorMode.value === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon',
+        onSelect: () => {
+          colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
+        }
+      },
+      { label: navLabel('journey_help', 'Help'), icon: 'i-lucide-circle-help', to: '/help-center' }
+    ],
+    [
+      {
+        label: navLabel('journey_capture', 'Quick capture'),
+        icon: 'i-lucide-notebook-pen',
+        onSelect: () => {
+          showQuickCapture.value = !showQuickCapture.value
+        }
+      },
+      {
+        label: showFullCoachingSuite.value
+          ? navLabel('journey_coach_workspace', 'Coach workspace')
+          : navLabel('journey_my_coaches', 'My coaches'),
+        icon: 'i-lucide-users',
+        to: showFullCoachingSuite.value ? '/coaching' : '/coaching/team'
+      }
+    ],
+    [
+      impersonatedEmail.value
+        ? {
+            label: navLabel('navigation_admin_nav_stop_impersonating', 'Stop impersonating'),
+            icon: 'i-lucide-log-out',
+            onSelect: () => {
+              void stopImpersonation()
+            }
+          }
+        : {
+            label: navLabel('navigation_admin_nav_sign_out', 'Sign out'),
+            icon: 'i-lucide-log-out',
+            onSelect: () => {
+              void logout('/login')
+            }
+          }
+    ]
+  ])
+
+  function isContextActive(path: string) {
+    if (path === '/activities' || path === '/workouts') return route.path === path
+    if (path === '/library/workouts') return route.path.startsWith('/library')
+    return route.path === path || route.path.startsWith(`${path}/`)
+  }
+
+  function onPrimaryNavigation(path: string, label: string) {
+    trackNavClick(path, label)
+    open.value = false
+    showQuickCapture.value = false
+  }
+
+  function openCapture() {
+    open.value = false
+    showQuickCapture.value = true
+  }
+
+  function openTools() {
+    open.value = true
+  }
+
+  watch(
+    () => route.path,
+    () => {
+      open.value = false
+      showQuickCapture.value = false
+    }
+  )
 </script>
 
 <template>
   <UDashboardGroup
     unit="rem"
-    class="print:static print:inset-auto print:block print:overflow-visible"
+    class="journey-app !relative !inset-auto h-dvh min-h-0 flex-col print:static print:inset-auto print:block print:h-auto print:overflow-visible"
   >
-    <UDashboardSidebar
-      id="default"
-      :key="tolgee.getLanguage()"
-      v-model:open="open"
-      collapsible
-      resizable
-      class="bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 print:hidden"
-      :ui="{ footer: 'lg:border-t lg:border-default', body: 'flex min-h-0 flex-col' }"
-      :title="navLabel('navigation_sidebar_title', 'Navigation')"
-      :description="navLabel('navigation_sidebar_description', 'Browse Coach Watts destinations')"
-      :menu="{
-        title: navLabel('navigation_sidebar_title', 'Navigation'),
-        description: navLabel('navigation_sidebar_description', 'Browse Coach Watts destinations')
-      }"
-    >
-      <template #header="{ collapsed }">
+    <a href="#athlete-content" class="journey-skip-link">{{
+      navLabel('journey_skip', 'Skip to content')
+    }}</a>
+    <header class="journey-header print:hidden">
+      <NuxtLink
+        to="/dashboard"
+        class="journey-brand"
+        :aria-label="navLabel('journey_home', 'Coach Watts home')"
+      >
+        <img src="/media/logo.webp" width="32" height="32" alt="" class="size-8 object-contain" />
+        <span>Coach Watts</span>
+      </NuxtLink>
+      <nav
+        class="journey-primary-nav"
+        :aria-label="navLabel('journey_navigation', 'Main navigation')"
+      >
         <NuxtLink
-          to="/dashboard"
-          class="flex items-center w-full overflow-hidden shrink-0"
-          :class="collapsed ? 'p-1 justify-center' : 'p-4 justify-start lg:justify-center'"
+          v-for="item in primaryNavigation"
+          :key="item.key"
+          :to="item.to"
+          :aria-current="activeArea === item.key ? 'page' : undefined"
+          :class="{ 'is-active': activeArea === item.key }"
+          @click="onPrimaryNavigation(item.to, item.label)"
         >
-          <img
-            v-if="!collapsed"
-            src="/media/coach_watts_text_cropped.webp"
-            alt="Coach Watts"
-            width="702"
-            height="135"
-            loading="eager"
-            decoding="async"
-            class="h-8 lg:h-10 w-auto object-contain"
-          />
-          <img
-            v-else
-            src="/media/logo.webp"
-            alt="Coach Watts"
-            width="537"
-            height="537"
-            loading="eager"
-            decoding="async"
-            class="size-12 object-contain"
-          />
+          {{ item.label }}
         </NuxtLink>
-      </template>
-
-      <template #default="{ collapsed }">
+      </nav>
+      <div class="journey-header-actions">
+        <UButton
+          to="/chat"
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-message-circle"
+          :aria-label="navLabel('journey_coach', 'Ask Coach')"
+          class="journey-coach-button"
+        >
+          <span class="hidden lg:inline">{{ navLabel('journey_coach', 'Ask Coach') }}</span>
+        </UButton>
         <UDashboardSearchButton
-          :collapsed="collapsed"
-          :aria-label="
-            isTReady && t('navigation_search_title') !== 'navigation_search_title'
-              ? t('navigation_search_title')
-              : 'Search'
-          "
-          class="mb-4 shrink-0 bg-transparent ring-default"
+          collapsed
+          :kbds="[]"
+          :label="navLabel('navigation_search_title', 'Search')"
+          class="journey-icon-button"
         />
-
-        <div class="hidden min-h-0 flex-1 lg:block">
-          <UNavigationMenu
-            :collapsed="collapsed"
-            :items="links[0]"
-            orientation="vertical"
-            tooltip
+        <UButton
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-compass"
+          :aria-label="navLabel('journey_tools', 'Explore tools')"
+          class="journey-icon-button hidden sm:inline-flex"
+          @click="openTools"
+        />
+        <ColorModeButton class="journey-theme-button hidden md:inline-flex" />
+        <UDropdownMenu
+          :items="accountItems"
+          :content="{ align: 'end', onCloseAutoFocus: onToolsCloseAutoFocus }"
+        >
+          <UButton
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-user-round"
+            :aria-label="navLabel('journey_account', 'Account')"
+            class="journey-icon-button"
           />
-        </div>
-
-        <LayoutMobileSidebarNav ref="mobileSidebarNavRef" :sections="mobileNavSections" />
-      </template>
-
-      <template #footer="{ collapsed }">
-        <LayoutMobileSidebarFooter
-          :user="user"
-          :impersonated-email="impersonatedEmail"
-          :stopping-impersonation="stoppingImpersonation"
-          :sidebar-version-display="sidebarVersionDisplay"
-          @logout="
-            () => {
-              void logout('/login')
-            }
-          "
-          @stop-impersonation="
-            () => {
-              void stopImpersonation()
-            }
-          "
-        />
-
-        <div class="hidden w-full lg:block">
-          <div v-if="!collapsed" class="px-4 pb-2">
-            <div class="flex items-center justify-center gap-4 mb-4">
-              <NuxtLink
-                to="https://www.strava.com/clubs/2004142"
-                target="_blank"
-                class="hover:opacity-100 transition-opacity"
-              >
-                <img
-                  src="/images/logos/strava_powered_by_black.png"
-                  alt="Powered by Strava"
-                  width="176"
-                  height="60"
-                  loading="lazy"
-                  decoding="async"
-                  class="h-6 w-auto opacity-75 hover:opacity-100 dark:hidden"
-                />
-                <img
-                  src="/images/logos/strava_powered_by.png"
-                  alt="Powered by Strava"
-                  width="176"
-                  height="60"
-                  loading="lazy"
-                  decoding="async"
-                  class="h-6 w-auto opacity-75 hover:opacity-100 hidden dark:block"
-                />
-              </NuxtLink>
-              <NuxtLink
-                to="https://www.garmin.com"
-                target="_blank"
-                class="hover:opacity-100 transition-opacity"
-              >
-                <img
-                  src="/images/logos/WorksWithGarmin-Black.svg"
-                  alt="Works with Garmin"
-                  width="221"
-                  height="127"
-                  loading="lazy"
-                  decoding="async"
-                  class="h-6 w-auto opacity-75 hover:opacity-100 dark:hidden"
-                />
-                <img
-                  src="/images/logos/WorksWithGarmin-White.svg"
-                  alt="Works with Garmin"
-                  width="221"
-                  height="127"
-                  loading="lazy"
-                  decoding="async"
-                  class="h-6 w-auto opacity-75 hover:opacity-100 hidden dark:block"
-                />
-              </NuxtLink>
-            </div>
-            <USeparator class="mb-4" />
-            <div class="flex items-center justify-center gap-2">
-              <UButton
-                to="https://discord.gg/dPYkzg49T9"
-                target="_blank"
-                color="neutral"
-                variant="ghost"
-                icon="i-simple-icons-discord"
-                size="xs"
-                class="flex-1 justify-center"
-              >
-                Discord
-              </UButton>
-              <USeparator orientation="vertical" class="h-4" />
-              <UButton
-                to="https://github.com/newpush/coach"
-                target="_blank"
-                color="neutral"
-                variant="ghost"
-                icon="i-simple-icons-github"
-                size="xs"
-                class="flex-1 justify-center"
-              >
-                GitHub
-              </UButton>
-            </div>
-            <USeparator class="my-2" />
-          </div>
-
-          <div v-if="!collapsed" class="p-4 flex items-center gap-3">
-            <UAvatar v-if="user" :alt="user.email || ''" size="md" />
-            <div class="flex-1 min-w-0 flex flex-col items-start gap-0.5">
-              <UTooltip
-                :text="impersonatedEmail || user?.email || ''"
-                :popper="{ placement: 'right' }"
-              >
-                <p class="text-sm font-medium truncate text-gray-900 dark:text-white">
-                  {{ user?.name || impersonatedEmail || user?.email }}
-                </p>
-              </UTooltip>
-              <UButton
-                v-if="impersonatedEmail"
-                variant="link"
-                color="warning"
-                size="xs"
-                :padded="false"
-                class="p-0 h-auto font-normal text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 dark:hover:text-yellow-300"
-                :loading="stoppingImpersonation"
-                @click="
-                  () => {
-                    void stopImpersonation()
-                  }
-                "
-              >
-                {{ isTReady ? t('navigation_admin_nav_stop_impersonating') : 'Stop impersonating' }}
-              </UButton>
-              <UButton
-                v-else
-                variant="link"
-                color="neutral"
-                size="xs"
-                :padded="false"
-                class="p-0 h-auto font-normal text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                @click="
-                  () => {
-                    void logout('/login')
-                  }
-                "
-              >
-                {{ isTReady ? t('navigation_admin_nav_sign_out') : 'Sign out' }}
-              </UButton>
-            </div>
-            <ColorModeButton />
-          </div>
-
-          <div v-if="!collapsed" class="px-4 pb-0 flex justify-center">
-            <UButton
-              to="/settings/changelog"
-              variant="link"
-              color="neutral"
-              size="xs"
-              :padded="false"
-              class="text-gray-400 dark:text-gray-400 font-normal hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-[10px]"
-            >
-              {{ sidebarVersionDisplay }}
-            </UButton>
-          </div>
-
-          <div v-if="collapsed" class="flex justify-center pb-0">
-            <UTooltip :text="buildVersionDisplay" :popper="{ placement: 'right' }">
-              <span class="text-[10px] text-gray-400 dark:text-gray-400 font-mono cursor-default">
-                {{ config.public.version }}
-              </span>
-            </UTooltip>
-          </div>
-        </div>
-      </template>
-    </UDashboardSidebar>
-
+        </UDropdownMenu>
+      </div>
+    </header>
+    <nav
+      v-if="contextNavigation.length"
+      class="journey-context-nav print:hidden"
+      :aria-label="navLabel('journey_section_navigation', 'Section navigation')"
+    >
+      <NuxtLink
+        v-for="item in contextNavigation"
+        :key="item.key"
+        :to="item.to"
+        :aria-current="isContextActive(item.to) ? 'page' : undefined"
+        :class="{ 'is-active': isContextActive(item.to) }"
+        @click="onPrimaryNavigation(item.to, item.label)"
+        >{{ item.label }}</NuxtLink
+      >
+      <UButton
+        color="neutral"
+        variant="ghost"
+        icon="i-lucide-compass"
+        size="sm"
+        :aria-label="navLabel('journey_tools', 'Explore tools')"
+        class="ms-auto sm:hidden"
+        @click="openTools"
+      />
+    </nav>
+    <main id="athlete-content" class="journey-stage" tabindex="-1">
+      <slot />
+    </main>
     <UDashboardSearch
       :key="tolgee.getLanguage()"
       :groups="groups"
+      :input="{ 'aria-label': navLabel('navigation_search_title', 'Search') }"
       :title="navLabel('navigation_search_title', 'Search')"
       :description="
         navLabel('navigation_search_description', 'Search pages, workouts, and shortcuts')
       "
     />
-
-    <slot />
-
+    <UModal
+      v-model:open="open"
+      :title="navLabel('journey_tools', 'Explore tools')"
+      :description="
+        navLabel('journey_tools_description', 'Find a useful next step for your training.')
+      "
+      :ui="{ content: 'journey-tools-dialog max-w-xl' }"
+      :content="{ onCloseAutoFocus: onToolsCloseAutoFocus }"
+    >
+      <template #body>
+        <UNavigationMenu
+          :items="tools"
+          orientation="vertical"
+          :ui="{ link: 'min-h-11 py-2.5', linkLeadingIcon: 'size-5' }"
+        />
+        <div class="journey-tools-footer">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-notebook-pen"
+            @click="openCapture"
+            >{{ navLabel('journey_capture', 'Quick capture') }}</UButton
+          >
+          <UButton color="neutral" variant="ghost" to="/settings">{{
+            navLabel('journey_settings', 'All settings')
+          }}</UButton>
+          <span class="text-xs text-muted" :title="buildVersionDisplay">{{
+            sidebarVersionDisplay
+          }}</span>
+        </div>
+      </template>
+    </UModal>
     <ClientOnly>
-      <AiQuickCapture />
+      <AiQuickCapture
+        v-if="showQuickCapture"
+        ref="quickCapture"
+        manual
+        @close="showQuickCapture = false"
+      />
       <DashboardTriggerMonitor v-model="showTriggerMonitor" />
       <ImpersonationBanner />
-      <!-- CoachingBanner is mounted once in app/app.vue (CW-541) -->
     </ClientOnly>
   </UDashboardGroup>
 </template>

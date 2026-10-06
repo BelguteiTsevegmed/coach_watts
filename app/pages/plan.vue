@@ -1,103 +1,46 @@
 <template>
   <UDashboardPanel id="training-plan-page">
-    <template #header>
-      <UDashboardNavbar title="Training Plan">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-        <template #right>
-          <div class="flex items-center gap-2">
-            <ClientOnly>
-              <DashboardTriggerMonitorButton />
-            </ClientOnly>
-            <UButton
-              v-if="activePlan"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="font-bold"
-              icon="i-heroicons-share"
-              @click="
-                () => {
-                  isShareModalOpen = true
-                }
-              "
-            >
-              <span class="hidden sm:inline">Share</span>
-            </UButton>
-            <UButton
-              v-if="activePlan"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="font-bold"
-              icon="i-heroicons-bookmark"
-              @click="
-                () => {
-                  void navigateTo('/plans')
-                }
-              "
-            >
-              <span class="hidden sm:inline">My Plans</span>
-            </UButton>
-            <UButton
-              v-if="activePlan"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="font-bold"
-              icon="i-heroicons-plus"
-              @click="
-                () => {
-                  void startNewPlan()
-                }
-              "
-            >
-              <span class="hidden sm:inline">New Plan</span>
-              <span class="sm:hidden">New</span>
-            </UButton>
-          </div>
-        </template>
-      </UDashboardNavbar>
-    </template>
-
     <template #body>
-      <div class="p-0 sm:p-6 space-y-4 sm:space-y-6 quick-capture-inset">
-        <!-- Dashboard Branding -->
-        <div class="px-4 sm:px-0">
-          <h1 class="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
-            Training Plan
-          </h1>
-          <p
-            class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em] mt-1 italic"
-          >
-            Periodized Progression & Physiological Alignment
-          </p>
-        </div>
-
-        <!-- Loading State -->
-        <div v-if="loading && !activePlan" class="space-y-6">
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <UCard v-for="i in 3" :key="i">
-              <template #header>
-                <USkeleton class="h-4 w-32" />
-              </template>
-              <div class="flex flex-col items-center justify-center h-32 space-y-3">
-                <USkeleton class="h-12 w-12 rounded-full" />
-                <USkeleton class="h-4 w-24" />
-              </div>
-            </UCard>
+      <div
+        class="mx-auto w-full max-w-[52rem] space-y-8 px-5 py-8 sm:px-10 sm:py-10 quick-capture-inset"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-5">
+          <div class="max-w-xl">
+            <h1
+              class="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-4xl"
+            >
+              Training plan
+            </h1>
+            <p class="mt-3 leading-7 text-gray-600 dark:text-gray-400">
+              A clear week, shaped around your goal and the time you have.
+            </p>
           </div>
-          <UCard>
-            <template #header>
-              <USkeleton class="h-4 w-48" />
-            </template>
-            <div class="space-y-4">
-              <USkeleton v-for="i in 5" :key="i" class="h-12 w-full" />
-            </div>
-          </UCard>
+          <div class="flex items-center gap-2">
+            <ClientOnly><DashboardTriggerMonitorButton /></ClientOnly>
+            <UDropdownMenu v-if="activePlan" :items="planPageActions"
+              ><UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-heroicons-ellipsis-horizontal"
+                aria-label="Plan actions"
+                >Plan actions</UButton
+              ></UDropdownMenu
+            >
+          </div>
         </div>
-
+        <p
+          v-if="loading && !activePlan"
+          role="status"
+          aria-live="polite"
+          class="py-8 text-gray-500"
+        >
+          Loading your training plan…
+        </p>
+        <div v-else-if="status === 'error' && !activePlan" role="alert" class="space-y-3 py-8">
+          <h2 class="text-xl font-medium">Your plan could not load</h2>
+          <p class="text-gray-500">Try again to load your current plan.</p>
+          <UButton color="neutral" variant="outline" @click="fetchActivePlan">Try again</UButton>
+        </div>
         <!-- Active Plan View -->
         <div v-else-if="activePlan">
           <PlanDashboard
@@ -111,35 +54,28 @@
           />
         </div>
 
-        <!-- No Plan State / Onboarding -->
-        <div v-else class="max-w-4xl mx-auto text-center py-8 sm:py-12">
-          <div
-            class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 sm:p-10"
-          >
-            <div
-              class="w-16 h-16 sm:w-20 sm:h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6"
-            >
-              <UIcon name="i-heroicons-trophy" class="w-8 h-8 sm:w-10 sm:h-10 text-primary" />
-            </div>
-            <h2 class="text-2xl sm:text-3xl font-bold mb-3">Start Your Goal-Driven Plan</h2>
-            <p class="text-base sm:text-lg text-muted mb-8 max-w-lg mx-auto">
-              Select a race or fitness goal, and let our AI build a periodized training plan
-              tailored to your schedule and physiology.
-            </p>
-            <UButton size="xl" color="primary" @click.stop="openWizard">
-              Create Training Plan
-            </UButton>
-          </div>
+        <div v-else class="max-w-xl space-y-5 py-8" data-testid="plan-empty">
+          <h2 class="text-2xl font-medium">What do you want to work toward?</h2>
+          <p class="leading-7 text-gray-600 dark:text-gray-400">
+            Choose a goal and tell us when you can train. We will turn that into a week you can
+            follow.
+          </p>
+          <UButton size="lg" color="primary" @click.stop="openWizard">Create my plan</UButton>
+          <p class="text-sm text-gray-500">
+            Have a plan saved already?
+            <NuxtLink to="/plans" class="text-primary underline underline-offset-4"
+              >Browse saved plans</NuxtLink
+            >.
+          </p>
         </div>
-
         <!-- Plan Wizard Modal -->
         <!-- Only render if explicitly open to prevent ghost clicks -->
         <UModal
           v-if="showWizard"
           v-model:open="showWizard"
           :ui="{ content: 'w-full sm:max-w-4xl' }"
-          title="Create Training Plan"
-          description="Follow the steps to configure your personalized training plan."
+          title="Create your training plan"
+          description="Start with your goal and availability, then review your week."
         >
           <template #body>
             <div class="p-6">
@@ -151,7 +87,7 @@
         <!-- Share Plan Modal -->
         <UModal
           v-model:open="isShareModalOpen"
-          title="Share Training Plan"
+          title="Share your training plan"
           description="Create a read-only link to your training plan and share it directly to social platforms."
         >
           <template #body>
@@ -187,7 +123,7 @@
         <!-- New Plan Confirmation Modal -->
         <UModal
           v-model:open="isArchiveModalOpen"
-          title="Create New Plan"
+          title="Create a new plan"
           description="Create a new plan? This will archive your current active plan."
         >
           <template #footer>
@@ -232,9 +168,12 @@
   })
 
   useHead({
-    title: 'Training Plan'
+    title: 'Training plan'
   })
 
+  const route = useRoute()
+  // Setup may return to Today after successful activation; arbitrary redirect targets are ignored.
+  const returnToToday = computed(() => route.query.returnTo === '/dashboard')
   const showWizard = ref(false)
   const isPolling = ref(false)
   const autoTriggerStructure = ref(false)
@@ -252,6 +191,25 @@
     'TRAINING_PLAN',
     computed(() => activePlan.value?.id)
   )
+  const planPageActions = computed(() => [
+    [
+      {
+        label: 'Share this plan',
+        icon: 'i-heroicons-share',
+        onSelect: () => {
+          isShareModalOpen.value = true
+        }
+      },
+      { label: 'Saved plans', icon: 'i-heroicons-bookmark', to: '/plans' },
+      {
+        label: 'Create a new plan',
+        icon: 'i-heroicons-plus',
+        onSelect: () => {
+          startNewPlan()
+        }
+      }
+    ]
+  ])
   const userFtp = computed(() => data.value?.userFtp)
   const loading = computed(() => status.value === 'pending')
 
@@ -312,7 +270,7 @@
     isArchiveModalOpen.value = true
   }
 
-  function onPlanCreated(plan: any) {
+  async function onPlanCreated(plan: any) {
     // Optimistic update
     if (!data.value) data.value = {}
     data.value.plan = plan
@@ -325,7 +283,11 @@
       color: 'info'
     })
 
-    // Start polling for workouts
+    // Setup returns to Today after activation; task monitoring there continues generation.
+    if (returnToToday.value) {
+      await navigateTo('/dashboard')
+      return
+    }
     startPolling()
   }
 

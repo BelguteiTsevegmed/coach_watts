@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+  import { useTranslate } from '@tolgee/vue'
   import ChatMessageContent from '~/components/chat/ChatMessageContent.vue'
   import ChatWelcomeTips from '~/components/chat/ChatWelcomeTips.vue'
   import {
@@ -30,12 +31,11 @@
     'forget-message',
     'retry-load'
   ])
+  const { t } = useTranslate('chat')
   const toast = useToast()
   const messageListRef = ref<HTMLElement | null>(null)
   let listActive = true
   const bottomAnchorRef = ref<HTMLElement | null>(null)
-  const isTouchDevice = ref(false)
-  const revealedActionsMessageId = ref<string | null>(null)
   const ttsLoadingMessageId = ref<string | null>(null)
   const ttsPlayingMessageId = ref<string | null>(null)
   const isVoiceSettingsOpen = ref(false)
@@ -77,7 +77,6 @@
   const didHydrateTtsPrefs = ref(false)
   const pendingAutoReadMessageKey = ref<string | null>(null)
   const lastHandledAssistantMessageKey = ref<string | null>(null)
-  let touchMediaQuery: MediaQueryList | null = null
   let activeAudio: HTMLAudioElement | null = null
   let activeAudioUrl: string | null = null
   let activeTtsRequestId = 0
@@ -207,8 +206,6 @@
   }
 
   const isEditingMessage = (message: any) => props.editingMessageId === message?.id
-  const isActionsVisible = (message: any) =>
-    !!message?.id && (isTouchDevice.value ? revealedActionsMessageId.value === message.id : true)
   const normalizedStatus = computed(() =>
     typeof props.status === 'string' ? props.status : String(props.status || '')
   )
@@ -245,15 +242,18 @@
     await nextTick()
     await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
     await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+    const scrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 'auto'
+      : behavior
     if (messageListRef.value) {
       messageListRef.value.scrollTo({
         top: messageListRef.value.scrollHeight,
-        behavior
+        behavior: scrollBehavior
       })
     }
     bottomAnchorRef.value?.scrollIntoView({
       block: 'end',
-      behavior
+      behavior: scrollBehavior
     })
   }
   const getTurnStatusLabel = (status?: string) => {
@@ -405,12 +405,6 @@
     const text = props.editingContent || ''
     const lines = text.split('\n').length
     return Math.min(10, Math.max(3, lines))
-  }
-
-  const updateTouchMode = () => {
-    if (!import.meta.client) return
-    isTouchDevice.value = window.matchMedia('(hover: none), (pointer: coarse)').matches
-    if (!isTouchDevice.value) revealedActionsMessageId.value = null
   }
 
   const stopPlayback = () => {
@@ -616,33 +610,8 @@
     ]
   ]
 
-  const handleMessageTap = (message: any) => {
-    if (
-      !isTouchDevice.value ||
-      !props.canEditMessages ||
-      !message ||
-      message.role !== 'user' ||
-      isEditingMessage(message)
-    )
-      return
-
-    revealedActionsMessageId.value =
-      revealedActionsMessageId.value === message.id ? null : message.id
-  }
-
-  const handleDocumentPointerDown = (event: Event) => {
-    if (!isTouchDevice.value) return
-    if (!messageListRef.value) return
-    if (messageListRef.value.contains(event.target as Node)) return
-    revealedActionsMessageId.value = null
-  }
-
   onMounted(() => {
     if (!import.meta.client) return
-    updateTouchMode()
-    touchMediaQuery = window.matchMedia('(hover: none), (pointer: coarse)')
-    touchMediaQuery.addEventListener('change', updateTouchMode)
-    document.addEventListener('pointerdown', handleDocumentPointerDown, { capture: true })
 
     lastHandledAssistantMessageKey.value = latestSpeakableAssistantMessage.value
       ? getMessageTtsKey(latestSpeakableAssistantMessage.value)
@@ -695,21 +664,12 @@
   onBeforeUnmount(() => {
     if (!import.meta.client) return
     listActive = false
-    touchMediaQuery?.removeEventListener('change', updateTouchMode)
-    document.removeEventListener('pointerdown', handleDocumentPointerDown, { capture: true })
     if (saveTtsSettingsTimeout) {
       clearTimeout(saveTtsSettingsTimeout)
       saveTtsSettingsTimeout = null
     }
     stopPlayback()
   })
-
-  watch(
-    () => props.editingMessageId,
-    () => {
-      revealedActionsMessageId.value = null
-    }
-  )
 
   watch([defaultVoicePreset, geminiVoiceName, voiceSpeed, autoReadMessages], () => {
     if (!import.meta.client || !didHydrateTtsPrefs.value) return
@@ -762,7 +722,7 @@
 
   const copyMessage = async (message: any) => {
     if (!import.meta.client) return
-    const text = typeof message?.content === 'string' ? message.content.trim() : ''
+    const text = getMessageActionText(message)
     if (!text) return
 
     await navigator.clipboard.writeText(text)
@@ -782,7 +742,11 @@
       return message.content.trim()
     }
 
-    return ''
+    return (message?.parts || [])
+      .filter((part: any) => part.type === 'text' && typeof part.text === 'string')
+      .map((part: any) => part.text.trim())
+      .filter(Boolean)
+      .join('\n\n')
   }
 
   const rememberMessage = (message: any) => {
@@ -796,11 +760,60 @@
     if (!text) return
     emit('forget-message', { message, text })
   }
+  const getMessageTools = (message: any) => [
+    [
+      {
+        label: 'Copy message',
+        icon: 'i-heroicons-clipboard-document',
+        onSelect: () => {
+          void copyMessage(message)
+        }
+      },
+      ...(message.role === 'user' && props.canEditMessages
+        ? [
+            {
+              label: 'Edit message',
+              icon: 'i-heroicons-pencil-square',
+              onSelect: () => {
+                handleEditMessage(message)
+              }
+            }
+          ]
+        : [])
+    ],
+    [
+      {
+        label: 'Remember this message',
+        icon: 'i-heroicons-bookmark',
+        onSelect: () => {
+          rememberMessage(message)
+        }
+      },
+      {
+        label: 'Forget this message',
+        icon: 'i-heroicons-bookmark-slash',
+        onSelect: () => {
+          forgetMessage(message)
+        }
+      }
+    ],
+    ...(canSpeakMessage(message)
+      ? [
+          [
+            {
+              label: t.value('message_voice_options'),
+              icon: 'i-heroicons-speaker-wave',
+              children: getTtsMenuItems(message)
+            }
+          ]
+        ]
+      : [])
+  ]
 </script>
 
 <template>
   <div ref="messageListRef" class="flex-1 overflow-y-auto">
-    <UContainer class="h-full">
+    <UContainer class="h-full max-w-[800px] px-4 sm:px-6">
       <div v-if="loading" class="space-y-6 py-8">
         <div v-for="i in 3" :key="i" class="flex flex-col space-y-4">
           <div class="flex items-start gap-3">
@@ -814,10 +827,9 @@
         </div>
       </div>
 
-      <div v-else-if="loadError" class="text-center py-24 px-4">
-        <UIcon name="i-heroicons-exclamation-triangle" class="w-12 h-12 text-error-500 mx-auto" />
+      <div v-else-if="loadError" role="alert" class="py-12 sm:py-24">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mt-4">
-          Could not load chat
+          {{ t('message_load_error') }}
         </h3>
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">
           {{ loadError }}
@@ -825,14 +837,14 @@
         <UButton
           color="primary"
           variant="outline"
-          class="mt-4"
+          class="mt-4 min-h-11"
           @click="
             () => {
               void emit('retry-load')
             }
           "
         >
-          Retry
+          {{ t('message_retry') }}
         </UButton>
       </div>
 
@@ -846,21 +858,19 @@
             side: 'right',
             variant: 'soft',
             ui: {
-              content: 'min-h-0 bg-transparent p-0 text-white shadow-none dark:text-gray-50',
+              content: 'min-h-0 bg-transparent p-0 text-default shadow-none',
               container:
-                'relative w-fit flex items-center ltr:justify-end ms-auto max-w-[75%] gap-2 !pb-0',
-              actions:
-                'absolute right-0 top-0 z-20 flex items-center justify-end gap-1 opacity-100 transition-opacity sm:right-full sm:mr-1 sm:top-1/2 sm:-translate-y-1/2 sm:opacity-0 sm:group-hover/message:opacity-100'
+                'relative w-fit flex items-center ltr:justify-end ms-auto max-w-[90%] sm:max-w-[80%] gap-2 !pb-0',
+              actions: 'flex items-center justify-end gap-1 mt-1'
             }
           }"
           :assistant="{
             side: 'left',
             variant: 'naked',
             ui: {
-              content: 'rounded-[1.2rem] px-4 py-3',
+              content: 'px-0 py-3 max-w-prose text-default',
               container: 'relative flex items-start rtl:justify-end !pb-0',
-              actions:
-                'absolute right-0 top-0 z-20 flex items-center gap-1 opacity-100 transition-opacity sm:left-full sm:right-auto sm:ml-1 sm:top-1/2 sm:-translate-y-1/2 sm:opacity-0 sm:group-hover/message:opacity-100'
+              actions: 'flex items-center gap-1 mt-1'
             }
           }"
         >
@@ -878,6 +888,7 @@
               <div class="flex items-center justify-end gap-2">
                 <UButton
                   label="Cancel"
+                  class="min-h-11"
                   color="neutral"
                   variant="ghost"
                   :disabled="savingEditedMessage"
@@ -889,6 +900,7 @@
                 />
                 <UButton
                   label="Update"
+                  class="min-h-11"
                   color="neutral"
                   :loading="savingEditedMessage"
                   @click="
@@ -904,110 +916,37 @@
               :class="
                 message.role === 'user'
                   ? isQueuedUserMessage(message)
-                    ? 'animate-pulse rounded-[1.75rem] rounded-tr-lg bg-amber-500/22 px-4 py-2 text-white ring-1 ring-inset ring-amber-300/35 dark:bg-amber-400/16 dark:ring-amber-200/20'
+                    ? 'rounded-2xl rounded-tr-sm bg-warning/10 px-4 py-3 text-default ring-1 ring-inset ring-warning/30'
                     : isFailedQueuedUserMessage(message)
-                      ? 'rounded-[1.75rem] rounded-tr-lg bg-red-500/22 px-4 py-2 text-white ring-1 ring-inset ring-red-300/35 dark:bg-red-400/16 dark:ring-red-200/20'
-                      : 'rounded-[1.75rem] rounded-tr-lg bg-gray-800/95 px-4 py-2 text-white dark:bg-gray-700/95 dark:text-gray-50'
+                      ? 'rounded-2xl rounded-tr-sm bg-error/10 px-4 py-3 text-default ring-1 ring-inset ring-error/30'
+                      : 'rounded-2xl rounded-tr-sm bg-elevated px-4 py-3 text-default'
                   : ''
               "
             >
-              <div
-                v-if="
-                  message.role === 'assistant' &&
-                  (getSkillIndicators(message).length || canSpeakMessage(message))
-                "
-                class="mb-2 flex flex-wrap items-start justify-between gap-2"
+              <details
+                v-if="message.role === 'assistant' && getSkillIndicators(message).length"
+                class="mb-3 text-xs text-muted"
               >
-                <div
-                  v-if="getSkillIndicators(message).length"
-                  class="flex flex-wrap items-center gap-1.5"
+                <summary
+                  class="min-h-11 cursor-pointer py-3 rounded focus-visible:outline-2 focus-visible:outline-primary"
                 >
+                  {{ t('message_context') }}
+                </summary>
+                <div class="flex flex-wrap items-center gap-2 pb-2">
                   <UTooltip
                     v-for="(indicator, idx) in getSkillIndicators(message)"
                     :key="idx"
                     :text="indicator.tooltip"
-                    :popper="{ placement: 'top' }"
                   >
-                    <UBadge
-                      color="neutral"
-                      variant="soft"
-                      size="xs"
-                      :icon="indicator.icon"
-                      class="rounded-full"
-                    >
+                    <UBadge color="neutral" variant="soft" :icon="indicator.icon">
                       {{ indicator.label }}
                     </UBadge>
                   </UTooltip>
                 </div>
-                <div v-if="canSpeakMessage(message)" class="flex items-center gap-1 self-start">
-                  <UButton
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    square
-                    aria-label="Remember this message"
-                    icon="i-heroicons-bookmark"
-                    @click="
-                      () => {
-                        void rememberMessage(message)
-                      }
-                    "
-                  />
-                  <UButton
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    square
-                    aria-label="Forget this message"
-                    icon="i-heroicons-bookmark-slash"
-                    @click="
-                      () => {
-                        void forgetMessage(message)
-                      }
-                    "
-                  />
-                  <UButton
-                    color="neutral"
-                    :variant="isTtsPlaying(message) ? 'solid' : 'ghost'"
-                    size="xs"
-                    square
-                    :loading="isTtsLoading(message)"
-                    :aria-label="
-                      isTtsPlaying(message)
-                        ? 'Stop reading aloud'
-                        : `Read aloud with ${selectedGeminiVoice.name}, ${selectedVoicePreset.label}, at ${voiceSpeed} speed`
-                    "
-                    :icon="isTtsPlaying(message) ? 'i-heroicons-stop' : 'i-heroicons-speaker-wave'"
-                    @click="
-                      () => {
-                        void playAssistantMessage(message, defaultVoicePreset)
-                      }
-                    "
-                  />
-                  <UDropdownMenu
-                    :items="getTtsMenuItems(message)"
-                    :content="{ side: 'bottom', align: 'start' }"
-                  >
-                    <UButton
-                      color="neutral"
-                      variant="ghost"
-                      size="xs"
-                      square
-                      aria-label="Choose voice style"
-                      icon="i-heroicons-chevron-down"
-                      :disabled="isTtsLoading(message)"
-                    />
-                  </UDropdownMenu>
-                </div>
-              </div>
+              </details>
               <ChatMessageContent
                 :message="message"
                 :all-messages="messages"
-                @click="
-                  () => {
-                    void handleMessageTap(message)
-                  }
-                "
                 @tool-approval="handleToolApproval"
               />
             </div>
@@ -1031,6 +970,7 @@
                 color="neutral"
                 variant="ghost"
                 label="Resume"
+                class="min-h-11"
                 @click="
                   () => {
                     resumeTurn(getMessageTurnId(message))
@@ -1043,6 +983,7 @@
                 color="neutral"
                 variant="ghost"
                 label="Retry"
+                class="min-h-11"
                 @click="
                   () => {
                     retryTurn(getMessageTurnId(message))
@@ -1052,91 +993,43 @@
             </div>
           </template>
           <template #actions="{ message }">
-            <template
-              v-if="message.role === 'user' && canEditMessages && !isEditingMessage(message)"
+            <div
+              v-if="!isEditingMessage(message) && getMessageActionText(message)"
+              class="flex items-center gap-1"
             >
-              <div
-                :class="
-                  isTouchDevice
-                    ? isActionsVisible(message)
-                      ? '!opacity-100 !pointer-events-auto'
-                      : '!opacity-0 !pointer-events-none'
-                    : ''
+              <UButton
+                v-if="canSpeakMessage(message)"
+                color="neutral"
+                :variant="isTtsPlaying(message) ? 'soft' : 'ghost'"
+                class="min-h-11 min-w-11"
+                :loading="isTtsLoading(message)"
+                :aria-label="
+                  isTtsPlaying(message)
+                    ? 'Stop reading aloud'
+                    : `Read aloud with ${selectedGeminiVoice.name}, ${selectedVoicePreset.label}, at ${voiceSpeed} speed`
                 "
-                class="flex items-center gap-1 transition-opacity"
-              >
+                :icon="isTtsPlaying(message) ? 'i-heroicons-stop' : 'i-heroicons-speaker-wave'"
+                @click="
+                  () => {
+                    void playAssistantMessage(message, defaultVoicePreset)
+                  }
+                "
+              />
+              <UDropdownMenu :items="getMessageTools(message)" :content="{ align: 'end' }">
                 <UButton
                   color="neutral"
                   variant="ghost"
-                  size="xs"
-                  square
-                  aria-label="Copy message"
-                  icon="i-heroicons-clipboard-document"
-                  @click="
-                    () => {
-                      void copyMessage(message)
-                    }
-                  "
+                  class="min-h-11 min-w-11"
+                  icon="i-heroicons-ellipsis-horizontal"
+                  :aria-label="t('message_options')"
                 />
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  square
-                  aria-label="Remember this message"
-                  icon="i-heroicons-bookmark"
-                  @click="
-                    () => {
-                      void rememberMessage(message)
-                    }
-                  "
-                />
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  square
-                  aria-label="Forget this message"
-                  icon="i-heroicons-bookmark-slash"
-                  @click="
-                    () => {
-                      void forgetMessage(message)
-                    }
-                  "
-                />
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  square
-                  aria-label="Edit message"
-                  icon="i-heroicons-pencil-square"
-                  @click="
-                    () => {
-                      void handleEditMessage(message)
-                    }
-                  "
-                />
-              </div>
-            </template>
+              </UDropdownMenu>
+            </div>
           </template>
         </UChatMessages>
-        <div
-          v-if="showTypingIndicator"
-          class="pointer-events-none flex items-start gap-3 px-4 pb-4 pt-2"
-        >
-          <div
-            class="flex items-center gap-2 rounded-[1.2rem] px-4 py-3 text-gray-500 dark:text-gray-400"
-          >
-            <span
-              class="h-2.5 w-2.5 animate-[bounce_1s_infinite] rounded-full bg-current [animation-delay:-0.3s]"
-            />
-            <span
-              class="h-2.5 w-2.5 animate-[bounce_1s_infinite] rounded-full bg-current [animation-delay:-0.15s]"
-            />
-            <span class="h-2.5 w-2.5 animate-[bounce_1s_infinite] rounded-full bg-current" />
-          </div>
-        </div>
+        <p v-if="showTypingIndicator" role="status" class="py-4 text-sm text-muted">
+          {{ t('message_replying') }}
+        </p>
         <div ref="bottomAnchorRef" class="h-px w-full shrink-0" />
       </div>
     </UContainer>

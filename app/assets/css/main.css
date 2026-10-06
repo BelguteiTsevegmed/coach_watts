@@ -1,27 +1,25 @@
 @import 'tailwindcss' theme(static);
 @import '@nuxt/ui';
+@import './journey.css';
 
-/* Hallmark · macrostructure: Workbench · genre: atmospheric · tone: athletic
- * theme: custom green-ink · display: Oswald roman · body: Public Sans
- * nav: N9 edge-aligned · footer: Ft2 statement · enrichment: none
- */
+/* Coach Watts journey: Public Sans, forest ink, and restrained evergreen actions. */
 @theme static {
   --font-sans: 'Public Sans', sans-serif;
-  --font-display: 'Oswald', 'Public Sans', sans-serif;
+  --font-display: 'Public Sans', sans-serif;
 
   --radius-xs: 0.0625rem;
 
-  --color-green-50: #effdf5;
-  --color-green-100: #d9fbe8;
-  --color-green-200: #b3f5d1;
-  --color-green-300: #75edae;
-  --color-green-400: #00dc82;
-  --color-green-500: #00c16a;
-  --color-green-600: #00a155;
-  --color-green-700: #007f45;
-  --color-green-800: #016538;
-  --color-green-900: #0a5331;
-  --color-green-950: #052e16;
+  --color-green-50: #f0f7f4;
+  --color-green-100: #deeee7;
+  --color-green-200: #baded0;
+  --color-green-300: #8ec7b4;
+  --color-green-400: #519f8a;
+  --color-green-500: #23675e;
+  --color-green-600: #1f5a51;
+  --color-green-700: #1b4d45;
+  --color-green-800: #193f39;
+  --color-green-900: #183b35;
+  --color-green-950: #112f29;
 }
 
 @utility no-scrollbar {

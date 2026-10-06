@@ -1,56 +1,8 @@
 <template>
   <UDashboardPanel id="fitness">
-    <template #header>
-      <UDashboardNavbar title="Fitness Integrity">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-        <template #right>
-          <div class="flex items-center gap-3">
-            <ClientOnly>
-              <DashboardTriggerMonitorButton />
-            </ClientOnly>
-
-            <UButton
-              to="/recovery"
-              icon="i-lucide-heart-handshake"
-              color="neutral"
-              variant="outline"
-              size="sm"
-            >
-              Recovery History
-            </UButton>
-
-            <UButton
-              icon="i-heroicons-adjustments-horizontal"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              @click="
-                () => {
-                  isSettingsModalOpen = true
-                }
-              "
-            >
-              Customize
-            </UButton>
-
-            <USelect
-              v-model="selectedPeriod"
-              :items="periodOptions"
-              size="sm"
-              class="w-32"
-              color="neutral"
-              variant="outline"
-            />
-          </div>
-        </template>
-      </UDashboardNavbar>
-    </template>
-
     <template #body>
       <ClientOnly>
-        <div class="relative p-0 sm:p-6 space-y-4 sm:space-y-6 pb-24">
+        <div class="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6">
           <FitnessSettingsModal v-model:open="isSettingsModalOpen" />
           <FitnessHrvRhrSettingsModal v-model:open="isHrvRhrSettingsModalOpen" />
           <FitnessChartSettingsModal
@@ -70,40 +22,50 @@
             @saved="handleRecoveryContextChanged"
             @deleted="handleRecoveryContextChanged"
           />
-          <div
-            v-if="isGarminConnected"
-            class="px-4 pt-1 sm:px-0 sm:pt-0 sm:absolute sm:right-6 sm:top-6 sm:z-10"
-          >
-            <div class="flex items-center gap-1.5">
-              <span
-                class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
-              >
-                Dashboard may include data from
-              </span>
-              <img
-                src="/images/logos/Garmin-Tag-black-high-res.png"
-                class="h-5 w-auto dark:hidden"
-                alt="Garmin"
-              />
-              <img
-                src="/images/logos/Garmin-Tag-white-high-res.png"
-                class="hidden h-5 w-auto dark:block"
-                alt="Garmin"
-              />
+          <header class="space-y-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h1 class="text-3xl font-semibold text-highlighted">Fitness</h1>
+                <p class="mt-2 max-w-prose text-sm text-muted leading-relaxed">
+                  Review your training, recovery, and recent trends.
+                </p>
+              </div>
+              <UDropdownMenu :items="fitnessToolsItems" :content="{ align: 'end' }">
+                <UButton
+                  icon="i-heroicons-ellipsis-horizontal"
+                  color="neutral"
+                  variant="ghost"
+                  class="min-h-11"
+                  aria-label="Fitness tools"
+                  >Fitness tools</UButton
+                >
+              </UDropdownMenu>
             </div>
-          </div>
-
-          <!-- Dashboard Branding -->
-          <div class="px-4 sm:px-0">
-            <h1 class="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
-              Fitness
-            </h1>
-            <p
-              class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em] mt-1 italic"
-            >
-              Wellness Biometrics & Recovery Integrity
-            </p>
-          </div>
+            <div class="flex flex-wrap items-end justify-between gap-4">
+              <UFormField label="Time range" name="fitness-period">
+                <USelect
+                  v-model="selectedPeriod"
+                  :items="periodOptions"
+                  aria-label="Fitness time range"
+                  class="w-44"
+                  :ui="{ base: 'min-h-11' }"
+                />
+              </UFormField>
+              <div v-if="isGarminConnected" class="flex items-center gap-2 text-xs text-muted">
+                <span>Includes data from</span>
+                <img
+                  src="/images/logos/Garmin-Tag-black-high-res.png"
+                  class="h-5 w-auto dark:hidden"
+                  alt="Garmin"
+                />
+                <img
+                  src="/images/logos/Garmin-Tag-white-high-res.png"
+                  class="hidden h-5 w-auto dark:block"
+                  alt="Garmin"
+                />
+              </div>
+            </div>
+          </header>
 
           <!-- Summary Stats -->
           <FitnessSummaryCards
@@ -127,6 +89,7 @@
                 variant="outline"
                 size="sm"
                 icon="i-lucide-plus"
+                class="min-h-11"
                 @click="
                   () => {
                     void openCreateRecoveryEvent()
@@ -138,166 +101,206 @@
             </template>
           </RecoveryContextStrip>
 
-          <!-- Featured Correlation Chart -->
-
-          <div
+          <details
             v-if="
-              loading || (allWellness.length > 0 && chartSettings.hrvRhrDual?.visible !== false)
+              showRecoveryChart ||
+              showReadinessEstimateChart ||
+              showHrvRhrChart ||
+              recoveryContextItems.length > 0
             "
+            class="border-t border-default"
+            @toggle="setTopicOpen('recovery', $event)"
           >
-            <FitnessHrvRhrDualChart
-              :wellness-data="filteredWellness"
-              :wellness-events="wellnessEvents"
-              :loading="loading"
-              :plugins="[ChartDataLabels]"
-              @settings="isHrvRhrSettingsModalOpen = true"
-            />
-          </div>
-
-          <!-- Secondary Charts Grid -->
-
-          <div
-            v-if="showSecondaryChartsGrid"
-            class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6"
-          >
-            <FitnessTrendChart
-              v-if="showRecoveryChart"
-              metric-key="recovery"
-              title="Recovery Trajectory"
-              :loading="loading"
-              :data="recoveryTrendData"
-              :options="getChartOptions('recovery')"
-              :settings="chartSettings.recovery"
-              :plugins="[ChartDataLabels]"
-              @settings="openChartSettings('recovery', 'Recovery')"
-            />
-
-            <FitnessTrendChart
-              v-if="showReadinessEstimateChart"
-              metric-key="readinessEstimate"
-              title="Readiness Estimate (HRV + RHR)"
-              :loading="loading"
-              :data="readinessEstimateTrendData"
-              :options="getChartOptions('readinessEstimate')"
-              :settings="chartSettings.readinessEstimate"
-              :plugins="[ChartDataLabels]"
-              @settings="openChartSettings('readinessEstimate', 'Readiness Estimate')"
-            />
-
-            <FitnessTrendChart
-              v-if="showSleepChart"
-              metric-key="sleep"
-              title="Sleep Duration"
-              :loading="loading"
-              :data="sleepTrendData"
-              :options="getChartOptions('sleep')"
-              :settings="chartSettings.sleep"
-              :plugins="[ChartDataLabels]"
-              @settings="openChartSettings('sleep', 'Sleep')"
-            />
-
-            <FitnessTrendChart
-              v-if="showHrvChart"
-              metric-key="hrv"
-              title="Heart Rate Variability"
-              :loading="loading"
-              :data="hrvTrendData"
-              :options="getChartOptions('hrv')"
-              :settings="chartSettings.hrv"
-              :plugins="[ChartDataLabels]"
-              @settings="openChartSettings('hrv', 'HRV')"
-            />
-
-            <FitnessTrendChart
-              v-if="showRestingHrChart"
-              metric-key="restingHr"
-              title="Resting Heart Rate"
-              :loading="loading"
-              :data="restingHrTrendData"
-              :options="getChartOptions('restingHr')"
-              :settings="chartSettings.restingHr"
-              :plugins="[ChartDataLabels]"
-              @settings="openChartSettings('restingHr', 'Resting HR')"
-            />
-
-            <FitnessTrendChart
-              v-if="showWeightChart"
-              metric-key="weight"
-              title="Mass Progression"
-              :loading="loading"
-              :data="weightTrendData"
-              :options="getChartOptions('weight')"
-              :settings="chartSettings.weight"
-              :plugins="[ChartDataLabels]"
-              @settings="openChartSettings('weight', 'Weight')"
-            />
-
-            <FitnessTrendChart
-              v-if="showBpChart"
-              metric-key="bp"
-              title="Blood Pressure"
-              :loading="loading"
-              :data="bpTrendData"
-              :options="getChartOptions('bp')"
-              :settings="chartSettings.bp"
-              :plugins="[ChartDataLabels]"
-              @settings="openChartSettings('bp', 'Blood Pressure')"
-            />
-          </div>
-
-          <RecoveryContextTimeline :items="recoveryContextItems" @select="openRecoveryItem" />
-
-          <!-- Filter Area -->
-          <UCard
-            :ui="{ root: 'rounded-none sm:rounded-lg shadow-none sm:shadow', body: 'p-3' }"
-            class="bg-gray-50/50 dark:bg-gray-900/40 border-dashed border-gray-200 dark:border-gray-800"
-          >
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="flex items-center gap-3">
-                <span
-                  class="text-[10px] font-black uppercase tracking-widest text-gray-400 shrink-0"
-                >
-                  Recovery
-                </span>
-                <USelect
-                  v-model="filterRecovery"
-                  :items="recoveryStatusOptions"
-                  placeholder="All Status"
-                  size="sm"
-                  color="neutral"
-                  variant="outline"
-                  class="w-full"
+            <summary class="min-h-11 cursor-pointer py-4 text-lg font-semibold text-highlighted">
+              Recovery and readiness
+            </summary>
+            <div v-if="openTopics.recovery" class="space-y-5 pb-6">
+              <div v-if="showHrvRhrChart">
+                <FitnessHrvRhrDualChart
+                  :wellness-data="filteredWellness"
+                  :wellness-events="wellnessEvents"
+                  :loading="loading"
+                  :plugins="[ChartDataLabels]"
+                  @settings="isHrvRhrSettingsModalOpen = true"
                 />
               </div>
-
-              <div class="flex items-center gap-3">
-                <span
-                  class="text-[10px] font-black uppercase tracking-widest text-gray-400 shrink-0"
-                >
-                  Sleep
-                </span>
-                <USelect
-                  v-model="filterSleep"
-                  :items="sleepQualityOptions"
-                  placeholder="All Quality"
-                  size="sm"
-                  color="neutral"
-                  variant="outline"
-                  class="w-full"
-                />
-              </div>
+              <FitnessTrendChart
+                v-if="showRecoveryChart"
+                metric-key="recovery"
+                title="Recovery"
+                :loading="loading"
+                :data="recoveryTrendData"
+                :options="getChartOptions('recovery')"
+                :settings="chartSettings.recovery"
+                :plugins="[ChartDataLabels]"
+                @settings="openChartSettings('recovery', 'Recovery')"
+              />
+              <FitnessTrendChart
+                v-if="showReadinessEstimateChart"
+                metric-key="readinessEstimate"
+                title="Readiness estimate (HRV and resting heart rate)"
+                :loading="loading"
+                :data="readinessEstimateTrendData"
+                :options="getChartOptions('readinessEstimate')"
+                :settings="chartSettings.readinessEstimate"
+                :plugins="[ChartDataLabels]"
+                @settings="openChartSettings('readinessEstimate', 'Readiness Estimate')"
+              />
+              <RecoveryContextTimeline :items="recoveryContextItems" @select="openRecoveryItem" />
             </div>
-          </UCard>
+          </details>
 
-          <!-- Wellness Table -->
-          <FitnessWellnessTable
-            :wellness="paginatedWellness"
-            :loading="loading"
-            :current-page="currentPage"
-            :total-items="filteredWellness.length"
-            :items-per-page="itemsPerPage"
-            @update:page="changePage"
-          />
+          <details
+            v-if="showSleepChart"
+            class="border-t border-default"
+            @toggle="setTopicOpen('sleep', $event)"
+          >
+            <summary class="min-h-11 cursor-pointer py-4 text-lg font-semibold text-highlighted">
+              Sleep
+            </summary>
+            <div v-if="openTopics.sleep" class="space-y-5 pb-6">
+              <FitnessTrendChart
+                v-if="showSleepChart"
+                metric-key="sleep"
+                title="Sleep Duration"
+                :loading="loading"
+                :data="sleepTrendData"
+                :options="getChartOptions('sleep')"
+                :settings="chartSettings.sleep"
+                :plugins="[ChartDataLabels]"
+                @settings="openChartSettings('sleep', 'Sleep')"
+              />
+            </div>
+          </details>
+
+          <details
+            v-if="showHrvChart || showRestingHrChart"
+            class="border-t border-default"
+            @toggle="setTopicOpen('heart', $event)"
+          >
+            <summary class="min-h-11 cursor-pointer py-4 text-lg font-semibold text-highlighted">
+              Heart rate trends
+            </summary>
+            <div v-if="openTopics.heart" class="space-y-5 pb-6">
+              <FitnessTrendChart
+                v-if="showHrvChart"
+                metric-key="hrv"
+                title="Heart Rate Variability"
+                :loading="loading"
+                :data="hrvTrendData"
+                :options="getChartOptions('hrv')"
+                :settings="chartSettings.hrv"
+                :plugins="[ChartDataLabels]"
+                @settings="openChartSettings('hrv', 'HRV')"
+              />
+              <FitnessTrendChart
+                v-if="showRestingHrChart"
+                metric-key="restingHr"
+                title="Resting Heart Rate"
+                :loading="loading"
+                :data="restingHrTrendData"
+                :options="getChartOptions('restingHr')"
+                :settings="chartSettings.restingHr"
+                :plugins="[ChartDataLabels]"
+                @settings="openChartSettings('restingHr', 'Resting HR')"
+              />
+            </div>
+          </details>
+
+          <details
+            v-if="showWeightChart || showBpChart"
+            class="border-t border-default"
+            @toggle="setTopicOpen('body', $event)"
+          >
+            <summary class="min-h-11 cursor-pointer py-4 text-lg font-semibold text-highlighted">
+              Weight and blood pressure
+            </summary>
+            <div v-if="openTopics.body" class="space-y-5 pb-6">
+              <FitnessTrendChart
+                v-if="showWeightChart"
+                metric-key="weight"
+                title="Weight"
+                :loading="loading"
+                :data="weightTrendData"
+                :options="getChartOptions('weight')"
+                :settings="chartSettings.weight"
+                :plugins="[ChartDataLabels]"
+                @settings="openChartSettings('weight', 'Weight')"
+              />
+              <FitnessTrendChart
+                v-if="showBpChart"
+                metric-key="bp"
+                title="Blood Pressure"
+                :loading="loading"
+                :data="bpTrendData"
+                :options="getChartOptions('bp')"
+                :settings="chartSettings.bp"
+                :plugins="[ChartDataLabels]"
+                @settings="openChartSettings('bp', 'Blood Pressure')"
+              />
+            </div>
+          </details>
+
+          <details class="border-t border-default" @toggle="setTopicOpen('records', $event)">
+            <summary class="min-h-11 cursor-pointer py-4 text-lg font-semibold text-highlighted">
+              Daily records
+            </summary>
+            <div v-if="openTopics.records" class="space-y-4 pb-6">
+              <!-- Filter Area -->
+              <UCard
+                :ui="{ root: 'rounded-none sm:rounded-lg shadow-none sm:shadow', body: 'p-3' }"
+                class="bg-gray-50/50 dark:bg-gray-900/40 border-dashed border-gray-200 dark:border-gray-800"
+              >
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="flex items-center gap-3">
+                    <span
+                      class="text-[10px] font-black uppercase tracking-widest text-gray-400 shrink-0"
+                    >
+                      Recovery
+                    </span>
+                    <USelect
+                      v-model="filterRecovery"
+                      :items="recoveryStatusOptions"
+                      placeholder="All statuses"
+                      aria-label="Filter records by recovery"
+                      size="sm"
+                      color="neutral"
+                      variant="outline"
+                      class="w-full"
+                    />
+                  </div>
+
+                  <div class="flex items-center gap-3">
+                    <span
+                      class="text-[10px] font-black uppercase tracking-widest text-gray-400 shrink-0"
+                    >
+                      Sleep
+                    </span>
+                    <USelect
+                      v-model="filterSleep"
+                      :items="sleepQualityOptions"
+                      placeholder="All quality ratings"
+                      aria-label="Filter records by sleep quality"
+                      size="sm"
+                      color="neutral"
+                      variant="outline"
+                      class="w-full"
+                    />
+                  </div>
+                </div>
+              </UCard>
+
+              <!-- Wellness Table -->
+              <FitnessWellnessTable
+                :wellness="paginatedWellness"
+                :loading="loading"
+                :current-page="currentPage"
+                :total-items="filteredWellness.length"
+                :items-per-page="itemsPerPage"
+                @update:page="changePage"
+              />
+            </div>
+          </details>
         </div>
       </ClientOnly>
     </template>
@@ -380,6 +383,31 @@
       false
     )
   })
+
+  const openTopics = ref<Record<string, boolean>>({})
+  function setTopicOpen(topic: string, event: Event) {
+    openTopics.value[topic] = (event.target as HTMLDetailsElement).open
+  }
+  const { toggle: toggleTriggerMonitor } = useTriggerMonitor()
+  const fitnessToolsItems = [
+    [
+      {
+        label: 'Customize fitness',
+        icon: 'i-heroicons-adjustments-horizontal',
+        onSelect: () => {
+          isSettingsModalOpen.value = true
+        }
+      },
+      { label: 'Recovery history', icon: 'i-lucide-heart-handshake', to: '/recovery' },
+      {
+        label: 'Tasks',
+        icon: 'i-heroicons-cpu-chip',
+        onSelect: () => {
+          toggleTriggerMonitor()
+        }
+      }
+    ]
+  ]
 
   const isSettingsModalOpen = ref(false)
   const isHrvRhrSettingsModalOpen = ref(false)
@@ -1262,15 +1290,10 @@
     () => chartSettings.value.bp?.visible !== false && (loading.value || hasBpChartData.value)
   )
 
-  const showSecondaryChartsGrid = computed(
+  const showHrvRhrChart = computed(
     () =>
-      showRecoveryChart.value ||
-      showReadinessEstimateChart.value ||
-      showSleepChart.value ||
-      showHrvChart.value ||
-      showRestingHrChart.value ||
-      showWeightChart.value ||
-      showBpChart.value
+      loading.value ||
+      (allWellness.value.length > 0 && chartSettings.value.hrvRhrDual?.visible !== false)
   )
 
   // Chart options

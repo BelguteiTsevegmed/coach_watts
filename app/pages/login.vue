@@ -1,41 +1,12 @@
 <template>
   <div
-    class="relative flex min-h-[calc(100vh-4rem)] items-center justify-center overflow-x-clip bg-[oklch(12%_0.015_155)] px-4 py-10 sm:px-6 lg:py-16"
+    class="relative flex min-h-[calc(100vh-4rem)] items-center justify-center overflow-x-clip bg-[#152523] px-4 py-10 sm:px-6 lg:py-16"
   >
-    <UContainer class="relative z-10 w-full max-w-6xl">
-      <div
-        class="grid overflow-hidden rounded-2xl border border-white/10 bg-[oklch(14%_0.018_155)] lg:grid-cols-12"
-      >
-        <aside
-          class="relative hidden flex-col justify-center border-r border-white/8 p-10 lg:col-span-5 lg:flex lg:p-12"
-        >
-          <p class="text-xs font-bold uppercase tracking-widest text-primary-400">Coach Watts</p>
-          <h2
-            class="font-athletic mt-6 text-3xl font-bold uppercase leading-[0.95] tracking-tight text-white"
-          >
-            {{ t('login.marketing_title') }}
-            <span class="text-primary-400">{{ t('login.marketing_title_accent') }}</span>
-          </h2>
-          <p class="mt-4 text-sm font-medium leading-relaxed text-gray-400">
-            {{ t('login.marketing_description') }}
-          </p>
-          <ul class="mt-8 space-y-3 text-sm text-gray-400">
-            <li class="flex items-center gap-2">
-              <UIcon name="i-heroicons-check-circle-solid" class="h-4 w-4 text-primary-400" />
-              {{ t('login.benefit_readiness') }}
-            </li>
-            <li class="flex items-center gap-2">
-              <UIcon name="i-heroicons-check-circle-solid" class="h-4 w-4 text-primary-400" />
-              {{ t('login.benefit_connected') }}
-            </li>
-          </ul>
-        </aside>
-
-        <div class="relative flex flex-col justify-center p-8 sm:p-12 lg:col-span-7 lg:p-16">
+    <UContainer class="relative z-10 w-full max-w-lg">
+      <div class="grid overflow-hidden rounded-2xl border border-white/10 bg-[#1b2d2a]">
+        <div class="relative flex flex-col justify-center p-6 sm:p-10">
           <div class="relative z-10 mx-auto w-full max-w-md">
-            <h1
-              class="font-athletic text-4xl font-bold uppercase leading-[0.9] tracking-tight text-white sm:text-5xl"
-            >
+            <h1 class="text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl">
               {{ t('login.heading') }}
               <span class="text-primary-400">{{ t('login.heading_accent') }}</span>
             </h1>
@@ -51,7 +22,7 @@
                 icon="i-simple-icons-apple"
                 color="neutral"
                 variant="solid"
-                class="h-14 min-w-full rounded-xl bg-black text-xs font-bold uppercase tracking-[0.15em] text-white hover:bg-neutral-900"
+                class="h-14 min-w-full rounded-xl bg-black text-sm font-medium text-white hover:bg-neutral-900"
                 :loading="loadingApple || isInitializing"
                 @click="
                   () => {
@@ -68,7 +39,7 @@
                 icon="i-simple-icons-google"
                 color="primary"
                 variant="solid"
-                class="h-14 min-w-full rounded-xl text-xs font-bold uppercase tracking-[0.15em]"
+                class="h-14 min-w-full rounded-xl text-sm font-medium"
                 :loading="loading || isInitializing"
                 @click="
                   () => {
@@ -79,43 +50,46 @@
                 {{ isInitializing ? t('login.connecting') : t('login.google') }}
               </UButton>
 
-              <UButton
-                block
-                size="xl"
-                color="neutral"
-                variant="outline"
-                class="h-14 min-w-full rounded-xl border-white/10 text-xs font-bold uppercase tracking-[0.12em]"
-                :loading="loadingStrava || isInitializing"
-                @click="
-                  () => {
-                    void handleStravaLogin()
-                  }
-                "
-              >
-                <template #leading>
-                  <UIcon name="i-simple-icons-strava" class="h-5 w-5 text-[#FC4C02]" />
-                </template>
-                {{ isInitializing ? t('login.connecting') : t('login.strava') }}
-              </UButton>
+              <details class="auth-more-options">
+                <summary>{{ moreSignInOptions }}</summary>
+                <UButton
+                  block
+                  size="xl"
+                  color="neutral"
+                  variant="outline"
+                  class="h-14 min-w-full rounded-xl border-white/10 text-sm font-medium"
+                  :loading="loadingStrava || isInitializing"
+                  @click="
+                    () => {
+                      void handleStravaLogin()
+                    }
+                  "
+                >
+                  <template #leading>
+                    <UIcon name="i-simple-icons-strava" class="h-5 w-5 text-[#FC4C02]" />
+                  </template>
+                  {{ isInitializing ? t('login.connecting') : t('login.strava') }}
+                </UButton>
 
-              <UButton
-                block
-                size="xl"
-                color="neutral"
-                variant="outline"
-                class="h-14 min-w-full rounded-xl border-white/10 text-xs font-bold uppercase tracking-[0.12em]"
-                :loading="loadingIntervals || isInitializing"
-                @click="
-                  () => {
-                    void handleIntervalsLogin()
-                  }
-                "
-              >
-                <template #leading>
-                  <img src="/images/logos/intervals.png" alt="" class="h-5 w-5" />
-                </template>
-                {{ isInitializing ? t('login.connecting') : t('login.intervals') }}
-              </UButton>
+                <UButton
+                  block
+                  size="xl"
+                  color="neutral"
+                  variant="outline"
+                  class="h-14 min-w-full rounded-xl border-white/10 text-sm font-medium"
+                  :loading="loadingIntervals || isInitializing"
+                  @click="
+                    () => {
+                      void handleIntervalsLogin()
+                    }
+                  "
+                >
+                  <template #leading>
+                    <img src="/images/logos/intervals.png" alt="" class="h-5 w-5" />
+                  </template>
+                  {{ isInitializing ? t('login.connecting') : t('login.intervals') }}
+                </UButton>
+              </details>
             </div>
 
             <p class="mt-8 text-sm text-gray-400">
@@ -126,7 +100,7 @@
                     ? '/join'
                     : `/join?callbackUrl=${encodeURIComponent(callbackUrl)}`
                 "
-                class="ml-1 font-bold uppercase tracking-widest text-primary-400 transition-colors hover:text-primary-300"
+                class="ml-1 font-medium text-primary-300 transition-colors hover:text-primary-300"
                 >{{ t('login.create_account') }}</NuxtLink
               >
             </p>
@@ -146,14 +120,14 @@
 
           <div
             v-if="isInitializing"
-            class="absolute inset-0 z-50 flex items-center justify-center bg-[oklch(12%_0.015_155)]/90"
+            class="absolute inset-0 z-50 flex items-center justify-center bg-[#152523]/90"
           >
             <div class="text-center">
               <UIcon
                 name="i-heroicons-arrow-path"
                 class="mx-auto h-8 w-8 animate-spin text-primary-400"
               />
-              <p class="font-athletic mt-4 text-lg font-bold uppercase tracking-wide text-white">
+              <p class="mt-4 text-lg font-medium text-white">
                 {{ t('login.signing_in') }}
               </p>
             </div>
@@ -168,6 +142,10 @@
   import { useTranslate } from '@tolgee/vue'
 
   const { t } = useTranslate('auth')
+  const moreSignInOptions = computed(() => {
+    const value = t.value('login.more_options')
+    return value === 'login.more_options' ? 'More sign-in options' : value
+  })
   const { signIn } = useAuth()
   const route = useRoute()
   const toast = useToast()
@@ -269,3 +247,24 @@
     }
   }
 </script>
+
+<style scoped>
+  .auth-more-options {
+    border-top: 1px solid #354e47;
+    padding-top: 0.75rem;
+  }
+  .auth-more-options summary {
+    color: #a7bbb5;
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 0;
+  }
+  .auth-more-options summary:focus-visible {
+    outline: 2px solid #93c9bc;
+    outline-offset: 4px;
+  }
+  .auth-more-options :deep(button) {
+    margin-top: 0.75rem;
+  }
+</style>

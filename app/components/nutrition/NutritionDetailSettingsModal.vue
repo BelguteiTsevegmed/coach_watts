@@ -31,26 +31,26 @@
 
             <div class="flex items-center justify-between">
               <div class="text-sm font-medium text-gray-900 dark:text-white">Smooth Wave</div>
-              <USwitch v-model="settings.smooth" />
+              <USwitch v-model="settings.smooth" aria-label="Smooth curve" />
             </div>
 
             <div class="flex items-center justify-between">
               <div class="text-sm font-medium text-gray-900 dark:text-white">
                 Show Event Markers
               </div>
-              <USwitch v-model="settings.showMarkers" />
+              <USwitch v-model="settings.showMarkers" aria-label="Show event markers" />
             </div>
 
             <div class="flex items-center justify-between">
               <div class="text-sm font-medium text-gray-900 dark:text-white">Show "Now" Line</div>
-              <USwitch v-model="settings.showNowLine" />
+              <USwitch v-model="settings.showNowLine" aria-label="Show current time" />
             </div>
 
             <div class="flex items-center justify-between">
               <div class="text-sm font-medium text-gray-900 dark:text-white">
                 Show Predicted Path
               </div>
-              <USwitch v-model="settings.showProjected" />
+              <USwitch v-model="settings.showProjected" aria-label="Show projected curve" />
             </div>
 
             <div class="space-y-2">
@@ -61,6 +61,7 @@
                 >
               </div>
               <USlider
+                aria-label="Chart fill opacity"
                 :model-value="(settings.opacity || 0) * 100"
                 :min="0"
                 :max="100"
@@ -86,6 +87,7 @@
               </div>
               <USelect
                 v-model="settings.yScale"
+                aria-label="Vertical axis scale"
                 :items="[
                   { label: 'Fixed', value: 'fixed' },
                   { label: 'Dynamic', value: 'dynamic' }

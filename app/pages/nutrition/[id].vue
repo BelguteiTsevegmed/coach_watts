@@ -1,435 +1,116 @@
 <template>
   <UDashboardPanel id="nutrition-detail">
     <template #header>
-      <UDashboardNavbar>
-        <template #leading>
-          <UButton
+      <UDashboardNavbar :title="t('journey_journal_title')">
+        <template #leading
+          ><UButton
             icon="i-heroicons-arrow-left"
             color="neutral"
             variant="ghost"
             to="/nutrition/history"
-          >
-            {{ t('detail_back') }}
-          </UButton>
-        </template>
-        <template #right>
-          <div class="flex items-center gap-2">
-            <UButton
-              v-if="nutrition"
-              icon="i-heroicons-sparkles"
-              color="primary"
-              variant="soft"
-              size="sm"
-              class="font-bold"
-              :loading="generatingPlan"
-              @click="
-                () => {
-                  void handleGeneratePlan()
-                }
-              "
-            >
-              {{ t('detail_regenerate_plan') }}
-            </UButton>
-            <UButton
-              v-if="nutrition"
-              icon="i-heroicons-chat-bubble-left-right"
-              color="primary"
-              variant="solid"
-              size="sm"
-              class="font-bold"
-              @click="
-                () => {
-                  void chatAboutNutrition()
-                }
-              "
-            >
-              <span class="hidden sm:inline">{{ t('detail_chat_about') }}</span>
-              <span class="sm:hidden">{{ t('detail_chat_short') }}</span>
-            </UButton>
-            <ClientOnly>
-              <DashboardTriggerMonitorButton />
-            </ClientOnly>
-          </div>
-        </template>
+            >{{ t('detail_back') }}</UButton
+          ></template
+        >
+        <template #right
+          ><UDropdownMenu :items="detailActions"
+            ><UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-ellipsis"
+              :aria-label="t('journey_more_actions')" /></UDropdownMenu
+        ></template>
       </UDashboardNavbar>
     </template>
-
     <template #body>
-      <div class="max-w-4xl mx-auto w-full p-0 sm:p-6 pb-24">
-        <div v-if="loading" class="flex items-center justify-center py-24">
-          <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-primary-500" />
+      <main class="nutrition-journal">
+        <div v-if="loading" class="py-20" role="status">
+          <USkeleton class="h-8 w-2/3" /><span class="sr-only">{{
+            t('journey_journal_loading')
+          }}</span>
         </div>
-
-        <div v-else-if="error" class="p-6 text-center">
-          <UAlert
-            icon="i-heroicons-exclamation-triangle"
-            color="error"
-            variant="soft"
-            :title="t('detail_data_error')"
-            :description="error"
-          />
+        <div v-else-if="error" class="py-10">
+          <h1 class="text-2xl font-medium">{{ t('detail_data_error') }}</h1>
+          <p class="mt-4 text-sm text-muted" role="alert">{{ error }}</p>
+          <UButton class="mt-6" @click="fetchData">{{ t('journey_retry') }}</UButton>
         </div>
-
-        <div v-else-if="nutrition" class="space-y-4 sm:space-y-8">
-          <UAlert
-            v-if="partialLoadWarning"
-            color="warning"
-            variant="soft"
-            icon="i-heroicons-exclamation-triangle"
-            :description="t('detail_partial_warning')"
-          />
-
-          <!-- 0. THE DATE HEADER -->
-          <UCard
-            :ui="{
-              root: 'rounded-none sm:rounded-xl shadow-none sm:shadow border-x-0 sm:border-x'
-            }"
-            class="shadow-sm overflow-hidden"
-            :class="[
-              fuelState === 3
-                ? 'border-red-200 dark:border-red-900/50'
-                : fuelState === 2
-                  ? 'border-orange-200 dark:border-orange-900/50'
-                  : 'border-blue-200 dark:border-blue-900/50'
-            ]"
-          >
-            <div class="flex items-center gap-2 sm:justify-between relative z-10">
-              <UButton
-                icon="i-heroicons-chevron-left"
+        <template v-else-if="nutrition">
+          <header class="flex items-center justify-between gap-3 pb-6 border-b border-default">
+            <UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-heroicons-chevron-left"
+              :aria-label="t('journey_previous_day')"
+              @click="
+                () => {
+                  void navigateDate(-1)
+                }
+              "
+            />
+            <div class="flex-1">
+              <p class="text-sm text-muted">
+                {{ formatDateUTC(nutrition.date, 'EEEE, MMM d yyyy') }}
+              </p>
+              <h1 class="text-2xl font-semibold mt-2">{{ t('journey_journal_title') }}</h1>
+            </div>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-heroicons-chevron-right"
+              :aria-label="t('journey_next_day')"
+              @click="
+                () => {
+                  void navigateDate(1)
+                }
+              "
+            />
+          </header>
+          <p v-if="partialLoadWarning" role="status" class="mt-5 text-sm text-muted">
+            {{ t('detail_partial_warning') }}
+          </p>
+          <section class="py-7">
+            <h2 class="text-xl font-medium">{{ t('journey_journal_prompt') }}</h2>
+            <p class="mt-3 text-sm text-muted leading-relaxed">
+              {{ t('journey_journal_description') }}
+            </p>
+            <div class="mt-6 flex flex-wrap items-center gap-4">
+              <UButton size="lg" @click="handleAddItem({ type: 'DAILY_BASE' })">{{
+                t('journey_log_food')
+              }}</UButton
+              ><UButton
                 color="neutral"
-                variant="ghost"
-                class="shrink-0"
+                variant="link"
                 @click="
                   () => {
-                    void navigateDate(-1)
+                    openAiModal()
                   }
                 "
-              />
-
-              <div
-                class="min-w-0 flex-1 px-2 sm:px-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-center"
+                >{{ t('journey_log_with_coach') }}</UButton
               >
-                <!-- Title Section -->
-                <div class="md:col-span-2">
-                  <div
-                    class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 italic mb-1"
-                  >
-                    {{
-                      formatDateUTC(
-                        nutrition?.date || (route.params.id as string),
-                        'EEEE, MMMM do yyyy'
-                      )
-                    }}
-                  </div>
-                  <h1
-                    class="text-xl sm:text-2xl font-black tracking-tight text-gray-900 dark:text-white uppercase truncate"
-                  >
-                    {{ t('detail_fueling_strategy') }}
-                  </h1>
-                  <p
-                    class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em] mt-1 italic"
-                  >
-                    {{ t('detail_metabolic_status') }}
-                  </p>
-                </div>
-
-                <!-- Desktop Fuel State (Consolidated) -->
-                <div
-                  class="hidden md:flex md:col-span-1 items-center justify-between pl-6 border-l border-gray-100 dark:border-gray-800"
-                >
-                  <div class="space-y-1">
-                    <div class="flex items-center gap-2">
-                      <h2
-                        class="text-base font-black uppercase tracking-tight"
-                        :class="[
-                          fuelState === 3
-                            ? 'text-red-600 dark:text-red-400'
-                            : fuelState === 2
-                              ? 'text-orange-600 dark:text-orange-400'
-                              : 'text-blue-600 dark:text-blue-400'
-                        ]"
-                      >
-                        {{ stateLabel }}
-                      </h2>
-                      <UTooltip v-if="nutrition.isManualLock" :text="t('detail_manual_lock')">
-                        <UIcon name="i-heroicons-lock-closed" class="w-4 h-4 text-gray-400" />
-                      </UTooltip>
-                    </div>
-                    <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest italic">
-                      {{ t('detail_fuel_state', { state: fuelState }) }}
-                    </p>
-                  </div>
-
-                  <!-- Goal Profile Offset -->
-                  <div v-if="goalAdjustment !== 0" class="text-right">
-                    <UBadge
-                      variant="soft"
-                      :color="goalAdjustment < 0 ? 'error' : 'success'"
-                      size="sm"
-                      class="font-black"
-                    >
-                      {{ goalAdjustment > 0 ? '+' : '' }}{{ goalAdjustment }}%
-                    </UBadge>
-                  </div>
-                </div>
-              </div>
-
+            </div>
+          </section>
+          <section class="pb-6">
+            <div class="flex items-center justify-between gap-3 mb-5">
+              <h2 class="text-lg font-medium">{{ t('journey_your_day') }}</h2>
               <UButton
-                icon="i-heroicons-chevron-right"
+                icon="i-heroicons-cog-6-tooth"
                 color="neutral"
                 variant="ghost"
-                class="shrink-0"
+                :aria-label="t('journey_timeline_settings')"
                 @click="
                   () => {
-                    void navigateDate(1)
+                    isTimelineSettingsModalOpen = true
                   }
                 "
               />
             </div>
-          </UCard>
-
-          <!-- 1. THE METABOLIC STATUS (Header) -->
-          <NutritionFuelStateHeader
-            :fuel-state="fuelState"
-            :is-locked="nutrition.isManualLock"
-            :goal-adjustment="goalAdjustment"
-            :settings="nutritionSettings"
-            :weight="userStore.currentWeightKg || 75"
-            :targets="{
-              calories: nutrition.caloriesGoal || 2500,
-              carbs: nutrition.carbsGoal || 300,
-              protein: nutrition.proteinGoal || 150,
-              fat: nutrition.fatGoal || 80
-            }"
-            :fueling-plan="nutrition.fuelingPlan"
-            :actuals="{
-              calories: nutrition.calories || 0,
-              carbs: nutrition.carbs || 0,
-              protein: nutrition.protein || 0,
-              fat: nutrition.fat || 0
-            }"
-            :hide-banner="true"
-            class="px-4 sm:px-0 md:!-mt-4"
-          />
-
-          <!-- Mobile-only Banner (Duplicate for mobile logic simplicity) -->
-          <div
-            class="md:hidden rounded-none sm:rounded-xl p-4 shadow-none sm:shadow border-y sm:border border-gray-100 dark:border-gray-800 transition-all duration-500"
-            :class="[
-              fuelState === 3
-                ? 'bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/50'
-                : fuelState === 2
-                  ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900/50'
-                  : 'bg-blue-50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900/50'
-            ]"
-          >
-            <div class="flex items-start justify-between">
-              <div class="space-y-1">
-                <div class="flex items-center gap-2">
-                  <h2
-                    class="text-lg font-black uppercase tracking-tight"
-                    :class="[
-                      fuelState === 3
-                        ? 'text-red-600 dark:text-red-400'
-                        : fuelState === 2
-                          ? 'text-orange-600 dark:text-orange-400'
-                          : 'text-blue-600 dark:text-blue-400'
-                    ]"
-                  >
-                    State {{ fuelState }}: {{ stateLabel }}
-                  </h2>
-                </div>
-                <p class="text-xs text-gray-600 dark:text-gray-400 font-medium">
-                  {{ stateDescription }}
-                </p>
-              </div>
-              <div v-if="goalAdjustment !== 0" class="text-right">
-                <UBadge
-                  variant="soft"
-                  :color="goalAdjustment < 0 ? 'error' : 'success'"
-                  class="font-black text-[10px]"
-                >
-                  {{ goalAdjustment > 0 ? '+' : '' }}{{ goalAdjustment }}%
-                </UBadge>
-              </div>
-            </div>
-          </div>
-
-          <!-- 1.5 LIVE ENERGY CHART -->
-          <div
-            class="bg-white dark:bg-gray-900/50 rounded-none sm:rounded-xl border-y sm:border border-gray-100 dark:border-gray-800 p-4 sm:p-6 shadow-none sm:shadow"
-          >
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-1.5">
-                <h4
-                  class="text-[10px] font-black uppercase text-gray-400 tracking-widest flex items-center gap-1.5"
-                >
-                  <UIcon name="i-heroicons-bolt" class="w-3.5 h-3.5 text-primary-500" />
-                  Live Energy Availability
-                </h4>
-              </div>
-              <div class="flex items-center gap-2">
-                <UTabs
-                  v-model="energyViewIdx"
-                  :items="[
-                    { label: '%', value: '0' },
-                    { label: 'kcal', value: '1' },
-                    { label: 'carbs', value: '2' }
-                  ]"
-                  size="xs"
-                  class="w-32"
-                />
-                <UButton
-                  icon="i-heroicons-cog-6-tooth"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  @click="
-                    () => {
-                      isDetailSettingsModalOpen = true
-                    }
-                  "
-                />
-              </div>
-            </div>
-            <ClientOnly>
-              <NutritionLiveEnergyChart
-                :key="`detail-${JSON.stringify(chartSettings.detail)}`"
-                :points="energyPoints"
-                :ghost-points="ghostPoints"
-                :journey-events="journeyEvents"
-                :view-mode="energyViewMode"
-                :settings="chartSettings.detail"
-              />
-            </ClientOnly>
-
-            <div class="px-1">
-              <UAlert
-                v-if="missingPlannedStartActivities.length > 0"
-                class="mt-4"
-                color="warning"
-                variant="soft"
-                icon="i-heroicons-exclamation-triangle"
-                :title="t('detail_missing_start_title')"
-              >
-                <template #description>
-                  <span v-if="missingPlannedStartActivities.length === 1">
-                    {{ t('detail_missing_start_single') }}
-                    <NuxtLink
-                      :to="`/workouts/planned/${missingPlannedStartActivities[0].id}`"
-                      class="font-bold underline hover:text-warning-600 transition-colors"
-                    >
-                      {{ missingPlannedStartActivities[0].title }}
-                    </NuxtLink>
-                  </span>
-                  <span v-else>
-                    {{
-                      t('detail_missing_start_multiple', {
-                        count: missingPlannedStartActivities.length
-                      })
-                    }}
-                    <template
-                      v-for="(activity, index) in missingPlannedStartActivities"
-                      :key="activity.id"
-                    >
-                      <NuxtLink
-                        :to="`/workouts/planned/${activity.id}`"
-                        class="font-bold underline hover:text-warning-600 transition-colors"
-                      >
-                        {{ activity.title }}
-                      </NuxtLink>
-                      <span v-if="index < missingPlannedStartActivities.length - 1">, </span>
-                    </template>
-                  </span>
-                  {{ t('detail_missing_start_footer') }}
-                </template>
-              </UAlert>
-            </div>
-
-            <!-- Legend/Status -->
-            <div
-              class="flex items-center justify-between text-[9px] font-bold uppercase tracking-widest text-gray-400 px-1 mt-4"
-            >
-              <div class="flex gap-3">
-                <span class="flex items-center gap-1"
-                  ><span class="w-1.5 h-1.5 rounded-full bg-primary-500"></span> Actual</span
-                >
-                <span class="flex items-center gap-1"
-                  ><span
-                    class="w-1.5 h-1.5 rounded-full border border-primary-500 border-dashed"
-                  ></span>
-                  Predicted</span
-                >
-                <span v-if="ghostPoints.length > 0" class="flex items-center gap-1">
-                  <span class="w-1.5 h-1.5 border border-purple-400 border-dashed"></span> Ghost
-                  (Rec)
-                </span>
-              </div>
-              <div class="flex gap-3">
-                <span class="flex items-center gap-1">
-                  <UIcon name="i-tabler-tools-kitchen-2" class="w-3 h-3 text-green-500" />
-                  Meal
-                </span>
-                <span class="flex items-center gap-1">
-                  <UIcon name="i-tabler-bike" class="w-3 h-3 text-red-500" /> Workout
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 2. THE TIMELINE (The What & When) -->
-          <div class="space-y-4 px-4 sm:px-0">
-            <div class="flex items-center justify-between">
-              <h2 class="text-base font-black uppercase tracking-widest text-gray-400">
-                Fueling Timeline
-              </h2>
-              <div class="flex items-center gap-4">
-                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-tighter"
-                  >{{ timeline.length }} Active Windows</span
-                >
-                <div class="flex items-center gap-2">
-                  <UButton
-                    icon="i-heroicons-sparkles"
-                    color="primary"
-                    variant="ghost"
-                    size="xs"
-                    @click="
-                      () => {
-                        void openAiModal()
-                      }
-                    "
-                  >
-                    <span class="hidden sm:inline">Log with AI</span>
-                    <span class="sm:hidden">Log</span>
-                  </UButton>
-                  <UButton
-                    icon="i-heroicons-cog-6-tooth"
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    @click="
-                      () => {
-                        isTimelineSettingsModalOpen = true
-                      }
-                    "
-                  />
-                </div>
-              </div>
-            </div>
-            <UAlert
-              v-if="carbsTargetReached"
-              color="warning"
-              variant="soft"
-              icon="i-heroicons-information-circle"
-              :description="
+            <p v-if="carbsTargetReached" class="mb-5 text-sm text-muted">
+              {{
                 t('detail_carb_target_reached', {
                   actual: Math.round(nutrition.carbs || 0),
                   target: Math.round(nutrition.carbsGoal || 0)
                 })
-              "
-            />
-          </div>
-          <div class="sm:px-0">
+              }}
+            </p>
             <NutritionFuelingTimeline
               :windows="timeline"
               :is-locked="nutrition.isManualLock"
@@ -439,121 +120,285 @@
               @add-ai="handleAddItemAi"
               @edit="handleEditItem"
             />
-          </div>
+          </section>
+          <details class="nutrition-journal__disclosure">
+            <summary>{{ t('journey_daily_totals') }}</summary>
+            <div class="py-4 pb-7">
+              <p class="text-sm text-muted mb-5">{{ stateLabel }}. {{ stateDescription }}</p>
+              <NutritionFuelStateHeader
+                :fuel-state="fuelState"
+                :is-locked="nutrition.isManualLock"
+                :goal-adjustment="goalAdjustment"
+                :settings="nutritionSettings"
+                :weight="userStore.currentWeightKg || 75"
+                :targets="{
+                  calories: nutrition.caloriesGoal ?? 0,
+                  carbs: nutrition.carbsGoal ?? 0,
+                  protein: nutrition.proteinGoal ?? 0,
+                  fat: nutrition.fatGoal ?? 0
+                }"
+                :fueling-plan="nutrition.fuelingPlan"
+                :actuals="{
+                  calories: nutrition.calories || 0,
+                  carbs: nutrition.carbs || 0,
+                  protein: nutrition.protein || 0,
+                  fat: nutrition.fat || 0
+                }"
+                :hide-banner="true"
+                class="px-4 sm:px-0 md:!-mt-4"
+              />
 
-          <!-- 3. AI INSIGHTS (Expanded Analysis) -->
-          <div class="px-0 sm:px-0">
-            <UCard
-              v-if="nutrition.aiAnalysisJson"
-              :ui="{
-                root: 'rounded-none sm:rounded-xl shadow-none sm:shadow border-x-0 sm:border-x',
-                body: 'p-4 sm:p-6'
-              }"
-              class="mt-4 sm:mt-8 overflow-hidden border-primary-100 dark:border-primary-900 shadow-lg"
-            >
-              <template #header>
-                <div class="flex items-center justify-between">
-                  <h2 class="text-lg font-black uppercase tracking-tighter flex items-center gap-2">
-                    <UIcon name="i-heroicons-sparkles" class="w-5 h-5 text-primary-500" />
-                    {{ t('detail_coach_analysis') }}
-                  </h2>
-                  <UButton
-                    variant="ghost"
-                    color="neutral"
-                    icon="i-heroicons-arrow-path"
-                    size="xs"
-                    :loading="analyzingNutrition"
-                    @click="
-                      () => {
-                        void analyzeNutrition()
-                      }
-                    "
-                    >{{ t('detail_analyze_refresh') }}</UButton
-                  >
-                </div>
-              </template>
-
-              <div class="space-y-6">
-                <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl">
-                  <p class="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                    {{ nutrition.aiAnalysisJson.executive_summary }}
-                  </p>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div
-                    v-for="section in nutrition.aiAnalysisJson.sections"
-                    :key="section.title"
-                    class="space-y-2"
-                  >
-                    <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest">
-                      {{ section.title }}
+              <p v-if="nutrition.isManualLock" class="text-sm text-muted mt-4">
+                {{ t('detail_manual_lock') }}
+              </p>
+              <p v-if="goalAdjustment !== 0" class="text-sm text-muted mt-3">
+                {{ t('journey_goal_adjustment', { percent: goalAdjustment }) }}
+              </p>
+            </div>
+          </details>
+          <details class="nutrition-journal__disclosure">
+            <summary>{{ t('journey_energy_detail') }}</summary>
+            <div class="py-4 pb-7">
+              <!-- 1.5 LIVE ENERGY CHART -->
+              <div
+                class="bg-white dark:bg-gray-900/50 rounded-none sm:rounded-xl border-y sm:border border-gray-100 dark:border-gray-800 p-4 sm:p-6 shadow-none shadow-none"
+              >
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-1.5">
+                    <h4 class="text-xs font-medium text-gray-400 flex items-center gap-1.5">
+                      <UIcon name="i-heroicons-bolt" class="w-3.5 h-3.5 text-primary-500" />
+                      Live Energy Availability
                     </h4>
-                    <ul class="space-y-1">
-                      <li
-                        v-for="point in section.analysis_points"
-                        :key="point"
-                        class="text-xs flex items-start gap-2"
-                      >
-                        <UIcon
-                          name="i-heroicons-chevron-right"
-                          class="w-3 h-3 mt-0.5 text-primary-500"
-                        />
-                        {{ point }}
-                      </li>
-                    </ul>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <UTabs
+                      v-model="energyViewIdx"
+                      :items="[
+                        { label: '%', value: '0' },
+                        { label: 'kcal', value: '1' },
+                        { label: 'carbs', value: '2' }
+                      ]"
+                      size="xs"
+                      class="w-32"
+                    />
+                    <UButton
+                      icon="i-heroicons-cog-6-tooth"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      :aria-label="t('journey_chart_settings')"
+                      @click="
+                        () => {
+                          isDetailSettingsModalOpen = true
+                        }
+                      "
+                    />
+                  </div>
+                </div>
+                <ClientOnly>
+                  <NutritionLiveEnergyChart
+                    :key="`detail-${JSON.stringify(chartSettings.detail)}`"
+                    :points="energyPoints"
+                    :ghost-points="ghostPoints"
+                    :journey-events="journeyEvents"
+                    :view-mode="energyViewMode"
+                    :settings="chartSettings.detail"
+                  />
+                </ClientOnly>
+
+                <div class="px-1">
+                  <UAlert
+                    v-if="missingPlannedStartActivities.length > 0"
+                    class="mt-4"
+                    color="warning"
+                    variant="soft"
+                    icon="i-heroicons-exclamation-triangle"
+                    :title="t('detail_missing_start_title')"
+                  >
+                    <template #description>
+                      <span v-if="missingPlannedStartActivities.length === 1">
+                        {{ t('detail_missing_start_single') }}
+                        <NuxtLink
+                          :to="`/workouts/planned/${missingPlannedStartActivities[0].id}`"
+                          class="font-bold underline hover:text-warning-600 transition-colors"
+                        >
+                          {{ missingPlannedStartActivities[0].title }}
+                        </NuxtLink>
+                      </span>
+                      <span v-else>
+                        {{
+                          t('detail_missing_start_multiple', {
+                            count: missingPlannedStartActivities.length
+                          })
+                        }}
+                        <template
+                          v-for="(activity, index) in missingPlannedStartActivities"
+                          :key="activity.id"
+                        >
+                          <NuxtLink
+                            :to="`/workouts/planned/${activity.id}`"
+                            class="font-bold underline hover:text-warning-600 transition-colors"
+                          >
+                            {{ activity.title }}
+                          </NuxtLink>
+                          <span v-if="index < missingPlannedStartActivities.length - 1">, </span>
+                        </template>
+                      </span>
+                      {{ t('detail_missing_start_footer') }}
+                    </template>
+                  </UAlert>
+                </div>
+
+                <!-- Legend/Status -->
+                <div
+                  class="flex items-center justify-between text-xs font-bold text-gray-400 px-1 mt-4"
+                >
+                  <div class="flex gap-3">
+                    <span class="flex items-center gap-1"
+                      ><span class="w-1.5 h-1.5 rounded-full bg-primary-500"></span> Actual</span
+                    >
+                    <span class="flex items-center gap-1"
+                      ><span
+                        class="w-1.5 h-1.5 rounded-full border border-primary-500 border-dashed"
+                      ></span>
+                      Predicted</span
+                    >
+                    <span v-if="ghostPoints.length > 0" class="flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 border border-purple-400 border-dashed"></span> Ghost
+                      (Rec)
+                    </span>
+                  </div>
+                  <div class="flex gap-3">
+                    <span class="flex items-center gap-1">
+                      <UIcon name="i-tabler-tools-kitchen-2" class="w-3 h-3 text-green-500" />
+                      Meal
+                    </span>
+                    <span class="flex items-center gap-1">
+                      <UIcon name="i-tabler-bike" class="w-3 h-3 text-red-500" /> Workout
+                    </span>
                   </div>
                 </div>
               </div>
-            </UCard>
-
-            <UCard
-              v-else
-              :ui="{
-                root: 'rounded-none sm:rounded-xl shadow-none sm:shadow border-x-0 sm:border-x',
-                body: 'p-4 sm:p-6'
-              }"
-              class="mt-4 sm:mt-8 overflow-hidden"
-            >
-              <template #header>
-                <div class="flex items-center justify-between">
-                  <h2 class="text-lg font-black uppercase tracking-tighter flex items-center gap-2">
-                    <UIcon name="i-heroicons-sparkles" class="w-5 h-5 text-primary-500" />
-                    {{ t('detail_coach_analysis') }}
-                  </h2>
-                </div>
-              </template>
-              <div class="flex flex-col items-center justify-center py-8 text-center space-y-4">
-                <p class="text-sm text-gray-500 dark:text-gray-400 max-w-md">
-                  {{ t('detail_analyze_empty_desc') }}
-                </p>
-                <UButton
-                  color="primary"
-                  icon="i-heroicons-sparkles"
-                  :loading="analyzingNutrition"
-                  @click="
-                    () => {
-                      void analyzeNutrition()
-                    }
-                  "
+            </div>
+          </details>
+          <details class="nutrition-journal__disclosure">
+            <summary>{{ t('detail_coach_analysis') }}</summary>
+            <div class="py-4 pb-7">
+              <!-- 3. AI INSIGHTS (Expanded Analysis) -->
+              <div class="px-0 sm:px-0">
+                <UCard
+                  v-if="nutrition.aiAnalysisJson"
+                  :ui="{
+                    root: 'rounded-none sm:rounded-xl shadow-none shadow-none border-x-0 sm:border-x',
+                    body: 'p-4 sm:p-6'
+                  }"
+                  class="mt-4 sm:mt-8 overflow-hidden border-primary-100 dark:border-primary-900 shadow-none"
                 >
-                  {{ t('detail_analyze_cta') }}
-                </UButton>
+                  <template #header>
+                    <div class="flex items-center justify-between">
+                      <h2 class="text-lg font-medium tracking-tighter flex items-center gap-2">
+                        <UIcon name="i-heroicons-sparkles" class="w-5 h-5 text-primary-500" />
+                        {{ t('detail_coach_analysis') }}
+                      </h2>
+                      <UButton
+                        variant="ghost"
+                        color="neutral"
+                        icon="i-heroicons-arrow-path"
+                        size="xs"
+                        :loading="analyzingNutrition"
+                        @click="
+                          () => {
+                            void analyzeNutrition()
+                          }
+                        "
+                        >{{ t('detail_analyze_refresh') }}</UButton
+                      >
+                    </div>
+                  </template>
+
+                  <div class="space-y-6">
+                    <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl">
+                      <p class="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                        {{ nutrition.aiAnalysisJson.executive_summary }}
+                      </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div
+                        v-for="section in nutrition.aiAnalysisJson.sections"
+                        :key="section.title"
+                        class="space-y-2"
+                      >
+                        <h4 class="text-xs font-medium text-gray-400">
+                          {{ section.title }}
+                        </h4>
+                        <ul class="space-y-1">
+                          <li
+                            v-for="point in section.analysis_points"
+                            :key="point"
+                            class="text-xs flex items-start gap-2"
+                          >
+                            <UIcon
+                              name="i-heroicons-chevron-right"
+                              class="w-3 h-3 mt-0.5 text-primary-500"
+                            />
+                            {{ point }}
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </UCard>
+
+                <UCard
+                  v-else
+                  :ui="{
+                    root: 'rounded-none sm:rounded-xl shadow-none shadow-none border-x-0 sm:border-x',
+                    body: 'p-4 sm:p-6'
+                  }"
+                  class="mt-4 sm:mt-8 overflow-hidden"
+                >
+                  <template #header>
+                    <div class="flex items-center justify-between">
+                      <h2 class="text-lg font-medium tracking-tighter flex items-center gap-2">
+                        <UIcon name="i-heroicons-sparkles" class="w-5 h-5 text-primary-500" />
+                        {{ t('detail_coach_analysis') }}
+                      </h2>
+                    </div>
+                  </template>
+                  <div class="flex flex-col items-center justify-center py-8 text-center space-y-4">
+                    <p class="text-sm text-gray-500 dark:text-gray-400 max-w-md">
+                      {{ t('detail_analyze_empty_desc') }}
+                    </p>
+                    <UButton
+                      color="primary"
+                      icon="i-heroicons-sparkles"
+                      :loading="analyzingNutrition"
+                      @click="
+                        () => {
+                          void analyzeNutrition()
+                        }
+                      "
+                    >
+                      {{ t('detail_analyze_cta') }}
+                    </UButton>
+                  </div>
+                </UCard>
               </div>
-            </UCard>
-          </div>
-
-          <!-- 4. MANUAL NOTES -->
-          <div class="px-4 sm:px-0">
-            <NotesEditor
-              v-model="nutrition.notes"
-              :notes-updated-at="nutrition.notesUpdatedAt"
-              :api-endpoint="`/api/nutrition/${nutritionApiId}/notes`"
-              @update:notes-updated-at="nutrition.notesUpdatedAt = $event"
-            />
-          </div>
-        </div>
-
+            </div>
+          </details>
+          <details class="nutrition-journal__disclosure">
+            <summary>{{ t('journey_day_notes') }}</summary>
+            <div class="py-4 pb-7">
+              <NotesEditor
+                v-model="nutrition.notes"
+                :notes-updated-at="nutrition.notesUpdatedAt"
+                :api-endpoint="`/api/nutrition/${nutritionApiId}/notes`"
+                @update:notes-updated-at="nutrition.notesUpdatedAt = $event"
+              />
+            </div>
+          </details>
+        </template>
         <NutritionFoodItemModal
           v-model:open="showItemModal"
           :nutrition-id="nutrition?.id"
@@ -572,7 +417,7 @@
 
         <NutritionDetailSettingsModal v-model:open="isDetailSettingsModalOpen" />
         <NutritionFuelingTimelineSettingsModal v-model:open="isTimelineSettingsModalOpen" />
-      </div>
+      </main>
     </template>
   </UDashboardPanel>
 </template>
@@ -598,6 +443,31 @@
   const userStore = useUserStore()
   const { formatDateUTC } = useFormat()
   const { t } = useTranslate('nutrition')
+  const detailActions = computed(() => [
+    [
+      {
+        label: t.value('detail_regenerate_plan'),
+        icon: 'i-heroicons-arrow-path',
+        onSelect: () => {
+          void handleGeneratePlan()
+        }
+      },
+      {
+        label: t.value('detail_chat_about'),
+        icon: 'i-heroicons-chat-bubble-left-right',
+        onSelect: () => {
+          void chatAboutNutrition()
+        }
+      },
+      {
+        label: t.value('journey_timeline_settings'),
+        icon: 'i-heroicons-cog-6-tooth',
+        onSelect: () => {
+          isTimelineSettingsModalOpen.value = true
+        }
+      }
+    ]
+  ])
   const { trackNutritionView, trackNutritionAnalyze, trackTabFilterChange } = useAnalytics()
   const energyViewIdx = ref('0')
 
@@ -1060,3 +930,30 @@
     trackTabFilterChange('nutrition_detail', 'energy_view', view)
   })
 </script>
+
+<style scoped>
+  .nutrition-journal {
+    width: 100%;
+    max-width: 850px;
+    padding: 2rem 1.25rem 4rem;
+    margin-inline: auto;
+  }
+  .nutrition-journal__disclosure {
+    border-top: 1px solid var(--ui-border);
+  }
+  .nutrition-journal__disclosure summary {
+    padding-block: 1.25rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+  summary:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 3px;
+  }
+  @media (min-width: 640px) {
+    .nutrition-journal {
+      padding-inline: 2rem;
+    }
+  }
+</style>

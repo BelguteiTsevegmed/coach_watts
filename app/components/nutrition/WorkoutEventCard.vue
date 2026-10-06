@@ -2,7 +2,7 @@
   <div class="workout-event-card">
     <!-- Workout Block -->
     <div
-      class="bg-white dark:bg-gray-900 rounded-xl p-4 sm:p-5 border border-gray-200 dark:border-gray-800 shadow-xl dark:shadow-2xl relative overflow-hidden group transition-colors"
+      class="bg-white dark:bg-gray-900 rounded-xl p-4 sm:p-5 border border-gray-200 dark:border-gray-800 shadow-none dark:shadow-2xl relative overflow-hidden group transition-colors"
     >
       <!-- Animated background effect -->
       <div
@@ -22,7 +22,7 @@
         <div class="space-y-1 flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             <h3
-              class="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight hover:text-primary-500 dark:hover:text-primary-400 transition-colors"
+              class="text-base font-medium text-gray-900 dark:text-white tracking-tight hover:text-primary-500 dark:hover:text-primary-400 transition-colors"
             >
               {{ workout.title }}
             </h3>
@@ -31,15 +31,13 @@
               variant="soft"
               color="primary"
               size="xs"
-              class="font-black uppercase tracking-tighter"
+              class="font-medium tracking-tighter"
             >
               {{ strategyLabel }}
             </UBadge>
           </div>
 
-          <div
-            class="flex items-center gap-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
-          >
+          <div class="flex items-center gap-3 text-xs font-bold text-gray-500 dark:text-gray-400">
             <div class="flex items-center gap-1">
               <UIcon name="i-tabler-clock" class="w-3.5 h-3.5" />
               <span>{{
@@ -87,13 +85,11 @@
               class="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 text-center min-w-[70px]"
             >
               <div
-                class="text-[8px] font-black text-gray-400 dark:text-gray-500 uppercase leading-none mb-1"
+                class="text-[8px] font-medium text-gray-400 dark:text-gray-500 leading-none mb-1"
               >
                 Start
               </div>
-              <div
-                class="text-[10px] font-bold text-gray-900 dark:text-white uppercase leading-none"
-              >
+              <div class="text-xs font-bold text-gray-900 dark:text-white leading-none">
                 {{ formatTime(startTime) }}
               </div>
             </div>
@@ -102,13 +98,13 @@
               class="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 text-center min-w-[70px]"
             >
               <div
-                class="text-[8px] font-black text-gray-400 dark:text-gray-500 uppercase leading-none mb-1"
+                class="text-[8px] font-medium text-gray-400 dark:text-gray-500 leading-none mb-1"
               >
                 Status
               </div>
               <div
                 :class="[
-                  'text-[10px] font-bold uppercase leading-none',
+                  'text-xs font-bold  leading-none',
                   isCompleted(workout)
                     ? 'text-green-600 dark:text-green-400'
                     : 'text-primary-600 dark:text-primary-400'

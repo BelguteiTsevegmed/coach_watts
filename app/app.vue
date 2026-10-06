@@ -1,7 +1,7 @@
 <script setup lang="ts">
   const colorMode = useColorMode()
 
-  const color = computed(() => (colorMode.value === 'dark' ? '#1b1718' : 'white'))
+  const color = computed(() => (colorMode.value === 'dark' ? '#152523' : '#f6f9fa'))
 
   const { isOpen, options } = useUpgradeModal()
 
@@ -18,12 +18,16 @@
     ],
     htmlAttrs: {
       lang: 'en'
+    },
+    bodyAttrs: {
+      class: 'athlete-theme'
     }
   })
 </script>
 
 <template>
   <UApp>
+    <NuxtLoadingIndicator color="var(--journey-action)" :height="2" />
     <ImpersonationBanner />
     <ClientOnly>
       <CoachingBanner />

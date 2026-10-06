@@ -1,224 +1,221 @@
 <template>
   <UModal
     v-model:open="isOpen"
-    :title="tr('daily_checkin_title', 'Daily Coach Check-In')"
+    :title="tr('daily_checkin_title', 'Daily check-in')"
     :description="
       tr(
-        'daily_checkin_description',
-        'Answer a few quick questions so your coach can adapt today\'s guidance.'
+        'journey_checkin_modal_description',
+        'A few questions, one at a time. Add anything else your coach should know at the end.'
       )
     "
   >
     <template #body>
-      <div class="space-y-4">
-        <!-- Header with Refreshing State -->
-        <div
-          v-if="isPending && localQuestions.length > 0"
-          class="flex items-center justify-center gap-2 text-primary-500 bg-primary-50 dark:bg-primary-900/10 p-2 rounded-md mb-2"
-        >
-          <UIcon name="i-heroicons-arrow-path" class="w-4 h-4 animate-spin" />
-          <span class="text-xs font-medium">{{
-            tr('daily_checkin_refreshing', 'Refreshing check-in...')
-          }}</span>
-        </div>
-
+      <div class="checkin-journey">
         <div
           v-if="loading || (isPending && localQuestions.length === 0)"
-          class="flex flex-col items-center justify-center py-8 space-y-4"
+          class="py-10 space-y-4"
+          role="status"
         >
-          <UIcon name="i-heroicons-arrow-path" class="w-10 h-10 animate-spin text-primary-500" />
-
-          <div class="h-6 relative w-full text-center">
-            <Transition
-              mode="out-in"
-              enter-active-class="transition duration-300 ease-out"
-              enter-from-class="transform translate-y-2 opacity-0"
-              enter-to-class="transform translate-y-0 opacity-100"
-              leave-active-class="transition duration-300 ease-in"
-              leave-from-class="transform translate-y-0 opacity-100"
-              leave-to-class="transform -translate-y-2 opacity-0"
-            >
-              <p :key="currentLoadingMessage" class="text-sm text-gray-500 absolute w-full left-0">
-                {{ currentLoadingMessage }}
-              </p>
-            </Transition>
-          </div>
-
-          <UButton
-            v-if="showManualRefresh"
-            :label="tr('daily_checkin_retry_label', 'Taking too long? Click to retry')"
-            variant="link"
-            size="xs"
-            color="neutral"
-            @click="
-              () => {
-                void fetchToday()
-              }
-            "
-          />
-        </div>
-
-        <div v-else-if="error || checkin?.status === 'FAILED'" class="text-center py-8">
-          <UIcon
-            name="i-heroicons-exclamation-circle"
-            class="w-10 h-10 text-red-500 mx-auto mb-2"
-          />
-          <p class="text-red-500">
+          <UIcon name="i-heroicons-arrow-path" class="size-5 animate-spin text-primary" />
+          <p class="text-sm text-muted">
+            {{ tr('journey_checkin_preparing', 'Preparing your check-in…') }}
+          </p>
+          <p v-if="showManualRefresh" class="text-sm text-muted leading-relaxed">
             {{
-              error || checkin?.error || tr('daily_checkin_generation_failed', 'Generation failed')
+              tr(
+                'journey_checkin_slow',
+                'This is taking longer than usual. You can close this window and return later.'
+              )
             }}
           </p>
-          <UButton
-            :label="tr('daily_checkin_try_again', 'Try Again')"
-            color="error"
-            variant="soft"
-            class="mt-4"
-            @click="
-              () => {
-                void generate(true)
-              }
-            "
-          />
+          <UButton v-if="showManualRefresh" color="neutral" variant="link" @click="fetchToday()">{{
+            tr('daily_checkin_retry_label', 'Try loading again')
+          }}</UButton>
+        </div>
+        <div v-else-if="error || checkin?.status === 'FAILED'" class="py-6">
+          <p role="alert" class="text-sm leading-relaxed">
+            {{
+              error ||
+              checkin?.error ||
+              tr('daily_checkin_generation_failed', 'Your check-in could not load.')
+            }}
+          </p>
+          <UButton color="primary" class="mt-5" @click="generate(true)">{{
+            tr('daily_checkin_try_again', 'Try again')
+          }}</UButton>
+        </div>
+        <template v-else-if="localQuestions.length">
+          <p v-if="checkin?.date" class="text-sm text-muted mb-6">
+            {{ formatDateUTC(checkin.date, 'EEEE, MMM d') }}
+          </p>
+          <p v-if="isPending" class="mb-4 text-sm text-muted" role="status">
+            {{ tr('daily_checkin_refreshing', 'Refreshing check-in…') }}
+          </p>
+          <section v-if="currentQuestion" :key="currentQuestion.id" aria-live="polite">
+            <p class="text-sm text-muted mb-3">
+              {{
+                tr('journey_checkin_question_count', 'Question {current} of {total}', {
+                  current: questionIndex + 1,
+                  total: localQuestions.length
+                })
+              }}
+            </p>
+            <h2 ref="stepHeading" tabindex="-1" class="checkin-journey__question">
+              {{ currentQuestion.text }}
+            </h2>
+            <URadioGroup
+              v-model="answers[currentQuestion.id]"
+              :name="currentQuestion.id"
+              class="mt-7"
+              :items="[
+                { label: tr('daily_checkin_answer_yes', 'Yes'), value: 'YES' },
+                { label: tr('daily_checkin_answer_no', 'No'), value: 'NO' }
+              ]"
+            />
+            <details class="checkin-journey__disclosure mt-6">
+              <summary>{{ tr('journey_checkin_question_options', 'Question options') }}</summary>
+              <div class="flex flex-wrap gap-3 py-3">
+                <UButton
+                  v-if="answers[currentQuestion.id]"
+                  color="neutral"
+                  variant="link"
+                  size="sm"
+                  @click="clearAnswer(currentQuestion.id)"
+                  >{{ tr('journey_checkin_clear_answer', 'Clear answer') }}</UButton
+                >
+                <UButton
+                  color="neutral"
+                  variant="link"
+                  size="sm"
+                  @click="removeQuestion(currentQuestion.id)"
+                  >{{ tr('daily_checkin_remove_question', 'Remove question') }}</UButton
+                >
+              </div>
+            </details>
+            <details v-if="currentQuestion.reasoning" class="checkin-journey__disclosure mt-7">
+              <summary>{{ tr('journey_checkin_why', 'Why this question?') }}</summary>
+              <p class="text-sm text-muted leading-relaxed pt-2 pb-4">
+                {{ currentQuestion.reasoning }}
+              </p>
+            </details>
+          </section>
+          <section v-else>
+            <h2 ref="stepHeading" tabindex="-1" class="checkin-journey__question">
+              {{ tr('journey_checkin_notes_title', 'Anything else on your mind?') }}
+            </h2>
+            <p class="mt-3 text-sm text-muted leading-relaxed">
+              {{
+                tr(
+                  'journey_checkin_notes_description',
+                  'Add how you’re feeling, a change in your plans, or something your coach should consider. This is optional.'
+                )
+              }}
+            </p>
+            <UFormField
+              :label="tr('journey_checkin_notes_label', 'Your notes')"
+              name="checkin-notes"
+              class="mt-6"
+            >
+              <UTextarea
+                v-model="userNotes"
+                :rows="3"
+                autoresize
+                class="w-full"
+                :placeholder="
+                  tr(
+                    'journey_checkin_notes_placeholder',
+                    'For example, I slept poorly or have less time today.'
+                  )
+                "
+              />
+            </UFormField>
+            <details class="checkin-journey__disclosure mt-6">
+              <summary>{{ tr('journey_checkin_review', 'Review your answers') }}</summary>
+              <dl class="py-3 space-y-4">
+                <div
+                  v-for="question in localQuestions"
+                  :key="question.id"
+                  class="flex gap-4 justify-between text-sm"
+                >
+                  <dt class="text-muted">{{ question.text }}</dt>
+                  <dd class="font-medium shrink-0">
+                    {{
+                      answers[question.id] === 'YES'
+                        ? tr('daily_checkin_answer_yes', 'Yes')
+                        : answers[question.id] === 'NO'
+                          ? tr('daily_checkin_answer_no', 'No')
+                          : tr('journey_checkin_unanswered', 'Not answered')
+                    }}
+                  </dd>
+                </div>
+              </dl>
+            </details>
+            <p v-if="unansweredCount" class="mt-4 text-sm text-muted">
+              {{
+                tr(
+                  'journey_checkin_unanswered_description',
+                  'Unanswered questions stay open. You can return to them later.'
+                )
+              }}
+            </p>
+          </section>
+          <p v-if="submitError" role="alert" class="text-sm text-error mt-5">{{ submitError }}</p>
+        </template>
+        <div v-else class="py-6">
+          <p class="text-sm text-muted">
+            {{ tr('daily_checkin_no_questions', 'Your check-in has no questions yet.') }}
+          </p>
+          <UButton class="mt-5" @click="generate(true)">{{
+            tr('daily_checkin_generate', 'Prepare my check-in')
+          }}</UButton>
         </div>
 
-        <div v-else-if="localQuestions.length > 0" class="space-y-4">
-          <div
-            v-if="completedAnswersSummary.length || userNotes"
-            class="rounded-xl border border-teal-100 bg-teal-50/70 p-4 dark:border-teal-900/40 dark:bg-teal-950/20"
-          >
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <p class="text-sm font-semibold text-teal-900 dark:text-teal-100">
-                  {{ tr('daily_checkin_today_submission', "Today's submission") }}
-                </p>
-                <p class="mt-1 text-xs text-teal-800/80 dark:text-teal-200/80">
-                  {{
-                    tr(
-                      'daily_checkin_today_submission_desc',
-                      'Edit your answers here, or delete this entry if it was submitted by mistake.'
-                    )
-                  }}
-                </p>
-              </div>
+        <details v-if="!loading && !isPending" class="checkin-journey__disclosure mt-8">
+          <summary>{{ tr('journey_checkin_more', 'Earlier check-ins and options') }}</summary>
+          <div class="py-4 space-y-5">
+            <p v-if="checkin?.openingRemark" class="text-sm text-muted leading-relaxed">
+              {{ checkin.openingRemark }}
+            </p>
+            <div v-if="recentCheckins.length" class="divide-y divide-default">
+              <button
+                v-for="entry in recentCheckins"
+                :key="entry.id"
+                type="button"
+                class="w-full py-3 text-left"
+                @click="loadCheckinIntoEditor(entry)"
+              >
+                <span class="block text-sm font-medium">{{
+                  formatDateUTC(entry.date, 'EEE, MMM d')
+                }}</span>
+                <span class="block mt-1 text-xs text-muted">{{
+                  summarizeCheckin(entry).slice(0, 2).join('. ') ||
+                  tr('daily_checkin_no_answers', 'No answers saved')
+                }}</span>
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-3">
+              <UButton
+                color="neutral"
+                variant="outline"
+                @click="
+                  handleLockedAction({
+                    operation: 'daily_checkin',
+                    featureTitle: 'Daily check-in',
+                    onAllowed: () => generate(true)
+                  })
+                "
+                >{{ tr('daily_checkin_regenerate', 'Refresh questions') }}</UButton
+              >
               <UButton
                 v-if="checkin?.id && checkin?.status === 'COMPLETED'"
                 color="error"
-                variant="ghost"
-                size="xs"
-                icon="i-lucide-trash"
+                variant="link"
                 :loading="deleting"
-                @click="
-                  () => {
-                    void deleteCheckin()
-                  }
-                "
+                @click="deleteCheckin"
+                >{{ tr('daily_checkin_delete', 'Delete check-in') }}</UButton
               >
-                {{ tr('daily_checkin_delete', 'Delete') }}
-              </UButton>
             </div>
-            <ul
-              v-if="completedAnswersSummary.length"
-              class="mt-3 space-y-1 text-sm text-teal-900 dark:text-teal-100"
-            >
-              <li v-for="entry in completedAnswersSummary" :key="entry">{{ entry }}</li>
-            </ul>
-            <p v-if="userNotes" class="mt-3 text-sm text-teal-900 dark:text-teal-100">
-              {{ tr('daily_checkin_notes_prefix', 'Notes:') }} {{ userNotes }}
-            </p>
-          </div>
-
-          <div
-            v-if="checkin?.openingRemark"
-            class="text-sm text-gray-700 dark:text-gray-200 bg-primary-50/50 dark:bg-primary-900/10 p-4 rounded-lg border border-primary-100 dark:border-primary-800 flex gap-3 items-start shadow-sm"
-          >
-            <UIcon
-              name="i-heroicons-chat-bubble-bottom-center-text"
-              class="w-6 h-6 text-primary-500 shrink-0 mt-0.5"
-            />
-            <div class="italic leading-relaxed">
-              {{ checkin.openingRemark }}
-            </div>
-          </div>
-
-          <UCard
-            v-for="q in localQuestions"
-            :key="q.id"
-            :ui="{ body: 'p-3 sm:p-6' }"
-            class="cursor-pointer transition-all hover:ring-2 hover:ring-primary-500/20"
-            :class="{ 'ring-2 ring-primary-500/10': isExpanded(q.id) }"
-            @click="
-              () => {
-                void toggleExpand(q.id)
-              }
-            "
-          >
-            <div class="flex items-start justify-between gap-3">
-              <label
-                class="text-sm font-medium text-gray-900 dark:text-white block flex-1 cursor-pointer"
-              >
-                {{ q.text }}
-              </label>
-              <UButton
-                icon="i-heroicons-trash"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                class="-mr-1 -mt-1"
-                :aria-label="tr('daily_checkin_remove_question', 'Remove question')"
-                @click.stop="removeQuestion(q.id)"
-              />
-            </div>
-
-            <!-- Expanded Reasoning -->
-            <div
-              v-if="isExpanded(q.id)"
-              class="mt-3 text-sm text-gray-600 dark:text-gray-400 bg-gray-100/50 dark:bg-gray-800/50 p-3 rounded-md flex gap-2.5 items-start border border-gray-100 dark:border-gray-800"
-            >
-              <UIcon name="i-heroicons-light-bulb" class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <div class="flex-1 leading-relaxed">
-                <span class="font-medium text-gray-900 dark:text-gray-200 block mb-0.5">
-                  {{ tr('daily_checkin_coach_reasoning', "Coach's Reasoning") }}
-                </span>
-                {{ q.reasoning }}
-              </div>
-            </div>
-
-            <div class="mt-3 flex justify-end" @click.stop>
-              <URadioGroup
-                v-model="answers[q.id]"
-                :name="q.id"
-                orientation="horizontal"
-                :items="[
-                  { label: tr('daily_checkin_answer_yes', 'Yes'), value: 'YES' },
-                  { label: tr('daily_checkin_answer_no', 'No'), value: 'NO' }
-                ]"
-              />
-            </div>
-          </UCard>
-
-          <!-- User Notes -->
-          <UCard :ui="{ body: 'p-3 sm:p-6' }">
-            <div class="space-y-3">
-              <label class="text-sm font-medium text-gray-900 dark:text-white block">
-                {{ tr('daily_checkin_share_label', 'Do you have anything to share?') }}
-              </label>
-              <UTextarea
-                v-model="userNotes"
-                :placeholder="
-                  tr(
-                    'daily_checkin_share_placeholder',
-                    'E.g., I feel tired today, I think I have the flu, etc.'
-                  )
-                "
-                :rows="4"
-                autoresize
-                class="w-full"
-              />
-            </div>
-          </UCard>
-
-          <!-- AI Feedback Section -->
-          <div class="flex justify-end pt-2">
+            <QuotaMeter operation="daily_checkin" />
             <AiFeedback
               v-if="checkin?.llmUsageId"
               :llm-usage-id="checkin.llmUsageId"
@@ -226,161 +223,40 @@
               :initial-feedback-text="checkin.feedbackText"
             />
           </div>
-        </div>
-
-        <div v-else class="text-center py-8">
-          <p class="text-gray-500">
-            {{ tr('daily_checkin_no_questions', 'No questions available.') }}
-          </p>
-          <UButton
-            :label="tr('daily_checkin_generate', 'Generate')"
-            color="primary"
-            class="mt-4"
-            @click="
-              () => {
-                void generate(true)
-              }
-            "
-          />
-        </div>
-
-        <div
-          v-if="recentCheckins.length"
-          class="rounded-xl border border-gray-200 p-4 dark:border-gray-800"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <div>
-              <p class="text-[10px] font-black uppercase tracking-[0.24em] text-gray-400">
-                {{ tr('daily_checkin_recent_header', 'Recent Check-ins') }}
-              </p>
-              <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                {{
-                  tr(
-                    'daily_checkin_recent_desc',
-                    'Your last submitted check-ins stay visible here so they are not write-only.'
-                  )
-                }}
-              </p>
-            </div>
-            <UButton
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :icon="showRecentCheckins ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-              @click="
-                () => {
-                  showRecentCheckins = !showRecentCheckins
-                }
-              "
-            >
-              {{
-                showRecentCheckins
-                  ? tr('daily_checkin_hide', 'Hide')
-                  : tr('daily_checkin_show', 'Show')
-              }}
-            </UButton>
-          </div>
-          <div v-if="showRecentCheckins" class="mt-4 space-y-3">
-            <button
-              v-for="entry in recentCheckins"
-              :key="entry.id"
-              type="button"
-              class="w-full rounded-xl border border-gray-200 px-4 py-3 text-left transition hover:border-primary-300 dark:border-gray-800"
-              @click="
-                () => {
-                  void loadCheckinIntoEditor(entry)
-                }
-              "
-            >
-              <div class="flex items-center justify-between gap-2">
-                <p class="text-sm font-medium text-gray-900 dark:text-white">
-                  {{ formatDateUTC(entry.date, 'EEE, MMM d') }}
-                </p>
-                <span class="text-[10px] uppercase tracking-widest text-gray-400">
-                  {{
-                    tr('daily_checkin_answers_count', '{count} answers', {
-                      count: summarizeCheckin(entry).length
-                    })
-                  }}
-                </span>
-              </div>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {{
-                  summarizeCheckin(entry).slice(0, 2).join(' • ') ||
-                  tr('daily_checkin_no_answers', 'No answers captured')
-                }}
-              </p>
-            </button>
-          </div>
-        </div>
+        </details>
       </div>
     </template>
-
     <template #footer>
-      <div class="flex flex-col gap-3 w-full">
-        <QuotaMeter operation="daily_checkin" />
-        <div class="flex justify-between w-full items-center gap-2">
-          <div class="flex items-center gap-2">
-            <UButton
-              v-if="!loading && !isPending"
-              :label="tr('daily_checkin_regenerate', 'Regenerate')"
-              color="neutral"
-              variant="ghost"
-              :icon="isCheckinLocked ? 'i-heroicons-lock-closed' : 'i-heroicons-arrow-path'"
-              @click="
-                () => {
-                  void handleLockedAction({
-                    operation: 'daily_checkin',
-                    featureTitle: 'Daily Coach Check-In',
-                    onAllowed: () => generate(true)
-                  })
-                }
-              "
-            />
-            <UBadge
-              v-if="isCheckinLocked"
-              color="warning"
-              variant="subtle"
-              size="xs"
-              class="shrink-0 uppercase tracking-wide font-bold"
-            >
-              {{ lockedTierLabel }}
-            </UBadge>
-            <UBadge
-              v-else-if="checkinRemainingLabel"
-              color="neutral"
-              variant="subtle"
-              size="xs"
-              class="shrink-0 uppercase tracking-wide font-bold"
-            >
-              {{ checkinRemainingLabel }}
-            </UBadge>
-          </div>
-          <div class="flex gap-2 ml-auto">
-            <UButton
-              color="neutral"
-              variant="outline"
-              @click="
-                () => {
-                  isOpen = false
-                }
-              "
-            >
-              {{ tr('daily_checkin_close', 'Close') }}
-            </UButton>
-            <UButton
-              v-if="localQuestions.length > 0"
-              :label="tr('daily_checkin_save', 'Save Answers')"
-              color="primary"
-              :loading="submitting"
-              @click="
-                () => {
-                  void submit()
-                }
-              "
-            />
-          </div>
-        </div>
+      <div class="flex w-full items-center justify-between gap-3">
+        <UButton
+          v-if="questionIndex > 0 && localQuestions.length && !loading"
+          color="neutral"
+          variant="ghost"
+          :disabled="submitting"
+          @click="previousStep"
+          >{{ tr('journey_checkin_back', 'Back') }}</UButton
+        >
+        <UButton
+          v-else
+          color="neutral"
+          variant="ghost"
+          @click="
+            () => {
+              isOpen = false
+            }
+          "
+          >{{ tr('daily_checkin_close', 'Close') }}</UButton
+        >
+        <UButton v-if="currentQuestion && !loading && !error" @click="continueCheckin">{{
+          tr('journey_checkin_next', 'Next')
+        }}</UButton>
+        <UButton
+          v-else-if="localQuestions.length && !loading && !error"
+          :disabled="!canSave"
+          :loading="submitting"
+          @click="submit"
+          >{{ tr('daily_checkin_save', 'Save check-in') }}</UButton
+        >
       </div>
     </template>
   </UModal>
@@ -416,36 +292,58 @@
   const answers = ref<Record<string, string>>({})
   const userNotes = ref('')
   const localQuestions = ref<any[]>([])
-  const expandedQuestions = ref<Set<string>>(new Set())
+  const questionIndex = ref(0)
+  const stepHeading = ref<HTMLElement | null>(null)
+  const submitError = ref<string | null>(null)
+  const currentQuestion = computed(() => localQuestions.value[questionIndex.value] ?? null)
+  const canSave = computed(() => localQuestions.value.length > 0)
+  const unansweredCount = computed(
+    () => localQuestions.value.filter((question) => !answers.value[question.id]).length
+  )
+
+  function moveToFirstUnanswered() {
+    const unanswered = localQuestions.value.findIndex((question) => !answers.value[question.id])
+    questionIndex.value = unanswered < 0 ? localQuestions.value.length : unanswered
+  }
+
+  function continueCheckin() {
+    if (currentQuestion.value) questionIndex.value += 1
+  }
+
+  function previousStep() {
+    questionIndex.value = Math.max(0, questionIndex.value - 1)
+  }
+
+  function clearAnswer(id: string) {
+    const remainingAnswers = { ...answers.value }
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    delete remainingAnswers[id]
+    answers.value = remainingAnswers
+  }
+
+  function removeQuestion(id: string) {
+    localQuestions.value = localQuestions.value.filter((question) => question.id !== id)
+    clearAnswer(id)
+    questionIndex.value = Math.min(questionIndex.value, localQuestions.value.length)
+    void nextTick().then(() => stepHeading.value?.focus())
+  }
+
+  watch(questionIndex, async () => {
+    await nextTick()
+    stepHeading.value?.focus()
+  })
   const recentCheckins = ref<any[]>([])
-  const showRecentCheckins = ref(false)
   const deleting = ref(false)
-  const { showQuotaPaywall, handleLockedAction, useOperationLockState } = useQuotaPaywall()
-  const {
-    locked: isCheckinLocked,
-    lockedTierLabel,
-    remainingLabel: checkinRemainingLabel
-  } = useOperationLockState('daily_checkin')
+  const { showQuotaPaywall, handleLockedAction } = useQuotaPaywall()
   const toast = useToast()
   const { formatDateUTC } = useFormat()
   const { trackDailyCheckinStart, trackDailyCheckinComplete } = useAnalytics()
 
-  const {
-    message: currentLoadingMessage,
-    start: startMessages,
-    stop: stopMessages
-  } = useLoadingMessages('daily-checkin')
+  const { start: startMessages, stop: stopMessages } = useLoadingMessages('daily-checkin')
 
   const isPending = computed(() => {
     return checkin.value?.status === 'PENDING' || checkin.value?.status === 'PROCESSING'
   })
-  const completedAnswersSummary = computed(() =>
-    summarizeCheckin({
-      questions: localQuestions.value,
-      userNotes: userNotes.value
-    })
-  )
-
   watch(
     () => loading.value || (isPending.value && localQuestions.value.length === 0),
     (busy) => {
@@ -491,28 +389,6 @@
     }
   )
 
-  function isExpanded(id: string) {
-    return expandedQuestions.value.has(id)
-  }
-
-  function toggleExpand(id: string) {
-    if (expandedQuestions.value.has(id)) {
-      expandedQuestions.value.delete(id)
-    } else {
-      expandedQuestions.value.add(id)
-    }
-  }
-
-  function removeQuestion(id: string) {
-    localQuestions.value = localQuestions.value.filter((q) => q.id !== id)
-    if (answers.value[id]) {
-      const newAnswers = { ...answers.value }
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-      delete newAnswers[id]
-      answers.value = newAnswers
-    }
-  }
-
   // Background Task Monitoring
   const { refresh: refreshRuns } = useUserRuns()
   const { onTaskCompleted, onTaskFailed } = useUserRunsState()
@@ -551,7 +427,9 @@
       error.value = null
       const data = (await ($fetch as any)('/api/checkin/today')) as any
       if (data) {
+        const changedCheckin = checkin.value?.id !== data.id
         checkin.value = data
+        if (changedCheckin) answers.value = {}
 
         // Populate questions if available (stale-while-revalidate)
         if (data.questions && data.questions.length > 0) {
@@ -566,6 +444,7 @@
           data.questions.forEach((q: any) => {
             if (q.answer) answers.value[q.id] = q.answer
           })
+          if (!silent || changedCheckin) moveToFirstUnanswered()
         }
       } else if (!silent) {
         // Generate if not found
@@ -599,6 +478,7 @@
       })) as any
       checkin.value = data
 
+      if (force) answers.value = {}
       if (data.status === 'COMPLETED') {
         localQuestions.value = data.questions || []
       } else {
@@ -610,6 +490,8 @@
         }
       }
       userNotes.value = ''
+      questionIndex.value = 0
+      submitError.value = null
 
       refreshRuns()
     } catch (e: any) {
@@ -637,6 +519,7 @@
     if (!checkin.value) return
     try {
       submitting.value = true
+      submitError.value = null
       // Only send answers for remaining questions
       const filteredAnswers: Record<string, string> = {}
       localQuestions.value.forEach((q) => {
@@ -660,7 +543,13 @@
       emit('update:open', false)
       // Maybe toast success?
     } catch (e: any) {
-      // error
+      submitError.value =
+        e?.data?.message ||
+        e?.message ||
+        tr(
+          'journey_checkin_save_error',
+          'Your check-in could not be saved. Your answers are still here; try again.'
+        )
     } finally {
       submitting.value = false
     }
@@ -671,14 +560,22 @@
     (isOpen) => {
       if (isOpen) {
         trackDailyCheckinStart()
+        submitError.value = null
         fetchToday()
         fetchHistory()
       } else {
         pausePoll()
         stopMessages()
       }
-    }
+    },
+    { immediate: true }
   )
+
+  onBeforeUnmount(() => {
+    pausePoll()
+    stopMessages()
+    if (refreshTimer) clearTimeout(refreshTimer)
+  })
 
   function summarizeCheckin(entry: any) {
     const questions = entry?.questions || []
@@ -697,6 +594,8 @@
         answers.value[question.id] = question.answer
       }
     }
+    moveToFirstUnanswered()
+    submitError.value = null
   }
 
   async function deleteCheckin() {
@@ -728,3 +627,29 @@
     }
   }
 </script>
+
+<style scoped>
+  .checkin-journey__question {
+    font-size: 1.4rem;
+    font-weight: 500;
+    line-height: 1.45;
+    letter-spacing: -0.02em;
+  }
+  .checkin-journey__question:focus {
+    outline: none;
+  }
+  .checkin-journey__disclosure {
+    border-top: 1px solid var(--ui-border);
+  }
+  .checkin-journey__disclosure summary {
+    padding-block: 1rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--ui-text-muted);
+  }
+  .checkin-journey__disclosure summary:focus-visible,
+  .checkin-journey__disclosure button:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 3px;
+  }
+</style>

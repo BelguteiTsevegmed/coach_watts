@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="workout-detail" :ui="{ body: 'p-0' }">
     <template #header>
-      <UDashboardNavbar :title="workout ? `Workout: ${workout.title}` : t('details_title')">
+      <UDashboardNavbar :ui="{ title: 'hidden' }">
         <template #leading>
           <UButton
             icon="i-heroicons-arrow-left"
@@ -20,7 +20,8 @@
             icon="i-heroicons-arrow-left"
             color="neutral"
             variant="ghost"
-            class="sm:hidden"
+            class="sm:hidden min-h-11 min-w-11"
+            :aria-label="t('back_to_data')"
             @click="
               () => {
                 void goBack()
@@ -36,82 +37,19 @@
                 <DashboardTriggerMonitorButton />
               </ClientOnly>
             </div>
-            <UButton
-              icon="i-heroicons-adjustments-horizontal"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="hidden sm:inline-flex"
-              @click="
-                () => {
-                  isWorkoutSectionsModalOpen = true
-                }
-              "
-            >
-              <span>{{ t('controls_customize') }}</span>
-            </UButton>
-            <UButton
-              icon="i-heroicons-share"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="hidden sm:flex"
-              @click="
-                () => {
-                  isShareModalOpen = true
-                }
-              "
-            >
-              <span>{{ t('controls_share') }}</span>
-            </UButton>
-            <UButton
-              v-if="workout"
-              :icon="
-                isWorkoutInComparison(workout.id) ? 'i-lucide-check' : 'i-lucide-git-compare-arrows'
-              "
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="hidden sm:inline-flex font-bold"
-              @click="
-                () => {
-                  void toggleWorkoutComparison()
-                }
-              "
-            >
-              <span>{{
-                isWorkoutInComparison(workout.id) ? 'In Comparison' : 'Add to Comparison'
-              }}</span>
-            </UButton>
-            <UButton
-              v-if="workout"
-              icon="i-heroicons-bookmark"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="hidden sm:inline-flex font-bold"
-              :loading="savingToLibrary"
-              @click="
-                () => {
-                  void saveToLibrary()
-                }
-              "
-            >
-              <span>Save to Library</span>
-            </UButton>
             <UDropdownMenu
+              v-if="workout"
               :items="[
                 [
                   {
-                    label: 'Save to Library',
+                    label: savingToLibrary ? 'Saving to library…' : 'Save to library',
+                    disabled: savingToLibrary,
                     icon: 'i-heroicons-bookmark',
-                    class: 'sm:hidden',
                     onSelect: () => saveToLibrary()
                   },
                   {
                     label: t('controls_customize'),
                     icon: 'i-heroicons-adjustments-horizontal',
-                    class: 'sm:hidden',
                     onSelect: () => (isWorkoutSectionsModalOpen = true)
                   },
                   {
@@ -131,6 +69,18 @@
                     onSelect: () => (isEditModalOpen = true)
                   },
                   {
+                    label: 'Manage tags',
+                    icon: 'i-heroicons-hashtag',
+                    onSelect: () => {
+                      showTagEditor = !showTagEditor
+                    }
+                  },
+                  {
+                    label: t('map_analysis'),
+                    icon: 'i-heroicons-map',
+                    onSelect: () => navigateTo(`/workouts/${route.params.id}/map`)
+                  },
+                  {
                     label: 'Debug Intervals',
                     icon: 'i-heroicons-cpu-chip',
                     onSelect: () => navigateTo(`/workouts/${route.params.id}/intervals`)
@@ -138,7 +88,6 @@
                   {
                     label: t('controls_share'),
                     icon: 'i-heroicons-share',
-                    class: 'sm:hidden',
                     onSelect: () => (isShareModalOpen = true)
                   }
                 ],
@@ -156,1215 +105,167 @@
                 icon="i-heroicons-ellipsis-horizontal"
                 color="neutral"
                 variant="outline"
-                size="sm"
-              />
+                size="md"
+                aria-label="More workout actions"
+              >
+                {{ t('journey_more') }}
+              </UButton>
             </UDropdownMenu>
             <UButton
+              v-if="workout"
               icon="i-heroicons-chat-bubble-left-right"
-              color="primary"
-              variant="solid"
-              size="sm"
-              class="font-bold"
+              color="neutral"
+              variant="ghost"
+              size="md"
               @click="
                 () => {
                   void chatAboutWorkout()
                 }
               "
             >
-              <span class="hidden sm:inline">{{ t('controls_chat_about') }}</span>
+              <span class="hidden sm:inline">{{ t('journey_ask_coach') }}</span>
               <span class="sm:hidden">{{ t('controls_chat') }}</span>
             </UButton>
           </div>
         </template>
       </UDashboardNavbar>
 
-      <UDashboardToolbar>
-        <div
-          class="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
+      <UDashboardToolbar v-if="workout && !loading">
+        <nav class="flex items-center gap-1" :aria-label="t('journey_views')">
           <UButton
-            v-for="section in workoutNavSections"
-            :key="section.key"
-            variant="ghost"
-            color="neutral"
-            size="sm"
-            class="shrink-0 whitespace-nowrap px-3 sm:px-4"
-            :aria-label="section.label"
-            @click="
-              () => {
-                void scrollToSection(section.anchorId)
-              }
-            "
+            v-for="view in workoutJourneyViews"
+            :key="view.value"
+            :variant="workoutJourneyView === view.value ? 'soft' : 'ghost'"
+            :color="workoutJourneyView === view.value ? 'primary' : 'neutral'"
+            size="md"
+            class="min-h-11 px-4"
+            :aria-pressed="workoutJourneyView === view.value"
+            @click="selectWorkoutJourneyView(view.value)"
           >
-            <UIcon :name="section.icon" class="h-4 w-4 sm:mr-2" />
-            <span class="hidden sm:inline">{{ section.label }}</span>
+            {{ view.label }}
           </UButton>
-        </div>
+        </nav>
       </UDashboardToolbar>
     </template>
 
     <template #body>
       <div
-        class="max-w-5xl mx-auto w-full p-0 sm:p-6 pb-24 space-y-0 sm:space-y-8 overflow-x-hidden"
+        class="session-page max-w-4xl mx-auto w-full px-5 py-6 sm:px-8 sm:py-10 pb-24 space-y-8 sm:space-y-10 overflow-x-hidden"
       >
-        <!-- DESKTOP COMMAND CENTER HUD (hidden sm:block) -->
-        <div v-if="workout && !loading" class="hidden sm:flex flex-col gap-6">
-          <!-- TOP SECTION: TITLE, MAP & ACTIONS -->
-          <div
-            class="relative overflow-hidden rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-white/5 p-8 flex flex-col gap-6 group/header shadow-sm dark:shadow-2xl"
+        <section v-if="workout && !loading" class="session-intro" aria-labelledby="session-title">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <p class="text-sm text-muted">
+              {{ formatDateWeekday(workout.date) }}, {{ formatDatePrimary(workout.date) }}
+              <span class="ml-2">{{ formatTimeOnly(workout.date) }}</span>
+            </p>
+            <div class="flex items-center gap-1">
+              <UButton
+                icon="i-heroicons-chevron-left"
+                color="neutral"
+                variant="ghost"
+                class="min-h-11 min-w-11"
+                :aria-label="t('journey_previous')"
+                @click="navigateDate(-1)"
+              />
+              <UButton
+                icon="i-heroicons-chevron-right"
+                color="neutral"
+                variant="ghost"
+                class="min-h-11 min-w-11"
+                :aria-label="t('journey_next')"
+                @click="navigateDate(1)"
+              />
+            </div>
+          </div>
+          <h1
+            id="session-title"
+            class="mt-4 text-3xl sm:text-4xl font-semibold tracking-tight break-words"
           >
-            <!-- GHOST BACKGROUND ROUTE -->
-            <UiWorkoutRoutePreview
-              v-if="workout.summaryPolyline"
-              :polyline="workout.summaryPolyline"
-              mode="background"
-              class="opacity-[0.05] group-hover/header:opacity-[0.15] z-0 transition-opacity duration-700"
+            {{ workout.title }}
+          </h1>
+          <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted">
+            <span class="inline-flex items-center gap-2">
+              <UIcon :name="getWorkoutIcon(workout.type)" class="h-4 w-4" />
+              {{ workout.type || t('journey_activity') }}
+            </span>
+            <span v-if="workout.durationSec != null">{{
+              formatDuration(workout.durationSec)
+            }}</span>
+            <span v-if="workout.distanceMeters">{{ formatDistance(workout.distanceMeters) }}</span>
+            <span v-if="workout.tss || workout.trainingLoad">
+              {{ Math.round(workout.tss || workout.trainingLoad) }} {{ t('metrics_tss') }}
+            </span>
+            <UiDataAttribution
+              v-if="
+                [
+                  'strava',
+                  'garmin',
+                  'zwift',
+                  'apple_health',
+                  'whoop',
+                  'intervals',
+                  'withings',
+                  'hevy',
+                  'wahoo',
+                  'rouvy',
+                  'fit_file'
+                ].includes(workout.source)
+              "
+              :provider="workout.source"
+              :device-name="workout.deviceName"
+              :fallback-label="getWorkoutSourceLabel(workout, t)"
+              mode="minimal"
             />
-
-            <!-- SCRIM -->
-            <div
-              class="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent dark:from-gray-900 dark:via-gray-900/80 dark:to-transparent z-[1] pointer-events-none"
-            />
-
-            <div class="relative z-10 flex items-start justify-between">
-              <div class="flex flex-col gap-4 max-w-2xl">
-                <!-- Date & Nav -->
-                <div class="flex items-center gap-4">
-                  <div class="flex flex-col">
-                    <span
-                      class="font-mono text-[10px] text-primary-500 uppercase tracking-[0.4em] font-black"
-                    >
-                      {{ formatDateWeekday(workout.date) }}
-                    </span>
-                    <span
-                      class="font-mono text-xs text-zinc-500 uppercase tracking-widest font-black"
-                    >
-                      {{ formatDatePrimary(workout.date) }}
-                    </span>
-                    <span class="font-mono text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-                      {{ formatTimeOnly(workout.date) }}
-                    </span>
-                  </div>
-                  <div class="h-8 w-px bg-gray-200 dark:bg-white/10" />
-                  <div class="flex items-center gap-2">
-                    <UButton
-                      icon="i-heroicons-chevron-left"
-                      color="neutral"
-                      variant="subtle"
-                      size="xs"
-                      class="rounded-lg bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 hover:bg-gray-200 dark:hover:bg-white/10"
-                      @click="
-                        () => {
-                          void navigateDate(-1)
-                        }
-                      "
-                    />
-                    <UButton
-                      icon="i-heroicons-chevron-right"
-                      color="neutral"
-                      variant="subtle"
-                      size="xs"
-                      class="rounded-lg bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 hover:bg-gray-200 dark:hover:bg-white/10"
-                      @click="
-                        () => {
-                          void navigateDate(1)
-                        }
-                      "
-                    />
-
-                    <!-- Data Attribution (Desktop) -->
-                    <div
-                      class="ml-2 opacity-40 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300 scale-90 origin-left"
-                    >
-                      <UiDataAttribution
-                        v-if="
-                          [
-                            'strava',
-                            'garmin',
-                            'zwift',
-                            'apple_health',
-                            'whoop',
-                            'intervals',
-                            'withings',
-                            'hevy',
-                            'wahoo',
-                            'rouvy',
-                            'fit_file'
-                          ].includes(workout.source)
-                        "
-                        :provider="workout.source"
-                        :device-name="workout.deviceName"
-                        :fallback-label="getWorkoutSourceLabel(workout, t)"
-                        mode="minimal"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Title & Achievements -->
-                <div class="flex flex-col gap-3">
-                  <div class="flex items-center gap-6">
-                    <h1
-                      class="font-black uppercase tracking-tighter text-gray-900 dark:text-white leading-none drop-shadow-2xl transition-all duration-500"
-                      :class="[
-                        workout.title.length > 25 ? 'text-2xl lg:text-3xl' : 'text-3xl lg:text-5xl'
-                      ]"
-                    >
-                      {{ workout.title }}
-                    </h1>
-
-                    <!-- Personal Best Badges -->
-                    <div v-if="achievements.length > 0" class="flex items-center gap-2">
-                      <template v-for="pb in achievements" :key="pb.type">
-                        <UTooltip
-                          :text="`${pb.label}: ${pb.displayValue}${pb.unit === 's' ? '' : pb.unit}`"
-                        >
-                          <div
-                            class="flex items-center gap-1.5 bg-yellow-500/10 text-yellow-500 px-2.5 py-1 rounded-full border border-yellow-500/20 font-black text-[10px] tracking-widest uppercase animate-pulse-slow"
-                          >
-                            <UIcon name="i-heroicons-trophy" class="w-3 h-3" />
-                            {{ pb.label }}
-                          </div>
-                        </UTooltip>
-                      </template>
-                    </div>
-                  </div>
-
-                  <!-- Meta Info & Tags Trigger -->
-                  <div
-                    class="flex items-center gap-4 font-mono text-[10px] text-zinc-500 uppercase tracking-[0.2em]"
-                  >
-                    <div class="flex items-center gap-2">
-                      <UIcon
-                        :name="getWorkoutIcon(workout.type)"
-                        class="w-4 h-4"
-                        :class="getWorkoutColorClass(workout.type)"
-                      />
-                      <span>{{ workout.type || 'Activity' }}</span>
-                    </div>
-                    <span class="opacity-30">•</span>
-                    <div class="flex items-center gap-1">
-                      <span class="i-heroicons-clock w-3.5 h-3.5 opacity-50" />
-                      {{ formatDuration(workout.durationSec) }}
-                    </div>
-
-                    <!-- Device Name (Desktop) -->
-                    <template v-if="workout.deviceName">
-                      <span class="opacity-30">•</span>
-                      <div class="flex items-center gap-1">
-                        <UIcon name="i-heroicons-cpu-chip" class="w-3.5 h-3.5 opacity-50" />
-                        <span class="truncate max-w-[150px]">{{ workout.deviceName }}</span>
-                      </div>
-                    </template>
-
-                    <span class="opacity-30">•</span>
-                    <UButton
-                      color="neutral"
-                      variant="ghost"
-                      size="xs"
-                      icon="i-heroicons-hashtag"
-                      class="hover:text-primary-500 p-0 h-auto font-black"
-                      @click="
-                        () => {
-                          showTagEditor = !showTagEditor
-                        }
-                      "
-                    >
-                      <span v-if="workout.tags?.length" class="ml-1"
-                        >{{ workout.tags.length }} TAGS</span
-                      >
-                      <span v-else class="ml-1 text-[8px]">ADD TAGS</span>
-                    </UButton>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Action Stack -->
-              <div class="flex items-center gap-4">
-                <!-- Map Preview -->
-                <NuxtLink
-                  v-if="workout.summaryPolyline"
-                  :to="`/workouts/${workout.id}/map`"
-                  class="shrink-0 w-24 h-24 rounded-2xl bg-black border border-white/10 overflow-hidden relative group shadow-2xl hover:border-primary-500/50 transition-all duration-500"
-                >
-                  <UiWorkoutRoutePreview
-                    :polyline="workout.summaryPolyline"
-                    size="w-full h-full"
-                    class="text-primary-500/40"
-                  />
-                  <div
-                    class="absolute inset-0 bg-primary-500/5 group-hover:bg-primary-500/10 transition-colors"
-                  />
-                  <div
-                    class="absolute bottom-0 left-0 right-0 py-1 bg-black/60 backdrop-blur-sm text-center"
-                  >
-                    <span class="text-[8px] font-black text-primary-400 uppercase tracking-widest"
-                      >ANALYSIS</span
-                    >
-                  </div>
-                </NuxtLink>
-
-                <div class="flex flex-col gap-2">
-                  <UButton
-                    icon="i-heroicons-pencil-square"
-                    color="neutral"
-                    variant="subtle"
-                    size="sm"
-                    class="bg-white/5 border-white/5 hover:bg-white/10 font-bold"
-                    @click="
-                      () => {
-                        isEditModalOpen = true
-                      }
-                    "
-                  >
-                    Edit
-                  </UButton>
-                  <UButton
-                    icon="i-heroicons-share"
-                    color="neutral"
-                    variant="subtle"
-                    size="sm"
-                    class="bg-white/5 border-white/5 hover:bg-white/10 font-bold"
-                    @click="
-                      () => {
-                        isShareModalOpen = true
-                      }
-                    "
-                  >
-                    Share
-                  </UButton>
-                  <UButton
-                    icon="i-heroicons-trash"
-                    color="error"
-                    variant="subtle"
-                    size="sm"
-                    class="bg-red-500/5 border-red-500/10 hover:bg-red-500/10 font-bold"
-                    @click="
-                      () => {
-                        isDeleteModalOpen = true
-                      }
-                    "
-                  >
-                    Delete
-                  </UButton>
-                </div>
-              </div>
-            </div>
-
-            <!-- Tag Editor Panel (Desktop) -->
-            <div
-              v-if="showTagEditor"
-              class="relative z-10 p-6 bg-white/[0.02] border border-white/5 rounded-2xl"
-            >
-              <div class="flex flex-col gap-4">
-                <div class="flex items-start justify-between gap-6">
-                  <div class="flex-1">
-                    <div
-                      class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3"
-                    >
-                      Workout tags (Local)
-                    </div>
-                    <UInputTags
-                      v-model="localTagDraft"
-                      placeholder="Add local tags..."
-                      color="neutral"
-                      variant="outline"
-                      size="md"
-                    />
-                  </div>
-                  <div class="flex items-center gap-2 mt-7">
-                    <UButton
-                      color="neutral"
-                      variant="ghost"
-                      size="sm"
-                      :disabled="!hasLocalTagChanges || savingTags"
-                      @click="
-                        () => {
-                          void resetLocalTags()
-                        }
-                      "
-                      >Reset</UButton
-                    >
-                    <UButton
-                      color="primary"
-                      variant="solid"
-                      size="sm"
-                      icon="i-heroicons-tag"
-                      :loading="savingTags"
-                      :disabled="!hasLocalTagChanges"
-                      @click="
-                        () => {
-                          void saveLocalTags()
-                        }
-                      "
-                      >Save</UButton
-                    >
-                  </div>
-                </div>
-                <div
-                  v-if="intervalsSourceTags.length > 0"
-                  class="flex flex-wrap items-center gap-2 pt-2 border-t border-white/5"
-                >
-                  <span class="text-[9px] font-black uppercase tracking-widest text-zinc-600"
-                    >Intervals Sync:</span
-                  >
-                  <UBadge
-                    v-for="tag in intervalsSourceTags"
-                    :key="tag"
-                    color="neutral"
-                    variant="subtle"
-                    size="xs"
-                    class="font-black tracking-tight lowercase"
-                    >#{{ tag }}</UBadge
-                  >
-                </div>
-              </div>
-            </div>
-
-            <!-- Description (Desktop) -->
-            <div
-              v-if="workout.description"
-              class="relative z-10 p-6 bg-white/[0.01] border-l-2 border-primary-500/20 rounded-r-2xl italic text-zinc-400 font-medium leading-relaxed whitespace-pre-wrap"
-            >
+          </div>
+          <div v-if="achievements.length" class="mt-5 flex flex-wrap gap-2">
+            <UBadge v-for="pb in achievements" :key="pb.type" color="success" variant="soft">
+              <UIcon name="i-heroicons-trophy" class="mr-1 h-3.5 w-3.5" />
+              {{ pb.label }}: {{ pb.displayValue }}{{ pb.unit === 's' ? '' : pb.unit }}
+            </UBadge>
+          </div>
+          <details v-if="workout.description" class="mt-5 session-description">
+            <summary class="min-h-11 py-3 cursor-pointer text-sm text-muted">
+              {{ t('journey_session_description') }}
+            </summary>
+            <p class="mt-2 max-w-prose text-sm text-muted leading-relaxed whitespace-pre-wrap">
               {{ workout.description }}
-            </div>
-          </div>
-
-          <!-- HERO HUD ROW: UNIFIED COMMAND CENTER -->
-          <div
-            class="relative overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-white/5 p-1 flex items-stretch group/hero shadow-lg dark:shadow-2xl"
-          >
-            <div
-              class="absolute inset-0 ring-1 ring-inset ring-primary-500/10 opacity-0 group-hover/hero:opacity-100 transition-opacity duration-500 pointer-events-none"
-            />
-
-            <!-- Primary Group: Distance, Time, TSS -->
-            <div class="flex flex-1 items-center justify-around py-6 px-4">
-              <div v-if="workout.distanceMeters" class="flex-1 flex flex-col items-center gap-1">
-                <span
-                  class="font-mono text-[9px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-[0.3em]"
-                  >Distance</span
-                >
-                <div class="flex items-baseline gap-1.5">
-                  <span
-                    class="text-4xl font-black text-black dark:text-white tracking-tighter drop-shadow-md"
-                  >
-                    {{ (workout.distanceMeters / 1000).toFixed(1) }}
-                  </span>
-                  <span
-                    class="text-xs font-bold text-zinc-400 dark:text-zinc-600 uppercase opacity-50"
-                    >km</span
-                  >
-                </div>
-              </div>
-              <div class="w-px h-12 bg-gray-100 dark:bg-white/5" />
-              <div class="flex flex-col items-center gap-1">
-                <span
-                  class="font-mono text-[9px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-[0.3em]"
-                  >Time</span
-                >
-                <span
-                  class="text-4xl font-black text-black dark:text-white tracking-tighter drop-shadow-md"
-                >
-                  {{ formatDurationShort(workout.durationSec) }}
-                </span>
-              </div>
-              <div class="w-px h-12 bg-gray-100 dark:bg-white/5" />
-              <div
-                v-if="workout.tss || workout.trainingLoad"
-                class="flex flex-col items-center gap-1"
+            </p>
+          </details>
+          <div v-if="showTagEditor" class="mt-6 space-y-4 rounded-xl border border-default p-4">
+            <UFormField :label="t('journey_tags')">
+              <UInputTags
+                v-model="localTagDraft"
+                :placeholder="t('journey_tags_placeholder')"
+                class="w-full"
+              />
+            </UFormField>
+            <div v-if="intervalsSourceTags.length" class="flex flex-wrap items-center gap-2">
+              <span class="text-sm text-muted">Intervals.icu</span>
+              <UBadge
+                v-for="tag in intervalsSourceTags"
+                :key="tag"
+                color="neutral"
+                variant="soft"
+                >{{ tag }}</UBadge
               >
-                <span
-                  class="font-mono text-[9px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-[0.3em]"
-                  >TSS/Load</span
-                >
-                <span
-                  class="text-4xl font-black tabular-nums tracking-tighter drop-shadow-md animate-pulse-slow"
-                  :class="getIntensityColorClass(workout.intensity, 'text')"
-                >
-                  {{ Math.round(workout.tss || workout.trainingLoad) }}
-                </span>
-              </div>
             </div>
-
-            <!-- SECONDARY GROUP DIVIDER -->
-            <div class="w-px bg-gray-100 dark:bg-white/10 my-4" />
-
-            <!-- Secondary Group: Power, HR, Gain -->
-            <div
-              class="flex flex-1 items-center justify-around py-6 px-4 bg-gray-50/50 dark:bg-white/[0.01]"
-            >
-              <div v-if="workout.averageWatts" class="flex flex-col items-center gap-1">
-                <span
-                  class="font-mono text-[9px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-[0.3em]"
-                  >Power</span
-                >
-                <div class="flex items-baseline gap-1">
-                  <span
-                    class="text-2xl font-black text-purple-600 dark:text-purple-400 tabular-nums"
-                    >{{ workout.averageWatts }}</span
-                  >
-                  <span
-                    class="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase opacity-50"
-                    >W</span
-                  >
-                </div>
-              </div>
-              <div v-if="workout.normalizedPower" class="flex flex-col items-center gap-1">
-                <span
-                  class="font-mono text-[9px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-[0.3em]"
-                  >NP</span
-                >
-                <div class="flex items-baseline gap-1">
-                  <span
-                    class="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums"
-                    >{{ workout.normalizedPower }}</span
-                  >
-                  <span
-                    class="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase opacity-50"
-                    >W</span
-                  >
-                </div>
-              </div>
-              <div v-if="workout.averageHr" class="flex flex-col items-center gap-1">
-                <span
-                  class="font-mono text-[9px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-[0.3em]"
-                  >Heart</span
-                >
-                <div class="flex items-baseline gap-1">
-                  <span class="text-2xl font-black text-pink-600 dark:text-pink-400 tabular-nums">{{
-                    workout.averageHr
-                  }}</span>
-                  <span
-                    class="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase opacity-50"
-                    >BPM</span
-                  >
-                </div>
-              </div>
-              <div v-if="workout.elevationGain" class="flex flex-col items-center gap-1">
-                <span
-                  class="font-mono text-[9px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-[0.3em]"
-                  >Gain</span
-                >
-                <div class="flex items-baseline gap-1">
-                  <span class="text-2xl font-black text-black dark:text-white">{{
-                    Math.round(
-                      convertElevation(
-                        workout.elevationGain,
-                        userStore.profile?.distanceUnits || 'Kilometers'
-                      )
-                    )
-                  }}</span>
-                  <span
-                    class="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase opacity-50"
-                    >{{
-                      getElevationUnitLabel(userStore.profile?.distanceUnits || 'Kilometers')
-                    }}</span
-                  >
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- PERFORMANCE & IMPACT SIDE-BY-SIDE -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-            <!-- Performance Summary -->
-            <div
-              class="bg-zinc-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-white/5 p-6 flex flex-col shadow-lg dark:shadow-xl"
-            >
-              <h2
-                class="mb-6 flex items-center gap-2 font-mono text-[10px] font-black uppercase tracking-[0.3em] text-zinc-600 dark:text-zinc-500"
-              >
-                <UIcon name="i-heroicons-chart-bar" class="w-4 h-4 text-primary-500" />
-                Performance Metrics
-              </h2>
-
-              <div class="flex-1 min-h-[220px]">
-                <PerformanceScoreChart
-                  v-if="workout.overallScore || workout.technicalScore"
-                  :scores="{
-                    overall: workout.overallScore,
-                    technical: workout.technicalScore,
-                    effort: workout.effortScore,
-                    pacing: workout.pacingScore,
-                    execution: workout.executionScore
-                  }"
-                />
-                <div
-                  v-else
-                  class="h-full flex flex-col items-center justify-center text-center opacity-40"
-                >
-                  <UIcon name="i-heroicons-sparkles" class="w-8 h-8 mb-2" />
-                  <span class="text-[10px] font-black uppercase tracking-widest"
-                    >No Score Data</span
-                  >
-                </div>
-              </div>
-            </div>
-
-            <!-- System Impact Grid (Condensed 2x2) -->
-            <div
-              class="bg-zinc-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-white/5 p-6 flex flex-col shadow-lg dark:shadow-xl"
-            >
-              <h2
-                class="mb-6 flex items-center gap-2 font-mono text-[10px] font-black uppercase tracking-[0.3em] text-zinc-600 dark:text-zinc-500"
-              >
-                <UIcon name="i-heroicons-heart" class="w-4 h-4 text-orange-500" />
-                {{ t('impact_calc_title') }}
-              </h2>
-
-              <div class="grid grid-cols-2 gap-4 flex-1">
-                <!-- CTL -->
-                <div
-                  class="p-4 rounded-xl border border-[#00DC82]/10 bg-[#00DC82]/[0.02] flex flex-col justify-between cursor-pointer hover:bg-[#00DC82]/[0.05] transition-all group"
-                  @click="
-                    () => {
-                      handleOpenMetric({
-                        key: 'Fitness (CTL)',
-                        value: workout.ctl ? Math.round(workout.ctl) : 0
-                      })
-                    }
-                  "
-                >
-                  <div class="flex items-center gap-2 opacity-60">
-                    <UIcon name="i-heroicons-heart" class="w-3 h-3 text-[#00DC82]" />
-                    <UTooltip
-                      :popper="{ placement: 'top' }"
-                      :ui="{ content: 'w-[300px] h-auto whitespace-normal' }"
-                      arrow
-                    >
-                      <span
-                        class="font-mono text-[8px] font-black uppercase tracking-widest border-b border-dashed border-zinc-700"
-                        >Fitness (CTL)</span
-                      >
-                      <template #content>
-                        <div class="text-left text-sm">{{ tt('fitness_ctl') }}</div>
-                      </template>
-                    </UTooltip>
-                  </div>
-                  <span class="text-3xl font-black text-black dark:text-white">{{
-                    workout.ctl ? Math.round(workout.ctl) : '-'
-                  }}</span>
-                </div>
-                <!-- ATL -->
-                <div
-                  class="p-4 rounded-xl border border-orange-500/10 bg-orange-500/[0.02] flex flex-col justify-between cursor-pointer hover:bg-orange-500/[0.05] transition-all group"
-                  @click="
-                    () => {
-                      handleOpenMetric({
-                        key: 'Fatigue (ATL)',
-                        value: workout.atl ? Math.round(workout.atl) : 0
-                      })
-                    }
-                  "
-                >
-                  <div class="flex items-center gap-2 opacity-60">
-                    <UIcon name="i-heroicons-fire" class="w-3 h-3 text-orange-500" />
-                    <UTooltip
-                      :popper="{ placement: 'top' }"
-                      :ui="{ content: 'w-[300px] h-auto whitespace-normal' }"
-                      arrow
-                    >
-                      <span
-                        class="font-mono text-[8px] font-black uppercase tracking-widest border-b border-dashed border-zinc-700"
-                        >Fatigue (ATL)</span
-                      >
-                      <template #content>
-                        <div class="text-left text-sm">{{ tt('fatigue_atl') }}</div>
-                      </template>
-                    </UTooltip>
-                  </div>
-                  <span class="text-3xl font-black text-black dark:text-white">{{
-                    workout.atl ? Math.round(workout.atl) : '-'
-                  }}</span>
-                </div>
-                <!-- TSS -->
-                <div
-                  class="p-4 rounded-xl border border-[#00DC82]/10 bg-[#00DC82]/[0.02] flex flex-col justify-between cursor-pointer hover:bg-[#00DC82]/[0.05] transition-all group"
-                  @click="
-                    () => {
-                      handleOpenMetric({
-                        key: 'TSS (Load)',
-                        value: Math.round(workout.tss || workout.trainingLoad || 0)
-                      })
-                    }
-                  "
-                >
-                  <div class="flex items-center gap-2 opacity-60">
-                    <UIcon name="i-heroicons-bolt" class="w-3 h-3 text-[#00DC82]" />
-                    <UTooltip
-                      :popper="{ placement: 'top' }"
-                      :ui="{ content: 'w-[300px] h-auto whitespace-normal' }"
-                      arrow
-                    >
-                      <span
-                        class="font-mono text-[8px] font-black uppercase tracking-widest border-b border-dashed border-zinc-700"
-                        >Load (TSS)</span
-                      >
-                      <template #content>
-                        <div class="text-left text-sm">{{ tt('tss_load') }}</div>
-                      </template>
-                    </UTooltip>
-                  </div>
-                  <span class="text-3xl font-black text-black dark:text-white">{{
-                    Math.round(workout.tss || workout.trainingLoad || 0)
-                  }}</span>
-                </div>
-                <!-- TSB -->
-                <div
-                  class="p-4 rounded-xl border border-blue-500/10 bg-blue-500/[0.02] flex flex-col justify-between cursor-pointer hover:bg-blue-500/[0.05] transition-all group"
-                  @click="
-                    () => {
-                      handleOpenMetric({ key: 'Form (TSB)', value: calculateForm(workout) || 0 })
-                    }
-                  "
-                >
-                  <div class="flex items-center gap-2 opacity-60">
-                    <UIcon name="i-heroicons-scale" class="w-3 h-3 text-blue-500" />
-                    <UTooltip
-                      :popper="{ placement: 'top' }"
-                      :ui="{ content: 'w-[300px] h-auto whitespace-normal' }"
-                      arrow
-                    >
-                      <span
-                        class="font-mono text-[8px] font-black uppercase tracking-widest border-b border-dashed border-zinc-700"
-                        >Form (TSB)</span
-                      >
-                      <template #content>
-                        <div class="text-left text-sm">{{ tt('form_tsb') }}</div>
-                      </template>
-                    </UTooltip>
-                  </div>
-                  <span class="text-3xl font-black text-blue-400 tabular-nums">
-                    {{
-                      calculateForm(workout) !== null
-                        ? (calculateForm(workout)! > 0 ? '+' : '') + calculateForm(workout)
-                        : '-'
-                    }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- MOBILE HUD HEADER (sm:hidden) -->
-        <div
-          v-if="workout && !loading"
-          class="sm:hidden flex flex-col bg-white dark:bg-gray-900 relative overflow-hidden"
-        >
-          <!-- GHOST BACKGROUND ROUTE FOR HUD -->
-          <UiWorkoutRoutePreview
-            v-if="workout.summaryPolyline"
-            :polyline="workout.summaryPolyline"
-            mode="background"
-            class="opacity-[0.08] z-0"
-          />
-
-          <!-- HUD CONTENT -->
-          <div class="relative z-10 px-5 pt-6 pb-8 flex flex-col gap-8">
-            <!-- HUD TOP: Navigation, Title & Source -->
-            <div class="flex flex-col gap-4">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <UButton
-                    icon="i-heroicons-chevron-left"
-                    color="neutral"
-                    variant="subtle"
-                    size="xs"
-                    class="rounded-lg bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10"
-                    @click="
-                      () => {
-                        void navigateDate(-1)
-                      }
-                    "
-                  />
-                  <div class="flex flex-col">
-                    <span
-                      class="font-mono text-[8px] text-primary-500 uppercase tracking-[0.3em] font-black"
-                    >
-                      {{ formatDateWeekday(workout.date) }}
-                    </span>
-                    <span
-                      class="font-mono text-[10px] text-zinc-600 dark:text-zinc-500 uppercase tracking-widest font-black"
-                    >
-                      {{ formatDatePrimary(workout.date) }}
-                    </span>
-                  </div>
-                  <UButton
-                    icon="i-heroicons-chevron-right"
-                    color="neutral"
-                    variant="subtle"
-                    size="xs"
-                    class="rounded-lg bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10"
-                    @click="
-                      () => {
-                        void navigateDate(1)
-                      }
-                    "
-                  />
-                </div>
-
-                <div class="opacity-40 grayscale scale-75 origin-right">
-                  <UiDataAttribution
-                    v-if="
-                      [
-                        'strava',
-                        'garmin',
-                        'zwift',
-                        'apple_health',
-                        'whoop',
-                        'intervals',
-                        'withings',
-                        'hevy',
-                        'wahoo',
-                        'rouvy',
-                        'fit_file'
-                      ].includes(workout.source)
-                    "
-                    :provider="workout.source"
-                    :device-name="workout.deviceName"
-                    :fallback-label="getWorkoutSourceLabel(workout, t)"
-                    mode="minimal"
-                  />
-                </div>
-              </div>
-
-              <div class="flex items-start justify-between gap-4">
-                <div class="flex-1 min-w-0">
-                  <h1
-                    class="font-black uppercase tracking-tighter text-gray-900 dark:text-white leading-tight mb-1 transition-all duration-500"
-                    :class="[
-                      workout.title.length > 25 ? 'text-lg sm:text-xl' : 'text-2xl sm:text-3xl'
-                    ]"
-                  >
-                    {{ workout.title }}
-                  </h1>
-                  <div
-                    class="flex items-center gap-2 font-mono text-[9px] text-zinc-500 uppercase tracking-widest"
-                  >
-                    <UIcon
-                      :name="getWorkoutIcon(workout.type)"
-                      class="w-3.5 h-3.5"
-                      :class="getWorkoutColorClass(workout.type)"
-                    />
-                    <span>{{ workout.type || 'Activity' }}</span>
-                    <span v-if="workout.deviceName" class="opacity-30">•</span>
-                    <span v-if="workout.deviceName" class="truncate">{{ workout.deviceName }}</span>
-                  </div>
-
-                  <!-- Achievements (Mobile) -->
-                  <div v-if="achievements.length > 0" class="flex flex-wrap gap-1.5 mt-2">
-                    <template v-for="pb in achievements" :key="pb.type">
-                      <div
-                        class="flex items-center gap-1 bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded-full border border-yellow-500/20 font-black text-[8px] tracking-widest uppercase animate-pulse-slow"
-                      >
-                        <UIcon name="i-heroicons-trophy" class="w-2.5 h-2.5" />
-                        {{ pb.label }}
-                      </div>
-                    </template>
-                  </div>
-                </div>
-
-                <!-- FLOATING MAP PREVIEW -->
-                <NuxtLink
-                  v-if="workout.summaryPolyline"
-                  :to="`/workouts/${workout.id}/map`"
-                  class="shrink-0 w-20 h-20 rounded-xl bg-black border border-white/10 overflow-hidden relative group shadow-2xl"
-                >
-                  <UiWorkoutRoutePreview
-                    :polyline="workout.summaryPolyline"
-                    size="w-full h-full"
-                    class="text-primary-500/40"
-                  />
-                  <div
-                    class="absolute inset-0 bg-primary-500/5 group-hover:bg-primary-500/10 transition-colors"
-                  />
-                  <div
-                    class="absolute bottom-0 left-0 right-0 py-1 px-1 bg-black/60 backdrop-blur-sm text-center"
-                  >
-                    <span class="text-[7px] font-black text-primary-400 uppercase tracking-widest"
-                      >MAP</span
-                    >
-                  </div>
-                </NuxtLink>
-              </div>
-            </div>
-
-            <!-- HERO DATA ROW -->
-            <div class="flex items-center justify-between py-2 border-y border-white/5">
-              <div v-if="workout.distanceMeters" class="flex-1 flex flex-col items-center gap-1">
-                <span
-                  class="font-mono text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em]"
-                  >Distance</span
-                >
-                <div class="flex items-baseline gap-1">
-                  <span class="text-3xl font-black text-black dark:text-white tracking-tighter">
-                    {{ (workout.distanceMeters / 1000).toFixed(1) }}
-                  </span>
-                  <span class="text-[9px] font-bold text-zinc-600 uppercase">km</span>
-                </div>
-              </div>
-
-              <div class="w-px h-10 bg-white/5" />
-
-              <div class="flex-1 flex flex-col items-center gap-1">
-                <span
-                  class="font-mono text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em]"
-                  >Time</span
-                >
-                <span class="text-3xl font-black text-black dark:text-white tracking-tighter">
-                  {{ formatDurationShort(workout.durationSec) }}
-                </span>
-              </div>
-
-              <div class="w-px h-10 bg-white/5" />
-
-              <div
-                v-if="workout.tss || workout.trainingLoad"
-                class="flex-1 flex flex-col items-center gap-1"
-              >
-                <span
-                  class="font-mono text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em]"
-                  >TSS</span
-                >
-                <span
-                  class="text-3xl font-black tabular-nums tracking-tighter animate-pulse-slow"
-                  :class="getIntensityColorClass(workout.intensity, 'text')"
-                >
-                  {{ Math.round(workout.tss || workout.trainingLoad) }}
-                </span>
-              </div>
-            </div>
-
-            <!-- SECONDARY METRIC GRID -->
-            <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5 shadow-inner">
-              <div class="grid grid-cols-3 gap-x-4 gap-y-8">
-                <div v-if="workout.averageWatts" class="flex flex-col items-center">
-                  <span
-                    class="font-mono text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1"
-                    >Power</span
-                  >
-                  <div class="flex items-baseline gap-0.5">
-                    <span class="text-base font-black text-purple-400 tabular-nums">{{
-                      workout.averageWatts
-                    }}</span>
-                    <span class="text-[8px] font-bold text-zinc-600 uppercase">W</span>
-                  </div>
-                </div>
-                <div v-if="workout.normalizedPower" class="flex flex-col items-center">
-                  <span
-                    class="font-mono text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1"
-                    >NP</span
-                  >
-                  <div class="flex items-baseline gap-0.5">
-                    <span class="text-base font-black text-indigo-400 tabular-nums">{{
-                      workout.normalizedPower
-                    }}</span>
-                    <span class="text-[8px] font-bold text-zinc-600 uppercase">W</span>
-                  </div>
-                </div>
-                <div v-if="workout.averageHr" class="flex flex-col items-center">
-                  <span
-                    class="font-mono text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1"
-                    >Heart</span
-                  >
-                  <div class="flex items-baseline gap-0.5">
-                    <span class="text-base font-black text-pink-400 tabular-nums">{{
-                      workout.averageHr
-                    }}</span>
-                    <span class="text-[8px] font-bold text-zinc-600 uppercase">BPM</span>
-                  </div>
-                </div>
-                <div v-if="workout.elevationGain" class="flex flex-col items-center">
-                  <span
-                    class="font-mono text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1"
-                    >Gain</span
-                  >
-                  <div class="flex items-baseline gap-0.5">
-                    <span class="text-base font-black text-black dark:text-white">{{
-                      workout.elevationGain
-                    }}</span>
-                    <span class="text-[8px] font-bold text-zinc-600 uppercase">m</span>
-                  </div>
-                </div>
-                <div v-if="workout.averageCadence" class="flex flex-col items-center">
-                  <span
-                    class="font-mono text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1"
-                    >RPM</span
-                  >
-                  <span class="text-base font-black text-black dark:text-white">{{
-                    workout.averageCadence
-                  }}</span>
-                </div>
-                <div v-if="workout.intensity" class="flex flex-col items-center">
-                  <span
-                    class="font-mono text-[8px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1"
-                    >IF</span
-                  >
-                  <span class="text-base font-black text-zinc-300 tabular-nums">{{
-                    workout.intensity.toFixed(2)
-                  }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Tags (Mobile) -->
-            <div class="flex flex-col gap-3">
+            <div class="flex justify-end gap-2">
               <UButton
                 color="neutral"
-                variant="subtle"
-                size="sm"
-                icon="i-heroicons-hashtag"
-                class="bg-white/5 border-white/10 font-bold uppercase tracking-widest text-[9px] py-2"
-                @click="
-                  () => {
-                    showTagEditor = !showTagEditor
-                  }
-                "
+                variant="ghost"
+                :disabled="!hasLocalTagChanges || savingTags"
+                @click="resetLocalTags"
+                >{{ t('journey_reset') }}</UButton
               >
-                {{
-                  showTagEditor
-                    ? 'Close Tag Editor'
-                    : workout.tags?.length
-                      ? `Manage ${workout.tags.length} Tags`
-                      : 'Add Tags'
-                }}
-              </UButton>
-
-              <div
-                v-if="showTagEditor"
-                class="p-4 bg-white/[0.02] border border-white/5 rounded-xl"
+              <UButton
+                :loading="savingTags"
+                :disabled="!hasLocalTagChanges"
+                @click="saveLocalTags"
+                >{{ t('journey_save_tags') }}</UButton
               >
-                <UInputTags
-                  v-model="localTagDraft"
-                  placeholder="Add tags..."
-                  color="neutral"
-                  variant="outline"
-                  size="sm"
-                />
-                <div class="flex items-center justify-end gap-2 mt-3">
-                  <UButton
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    @click="
-                      () => {
-                        void resetLocalTags()
-                      }
-                    "
-                    >Reset</UButton
-                  >
-                  <UButton
-                    color="primary"
-                    variant="solid"
-                    size="xs"
-                    :loading="savingTags"
-                    @click="
-                      () => {
-                        void saveLocalTags()
-                      }
-                    "
-                    >Save</UButton
-                  >
-                </div>
-              </div>
-            </div>
-
-            <!-- Description (Mobile) -->
-            <div
-              v-if="workout.description"
-              class="p-4 bg-white/[0.01] border-l-2 border-primary-500/20 rounded-r-xl italic text-zinc-400 text-xs leading-relaxed whitespace-pre-wrap"
-            >
-              {{ workout.description }}
-            </div>
-
-            <!-- Performance Metrics Chart (Mobile) -->
-            <div class="flex flex-col gap-4">
-              <h2
-                class="flex items-center gap-2 font-mono text-[9px] font-black uppercase tracking-[0.3em] text-zinc-600 dark:text-zinc-500"
-              >
-                <UIcon name="i-heroicons-chart-bar" class="w-3.5 h-3.5 text-primary-500" />
-                Performance Metrics
-              </h2>
-              <div
-                class="p-4 rounded-2xl bg-zinc-50 dark:bg-gray-900 border border-zinc-200 dark:border-white/5 min-h-[200px] shadow-sm dark:shadow-none"
-              >
-                <PerformanceScoreChart
-                  v-if="workout.overallScore || workout.technicalScore"
-                  :scores="{
-                    overall: workout.overallScore,
-                    technical: workout.technicalScore,
-                    effort: workout.effortScore,
-                    pacing: workout.pacingScore,
-                    execution: workout.executionScore
-                  }"
-                />
-                <div
-                  v-else
-                  class="h-full flex flex-col items-center justify-center text-center opacity-40 py-8"
-                >
-                  <UIcon
-                    name="i-heroicons-sparkles"
-                    class="w-6 h-6 mb-2 text-zinc-400 dark:text-zinc-600"
-                  />
-                  <span
-                    class="text-[8px] font-black uppercase tracking-widest text-black dark:text-white"
-                    >No Score Data</span
-                  >
-                </div>
-              </div>
-            </div>
-
-            <!-- System Impact Grid (Mobile 2x2) -->
-            <div class="flex flex-col gap-4">
-              <h2
-                class="flex items-center gap-2 font-mono text-[9px] font-black uppercase tracking-[0.3em] text-zinc-600 dark:text-zinc-500"
-              >
-                <UIcon name="i-heroicons-heart" class="w-3.5 h-3.5 text-orange-500" />
-                {{ t('impact_calc_title') }}
-              </h2>
-              <div class="grid grid-cols-2 gap-3">
-                <!-- CTL -->
-                <div
-                  class="p-4 rounded-xl border border-[#00DC82]/10 bg-white dark:bg-[#00DC82]/[0.02] flex flex-col justify-between cursor-pointer active:bg-zinc-100 dark:active:bg-[#00DC82]/[0.05] transition-all shadow-sm dark:shadow-none"
-                  @click="
-                    () => {
-                      handleOpenMetric({
-                        key: 'Fitness (CTL)',
-                        value: workout.ctl ? Math.round(workout.ctl) : 0
-                      })
-                    }
-                  "
-                >
-                  <div class="flex items-center gap-2 opacity-60 mb-2">
-                    <UIcon name="i-heroicons-heart" class="w-3 h-3 text-[#00DC82]" />
-                    <span
-                      class="font-mono text-[8px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400"
-                      >Fitness</span
-                    >
-                  </div>
-                  <span class="text-2xl font-black text-black dark:text-white tabular-nums">{{
-                    workout.ctl ? Math.round(workout.ctl) : '-'
-                  }}</span>
-                </div>
-                <!-- ATL -->
-                <div
-                  class="p-4 rounded-xl border border-orange-500/10 bg-white dark:bg-orange-500/[0.02] flex flex-col justify-between cursor-pointer active:bg-zinc-100 dark:active:bg-orange-500/[0.05] transition-all shadow-sm dark:shadow-none"
-                  @click="
-                    () => {
-                      handleOpenMetric({
-                        key: 'Fatigue (ATL)',
-                        value: workout.atl ? Math.round(workout.atl) : 0
-                      })
-                    }
-                  "
-                >
-                  <div class="flex items-center gap-2 opacity-60 mb-2">
-                    <UIcon name="i-heroicons-fire" class="w-3 h-3 text-orange-500" />
-                    <span
-                      class="font-mono text-[8px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400"
-                      >Fatigue</span
-                    >
-                  </div>
-                  <span class="text-2xl font-black text-black dark:text-white tabular-nums">{{
-                    workout.atl ? Math.round(workout.atl) : '-'
-                  }}</span>
-                </div>
-                <!-- TSS -->
-                <div
-                  class="p-4 rounded-xl border border-[#00DC82]/10 bg-white dark:bg-[#00DC82]/[0.02] flex flex-col justify-between cursor-pointer active:bg-zinc-100 dark:active:bg-[#00DC82]/[0.05] transition-all shadow-sm dark:shadow-none"
-                  @click="
-                    () => {
-                      handleOpenMetric({
-                        key: 'TSS (Load)',
-                        value: Math.round(workout.tss || workout.trainingLoad || 0)
-                      })
-                    }
-                  "
-                >
-                  <div class="flex items-center gap-2 opacity-60 mb-2">
-                    <UIcon name="i-heroicons-bolt" class="w-3 h-3 text-[#00DC82]" />
-                    <span
-                      class="font-mono text-[8px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400"
-                      >Load</span
-                    >
-                  </div>
-                  <span class="text-2xl font-black text-black dark:text-white tabular-nums">{{
-                    Math.round(workout.tss || workout.trainingLoad || 0)
-                  }}</span>
-                </div>
-                <!-- TSB -->
-                <div
-                  class="p-4 rounded-xl border border-blue-500/10 bg-white dark:bg-blue-500/[0.02] flex flex-col justify-between cursor-pointer active:bg-zinc-100 dark:active:bg-blue-500/[0.05] transition-all shadow-sm dark:shadow-none"
-                  @click="
-                    () => {
-                      handleOpenMetric({ key: 'Form (TSB)', value: calculateForm(workout) || 0 })
-                    }
-                  "
-                >
-                  <div class="flex items-center gap-2 opacity-60 mb-2">
-                    <UIcon name="i-heroicons-scale" class="w-3 h-3 text-blue-500" />
-                    <span
-                      class="font-mono text-[8px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400"
-                      >Form</span
-                    >
-                  </div>
-                  <span class="text-2xl font-black text-blue-600 dark:text-blue-400 tabular-nums">
-                    {{
-                      calculateForm(workout) !== null
-                        ? (calculateForm(workout)! > 0 ? '+' : '') + calculateForm(workout)
-                        : '-'
-                    }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Explanation Accordion (Mobile) -->
-              <div class="mt-2">
-                <UAccordion
-                  :items="[{ label: t('impact_calc_title'), slot: 'explanation' }]"
-                  :ui="{
-                    trigger:
-                      'text-black dark:text-white font-black uppercase tracking-widest text-[9px]',
-                    root: 'bg-zinc-100 dark:bg-white/5 rounded-lg border border-zinc-200 dark:border-white/5 shadow-sm'
-                  }"
-                  variant="ghost"
-                  size="xs"
-                >
-                  <template #explanation>
-                    <div
-                      class="px-4 pb-4 text-[11px] text-zinc-600 dark:text-zinc-400 space-y-3 pt-2 font-medium"
-                    >
-                      <p>
-                        <strong class="text-zinc-900 dark:text-zinc-200">{{
-                          t('impact_source_label')
-                        }}</strong>
-                        <span
-                          v-if="workout.source === 'intervals'"
-                          class="text-zinc-600 dark:text-zinc-400"
-                        >
-                          {{ t('impact_source_intervals', { link: 'Intervals.icu' }) }}
-                        </span>
-                        <span v-else class="text-zinc-600 dark:text-zinc-400">
-                          {{ t('impact_source_local') }}
-                        </span>
-                      </p>
-                      <ul
-                        class="list-disc pl-5 space-y-1.5 leading-relaxed text-zinc-600 dark:text-zinc-400"
-                      >
-                        <li>{{ tt('tss_load') }}</li>
-                        <li>{{ tt('fitness_ctl') }}</li>
-                        <li>{{ tt('fatigue_atl') }}</li>
-                        <li>{{ tt('form_tsb') }}</li>
-                      </ul>
-                    </div>
-                  </template>
-                </UAccordion>
-              </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- Loading State -->
         <div v-if="loading" class="p-4 sm:p-0 space-y-6">
@@ -1403,505 +304,149 @@
             :title="t('error_data_title')"
             :description="error"
           />
+          <div class="mt-4 flex justify-center gap-3">
+            <UButton class="min-h-11" @click="fetchWorkout">{{ t('journey_retry') }}</UButton>
+            <UButton color="neutral" variant="ghost" class="min-h-11" @click="goBack">
+              {{ t('back_to_data') }}
+            </UButton>
+          </div>
         </div>
 
-        <div v-else-if="workout" class="flex flex-col gap-4 sm:gap-8">
-          <!-- Header Section: Workout Info (2/3) + Performance Scores (1/3) -->
+        <div v-else-if="workout" class="flex flex-col gap-8 sm:gap-10">
           <div id="header" class="scroll-mt-20" />
-          <div
-            v-if="false"
-            class="hidden sm:grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6"
-            :style="sectionStyle('overview')"
+          <section
+            v-if="workoutJourneyView === 'summary' && isSectionEnabled('analysis')"
+            class="session-coach"
+            :style="{ order: -20 }"
           >
-            <!-- Workout Info Card - 2/3 -->
-            <div class="lg:col-span-2">
-              <div
-                class="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-none sm:shadow p-4 sm:p-6 h-full border-x-0 sm:border-x border-y border-gray-100 dark:border-gray-800"
-              >
-                <!-- Navigation & Date -->
-                <div
-                  class="mb-6 flex flex-col gap-4 border-b border-gray-100 pb-4 dark:border-gray-800 sm:mb-8 sm:flex-row sm:items-center sm:justify-between sm:pb-6"
-                >
-                  <div class="flex w-full flex-wrap items-center gap-3 sm:gap-4">
-                    <UButton
-                      icon="i-heroicons-chevron-left"
-                      color="neutral"
-                      variant="subtle"
-                      size="sm"
-                      class="rounded-lg"
-                      @click="
-                        () => {
-                          void navigateDate(-1)
-                        }
-                      "
-                    />
-                    <div class="flex flex-col">
-                      <div
-                        class="text-[10px] font-black uppercase tracking-[0.2em] text-primary-500"
-                      >
-                        {{ formatDateWeekday(workout.date) }}
-                      </div>
-                      <div
-                        class="text-xs font-black uppercase tracking-tight text-gray-900 dark:text-white sm:text-sm"
-                      >
-                        {{ formatDatePrimary(workout.date) }}
-                      </div>
-                    </div>
-                    <UButton
-                      icon="i-heroicons-chevron-right"
-                      color="neutral"
-                      variant="subtle"
-                      size="sm"
-                      class="rounded-lg"
-                      @click="
-                        () => {
-                          void navigateDate(1)
-                        }
-                      "
-                    />
+            <h2 class="text-xl font-semibold">{{ t('journey_coach_takeaway') }}</h2>
+            <p
+              v-if="workout.aiAnalysisJson?.executive_summary"
+              class="mt-3 max-w-prose text-base leading-relaxed whitespace-pre-wrap line-clamp-4"
+            >
+              {{ workout.aiAnalysisJson.executive_summary }}
+            </p>
+            <p v-else class="mt-3 max-w-prose text-sm text-muted leading-relaxed">
+              {{
+                analyzingWorkout
+                  ? t('analysis_analyzing')
+                  : workout.aiAnalysis
+                    ? t('journey_legacy_ready')
+                    : t('journey_analysis_empty')
+              }}
+            </p>
+            <UButton
+              color="neutral"
+              variant="link"
+              class="mt-3 px-0 min-h-11"
+              @click="scrollToSection('analysis')"
+            >
+              {{
+                workout.aiAnalysis || workout.aiAnalysisJson
+                  ? t('journey_read_analysis')
+                  : t('journey_open_analysis')
+              }}
+            </UButton>
+          </section>
 
-                    <!-- Map Analysis shortcut -->
-                    <UButton
-                      :to="`/workouts/${workout.id}/map`"
-                      icon="i-heroicons-map"
-                      color="primary"
-                      variant="subtle"
-                      size="sm"
-                      class="order-3 w-full justify-center font-bold sm:order-none sm:ml-2 sm:w-auto"
-                    >
-                      {{ t('map_analysis') }}
-                    </UButton>
+          <!-- Personal Notes -->
+          <div
+            v-if="isJourneySectionVisible('notes')"
+            id="notes"
+            class="scroll-mt-20 px-0 sm:px-0"
+            :style="sectionStyle('notes')"
+          >
+            <NotesEditor
+              v-model="workout.notes"
+              :notes-updated-at="workout.notesUpdatedAt"
+              :title="t('journey_reflection')"
+              :empty-hint="t('journey_reflection_hint')"
+              :api-endpoint="`/api/workouts/${workout.id}/notes`"
+              @update:notes-updated-at="workout.notesUpdatedAt = $event"
+            />
+          </div>
 
-                    <div class="ml-auto flex flex-wrap items-center justify-end gap-2 sm:items-end">
-                      <template v-if="workout.deviceName">
-                        <UiDataAttribution
-                          v-if="
-                            detectProvider(workout.deviceName) &&
-                            detectProvider(workout.deviceName) !== workout.source
-                          "
-                          :provider="detectProvider(workout.deviceName) || ''"
-                          :device-name="workout.deviceName"
-                        />
-                        <span
-                          v-else-if="
-                            !detectProvider(workout.deviceName) &&
-                            workout.source !== 'garmin' &&
-                            workout.source !== 'zwift'
-                          "
-                          class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
-                        >
-                          {{ workout.deviceName }}
-                        </span>
-                      </template>
-
-                      <UiDataAttribution
-                        v-if="
-                          [
-                            'strava',
-                            'garmin',
-                            'zwift',
-                            'apple_health',
-                            'whoop',
-                            'intervals',
-                            'withings',
-                            'hevy'
-                          ].includes(workout.source)
-                        "
-                        :provider="workout.source"
-                        :device-name="workout.deviceName"
-                      />
-                      <span
-                        v-else
-                        :class="getSourceBadgeClass(workout.source)"
-                        class="font-black uppercase tracking-widest text-[9px]"
-                      >
-                        {{ getWorkoutSourceLabel(workout) }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="mb-4 flex items-start justify-between sm:mb-6">
-                  <div class="flex-1">
-                    <h1
-                      class="mb-2 text-xl font-black uppercase tracking-tight text-gray-900 dark:text-white sm:text-2xl"
-                    >
-                      {{ workout.title }}
-                    </h1>
-                    <div
-                      class="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 sm:gap-3"
-                    >
-                      <div class="flex items-center gap-1">
-                        <span class="i-heroicons-clock w-3.5 h-3.5" />
-                        {{ formatDuration(workout.durationSec) }}
-                      </div>
-                      <div v-if="workout.type" class="flex items-center gap-1">
-                        <span class="i-heroicons-tag w-3.5 h-3.5" />
-                        {{ workout.type }}
-                        <UButton
-                          color="neutral"
-                          variant="ghost"
-                          size="xs"
-                          icon="i-heroicons-hashtag"
-                          class="ml-1"
-                          :ui="{ base: 'px-1.5' }"
-                          @click="
-                            () => {
-                              showTagEditor = !showTagEditor
-                            }
-                          "
-                        >
-                          <span v-if="workout.tags?.length" class="text-[9px] font-black">
-                            {{ workout.tags.length }}
-                          </span>
-                        </UButton>
-                      </div>
-
-                      <!-- Personal Best Badges -->
-                      <div v-if="achievements.length > 0" class="flex items-center gap-1.5 ml-2">
-                        <template v-for="pb in achievements" :key="pb.type">
-                          <UTooltip
-                            :text="`${pb.label}: ${pb.displayValue}${pb.unit === 's' ? '' : pb.unit}`"
-                          >
-                            <div
-                              class="flex items-center gap-0.5 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 rounded-full border border-yellow-500/20 lowercase font-black text-[10px] tracking-tight"
-                            >
-                              <UIcon name="i-heroicons-trophy" class="w-2.5 h-2.5" />
-                              {{ pb.label }}
-                            </div>
-                          </UTooltip>
-                        </template>
-                      </div>
-                    </div>
-
-                    <div v-if="showTagEditor" class="mt-5 space-y-3">
-                      <div
-                        class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"
-                      >
-                        <div class="min-w-0 flex-1">
-                          <div
-                            class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2"
-                          >
-                            Workout tags
-                          </div>
-                          <UInputTags
-                            v-model="localTagDraft"
-                            placeholder="Add local tags"
-                            color="neutral"
-                            variant="outline"
-                            size="sm"
-                          />
-                          <p
-                            class="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-400"
-                          >
-                            Local tags can be edited here. Intervals tags stay read-only.
-                          </p>
-                        </div>
-                        <div class="flex items-center gap-2 shrink-0">
-                          <UButton
-                            color="neutral"
-                            variant="ghost"
-                            size="sm"
-                            :disabled="!hasLocalTagChanges || savingTags"
-                            @click="
-                              () => {
-                                void resetLocalTags()
-                              }
-                            "
-                          >
-                            Reset
-                          </UButton>
-                          <UButton
-                            color="primary"
-                            variant="solid"
-                            size="sm"
-                            icon="i-heroicons-tag"
-                            :loading="savingTags"
-                            :disabled="!hasLocalTagChanges"
-                            @click="
-                              () => {
-                                void saveLocalTags()
-                              }
-                            "
-                          >
-                            Save Tags
-                          </UButton>
-                        </div>
-                      </div>
-
-                      <div
-                        v-if="intervalsSourceTags.length > 0"
-                        class="flex flex-wrap items-center gap-2"
-                      >
-                        <span
-                          class="text-[10px] font-black uppercase tracking-widest text-gray-400"
-                        >
-                          Intervals
-                        </span>
-                        <UBadge
-                          v-for="tag in intervalsSourceTags"
-                          :key="tag"
-                          color="neutral"
-                          variant="subtle"
-                          size="sm"
-                          class="font-black tracking-tight lowercase"
-                        >
-                          {{ tag }}
-                        </UBadge>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Key Stats Grid -->
-                <div
-                  class="mt-4 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-4 sm:gap-4"
-                >
-                  <div
-                    v-if="workout.trainingLoad"
-                    class="group cursor-pointer rounded-xl border border-blue-100 bg-blue-50 p-3.5 transition-all hover:border-blue-500/50 active:scale-[0.98] dark:border-blue-800/50 dark:bg-blue-900/20 sm:p-4"
-                    @click="
-                      () => {
-                        handleOpenMetric({
-                          key: t('metrics_tss'),
-                          value: Math.round(workout.trainingLoad),
-                          unit: ''
-                        })
-                      }
-                    "
-                  >
-                    <div class="flex items-center justify-between mb-1">
-                      <UTooltip
-                        :popper="{ placement: 'top' }"
-                        :ui="{ content: 'w-[300px] h-auto whitespace-normal' }"
-                        arrow
-                      >
-                        <div
-                          class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 border-b border-dashed border-blue-300 dark:border-blue-700 inline-block cursor-help"
-                        >
-                          {{ t('metrics_tss') }}
-                        </div>
-                        <template #content>
-                          <div class="text-left text-sm">{{ tt('training_load') }}</div>
-                        </template>
-                      </UTooltip>
-                      <UIcon
-                        name="i-heroicons-magnifying-glass-circle"
-                        class="w-4 h-4 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                      />
-                    </div>
-                    <div
-                      class="text-xl font-black tracking-tight text-blue-900 dark:text-blue-100 sm:text-2xl"
-                    >
-                      {{ Math.round(workout.trainingLoad) }}
-                    </div>
-                  </div>
-                  <div
-                    v-if="workout.averageHr"
-                    class="group cursor-pointer rounded-xl border border-pink-100 bg-pink-50 p-3.5 transition-all hover:border-pink-500/50 active:scale-[0.98] dark:border-pink-800/50 dark:bg-pink-900/20 sm:p-4"
-                    @click="
-                      () => {
-                        handleOpenMetric({
-                          key: t('metrics_avg_hr'),
-                          value: workout.averageHr,
-                          unit: 'BPM'
-                        })
-                      }
-                    "
-                  >
-                    <div class="flex items-center justify-between mb-1">
-                      <UTooltip
-                        :popper="{ placement: 'top' }"
-                        :ui="{ content: 'w-[300px] h-auto whitespace-normal' }"
-                        arrow
-                      >
-                        <div
-                          class="text-[10px] font-black uppercase tracking-widest text-pink-600 dark:text-pink-400 mb-1 border-b border-dashed border-pink-300 dark:border-pink-700 inline-block cursor-help"
-                        >
-                          {{ t('metrics_avg_hr') }}
-                        </div>
-                        <template #content>
-                          <div class="text-left text-sm">{{ tt('avg_hr') }}</div>
-                        </template>
-                      </UTooltip>
-                      <UIcon
-                        name="i-heroicons-magnifying-glass-circle"
-                        class="w-4 h-4 text-pink-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                      />
-                    </div>
-                    <div
-                      class="text-xl font-black tracking-tight text-pink-900 dark:text-pink-100 sm:text-2xl"
-                    >
-                      {{ workout.averageHr }}
-                      <span class="text-xs font-bold text-pink-500 uppercase">BPM</span>
-                    </div>
-                  </div>
-                  <div
-                    v-if="workout.averageWatts"
-                    class="group cursor-pointer rounded-xl border border-purple-100 bg-purple-50 p-3.5 transition-all hover:border-purple-500/50 active:scale-[0.98] dark:border-purple-800/50 dark:bg-purple-900/20 sm:p-4"
-                    @click="
-                      () => {
-                        handleOpenMetric({
-                          key: t('metrics_avg_power'),
-                          value: workout.averageWatts,
-                          unit: 'W'
-                        })
-                      }
-                    "
-                  >
-                    <div class="flex items-center justify-between mb-1">
-                      <UTooltip
-                        :popper="{ placement: 'top' }"
-                        :ui="{ content: 'w-[300px] h-auto whitespace-normal' }"
-                        arrow
-                      >
-                        <div
-                          class="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-1 border-b border-dashed border-purple-300 dark:border-purple-700 inline-block cursor-help"
-                        >
-                          {{ t('metrics_avg_power') }}
-                        </div>
-                        <template #content>
-                          <div class="text-left text-sm">{{ tt('avg_power') }}</div>
-                        </template>
-                      </UTooltip>
-                      <UIcon
-                        name="i-heroicons-magnifying-glass-circle"
-                        class="w-4 h-4 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                      />
-                    </div>
-                    <div
-                      class="text-xl font-black tracking-tight text-purple-900 dark:text-purple-100 sm:text-2xl"
-                    >
-                      {{ workout.averageWatts
-                      }}<span class="text-xs font-bold text-purple-500 uppercase">W</span>
-                    </div>
-                  </div>
-                  <div
-                    v-if="workout.normalizedPower"
-                    class="group cursor-pointer rounded-xl border border-indigo-100 bg-indigo-50 p-3.5 transition-all hover:border-indigo-500/50 active:scale-[0.98] dark:border-indigo-800/50 dark:bg-indigo-900/20 sm:p-4"
-                    @click="
-                      () => {
-                        handleOpenMetric({
-                          key: t('metrics_np'),
-                          value: workout.normalizedPower,
-                          unit: 'W'
-                        })
-                      }
-                    "
-                  >
-                    <div class="flex items-center justify-between mb-1">
-                      <UTooltip
-                        :popper="{ placement: 'top' }"
-                        :ui="{ content: 'w-[300px] h-auto whitespace-normal' }"
-                        arrow
-                      >
-                        <div
-                          class="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-1 border-b border-dashed border-indigo-300 dark:border-indigo-700 inline-block cursor-help"
-                        >
-                          {{ t('metrics_np') }}
-                        </div>
-                        <template #content>
-                          <div class="text-left text-sm">{{ tt('norm_power') }}</div>
-                        </template>
-                      </UTooltip>
-                      <UIcon
-                        name="i-heroicons-magnifying-glass-circle"
-                        class="w-4 h-4 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                      />
-                    </div>
-                    <div
-                      class="text-xl font-black tracking-tight text-indigo-900 dark:text-indigo-100 sm:text-2xl"
-                    >
-                      {{ workout.normalizedPower
-                      }}<span class="text-xs font-bold text-indigo-500 uppercase">W</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  v-if="workout.description"
-                  class="mt-6 p-4 bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800"
-                >
-                  <p
-                    class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed font-medium"
-                  >
-                    {{ workout.description }}
-                  </p>
-                </div>
-              </div>
+          <details
+            v-if="
+              workoutJourneyView === 'summary' && (workout.overallScore || workout.technicalScore)
+            "
+            class="session-disclosure"
+            :style="{ order: 20 }"
+          >
+            <summary>{{ t('performance_summary_header') }}</summary>
+            <div class="mt-6 max-w-lg">
+              <PerformanceScoreChart
+                :scores="{
+                  overall: workout.overallScore,
+                  technical: workout.technicalScore,
+                  effort: workout.effortScore,
+                  pacing: workout.pacingScore,
+                  execution: workout.executionScore
+                }"
+              />
             </div>
-
-            <!-- Performance Scores Card - 1/3 -->
-            <div id="scores" class="scroll-mt-20 lg:col-span-1">
-              <div
-                v-if="
-                  workout.overallScore ||
-                  workout.technicalScore ||
-                  workout.effortScore ||
-                  workout.pacingScore ||
-                  workout.executionScore
-                "
-                class="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-none sm:shadow p-4 sm:p-6 border-x-0 sm:border-x border-y border-gray-100 dark:border-gray-800 h-full"
+          </details>
+          <details
+            v-if="isJourneySectionVisible('training-impact')"
+            class="session-disclosure"
+            :style="sectionStyle('training-impact')"
+          >
+            <summary>{{ t('journey_training_impact') }}</summary>
+            <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <UButton
+                v-for="metric in journeyTrainingImpact"
+                :key="metric.key"
+                color="neutral"
+                variant="soft"
+                class="min-h-20 flex-col items-start p-4"
+                @click="handleOpenMetric({ key: metric.key, value: metric.value ?? 0 })"
               >
-                <h2
-                  class="mb-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 sm:mb-6"
-                >
-                  <UIcon name="i-heroicons-star" class="w-4 h-4 text-amber-500" />
-                  {{ t('performance_summary_header') }}
-                </h2>
-                <div class="h-[180px] sm:h-[200px]">
-                  <PerformanceScoreChart
-                    :scores="{
-                      overall: workout.overallScore,
-                      technical: workout.technicalScore,
-                      effort: workout.effortScore,
-                      pacing: workout.pacingScore,
-                      execution: workout.executionScore
-                    }"
-                  />
-                </div>
-              </div>
-              <!-- Placeholder for when analysis is missing -->
-              <div
-                v-else
-                class="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-none sm:shadow p-4 sm:p-6 border-x-0 sm:border-x border-y border-gray-100 dark:border-gray-800 h-full flex flex-col items-center justify-center text-center"
-              >
-                <div
-                  class="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4"
-                >
-                  <UIcon name="i-heroicons-sparkles" class="w-6 h-6 text-gray-400" />
-                </div>
-                <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-                  {{ t('analysis_required_title') }}
-                </h2>
-                <p
-                  class="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed max-w-[140px]"
-                >
-                  {{ t('analysis_required_desc') }}
-                </p>
-                <UButton
-                  color="neutral"
-                  variant="subtle"
-                  size="xs"
-                  class="mt-6 font-black uppercase tracking-widest text-[9px]"
-                  @click="
-                    () => {
-                      void scrollToSection('analysis')
-                    }
-                  "
-                >
-                  {{ t('analysis_required_button') }}
-                </UButton>
-              </div>
+                <span class="text-sm text-muted">{{ metric.label }}</span>
+                <span class="text-xl font-semibold tabular-nums">{{ metric.value ?? '—' }}</span>
+              </UButton>
             </div>
+            <p class="mt-5 text-sm text-muted">
+              {{
+                workout.source === 'intervals'
+                  ? t('impact_source_intervals', { link: 'Intervals.icu' })
+                  : t('impact_source_local')
+              }}
+            </p>
+            <ul class="mt-4 space-y-2 text-sm text-muted">
+              <li>{{ tt('tss_load') }}</li>
+              <li>{{ tt('fitness_ctl') }}</li>
+              <li>{{ tt('fatigue_atl') }}</li>
+              <li>{{ tt('form_tsb') }}</li>
+            </ul>
+          </details>
+          <div
+            v-if="workoutJourneyView !== 'summary'"
+            class="flex flex-wrap items-center gap-3"
+            :style="{ order: -30 }"
+          >
+            <label for="session-section" class="text-sm text-muted">{{ t('journey_jump') }}</label>
+            <select
+              id="session-section"
+              class="session-section-select"
+              @change="scrollToSection(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">{{ t('journey_choose_section') }}</option>
+              <option
+                v-for="section in workoutNavSections"
+                :key="section.key"
+                :value="section.anchorId"
+              >
+                {{ section.label }}
+              </option>
+            </select>
           </div>
 
           <!-- Refactored Threshold Detection Banner -->
-          <template v-if="detectedThresholds.length > 0">
+          <template v-if="workoutJourneyView === 'summary' && detectedThresholds.length > 0">
             <div
               v-for="detection in detectedThresholds"
               :key="detection.type"
-              class="relative overflow-hidden bg-neutral-50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-gray-800 rounded-2xl p-6 sm:p-8 shadow-xl dark:shadow-2xl transition-all duration-300 group"
+              class="relative overflow-hidden bg-neutral-50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-gray-800 rounded-2xl p-6 sm:p-8 shadow-none transition-all duration-300 group"
             >
               <!-- Decorative Accent -->
               <div class="absolute top-0 left-0 w-1 h-full bg-primary-500" />
@@ -1916,7 +461,7 @@
                       <UIcon name="i-heroicons-sparkles" class="w-5 h-5 text-primary-500" />
                     </div>
                     <h3
-                      class="text-lg font-black text-neutral-900 dark:text-white uppercase tracking-tight italic"
+                      class="text-lg font-semibold text-neutral-900 dark:text-white tracking-tight italic"
                     >
                       {{ t('level_up_detected', { sport: detection.sportName }) }}
                     </h3>
@@ -1940,7 +485,7 @@
                         color="neutral"
                         variant="subtle"
                         size="xs"
-                        class="uppercase text-[8px] font-bold"
+                        class="text-xs font-bold"
                         :label="t('level_up_estimated')"
                       />
                     </div>
@@ -1952,7 +497,7 @@
                         size="md"
                         color="primary"
                         variant="solid"
-                        class="font-black px-6 shadow-lg shadow-primary-500/20"
+                        class="font-semibold px-6 shadow-none shadow-primary-500/20"
                         :label="t('level_up_update_now')"
                         @click="
                           () => {
@@ -1973,7 +518,7 @@
                         "
                       />
                     </div>
-                    <p class="text-[9px] text-neutral-400 dark:text-gray-500 italic leading-tight">
+                    <p class="text-xs text-neutral-400 dark:text-gray-500 italic leading-tight">
                       {{ t('level_up_sync_note') }}
                     </p>
                   </div>
@@ -1986,9 +531,7 @@
                   >
                     <!-- Old Value -->
                     <div class="text-center">
-                      <div
-                        class="text-[10px] font-black text-neutral-400 dark:text-gray-500 uppercase tracking-widest mb-1"
-                      >
+                      <div class="text-xs font-semibold text-neutral-400 dark:text-gray-500 mb-1">
                         {{ t('level_up_old') }}
                       </div>
                       <div
@@ -2003,7 +546,7 @@
                     <div class="flex flex-col items-center gap-1">
                       <div
                         v-if="detection.percent > 0"
-                        class="text-[10px] font-black text-primary-500 bg-primary-500/10 px-2 py-0.5 rounded-full"
+                        class="text-xs font-semibold text-primary-500 bg-primary-500/10 px-2 py-0.5 rounded-full"
                       >
                         +{{ detection.percent }}%
                       </div>
@@ -2015,19 +558,16 @@
 
                     <!-- New Value -->
                     <div class="text-center relative">
-                      <div
-                        class="text-[10px] font-black text-primary-500 uppercase tracking-widest mb-1"
-                      >
+                      <div class="text-xs font-semibold text-primary-500 mb-1">
                         {{ t('level_up_new') }}
                       </div>
                       <div
-                        class="text-4xl font-black text-neutral-900 dark:text-white flex items-baseline gap-1"
+                        class="text-4xl font-semibold text-neutral-900 dark:text-white flex items-baseline gap-1"
                       >
                         {{ detection.newValue }}
-                        <span
-                          class="text-sm font-bold text-neutral-400 dark:text-gray-500 uppercase"
-                          >{{ detection.unit.trim() }}</span
-                        >
+                        <span class="text-sm font-bold text-neutral-400 dark:text-gray-500">{{
+                          detection.unit.trim()
+                        }}</span>
                       </div>
                     </div>
                   </div>
@@ -2036,209 +576,85 @@
             </div>
           </template>
 
-          <!-- Exercises Section -->
-          <div
-            v-if="isSectionEnabled('exercises')"
+          <details
+            v-if="isJourneySectionVisible('exercises')"
             id="exercises"
-            class="scroll-mt-20 space-y-4"
+            class="scroll-mt-20 session-disclosure"
             :style="sectionStyle('exercises')"
           >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-5 sm:px-0">
-              {{ t('sections_exercises') }}
-            </h2>
-            <WorkoutsExerciseList :exercises="workout.exercises" />
-          </div>
+            <summary>{{ t('sections_exercises') }}</summary>
+            <WorkoutsExerciseList class="mt-5" :exercises="workout.exercises" />
+          </details>
 
-          <!-- Fueling HUD (Nutrition Debrief) -->
-          <div
-            v-if="isSectionEnabled('nutrition')"
+          <details
+            v-if="isJourneySectionVisible('nutrition')"
             id="nutrition"
-            class="scroll-mt-20 bg-zinc-50 dark:bg-gray-900 rounded-none sm:rounded-3xl shadow-sm dark:shadow-2xl p-6 sm:p-10 border-x-0 sm:border-x border-y border-zinc-200 dark:border-white/5 relative overflow-hidden flex flex-col gap-8"
+            class="scroll-mt-20 session-disclosure"
             :style="sectionStyle('nutrition')"
           >
-            <!-- GHOST DECORATION (Dark Only) -->
-            <div
-              class="hidden dark:block absolute top-0 right-0 w-64 h-64 bg-orange-500/5 blur-[100px] pointer-events-none -mr-32 -mt-32"
-            />
-
-            <div class="flex items-center justify-between relative z-10">
-              <div class="flex items-center gap-4">
-                <div
-                  class="w-12 h-12 rounded-2xl flex items-center justify-center bg-orange-500/10 border border-orange-500/20 shadow-inner"
-                >
-                  <UIcon name="i-heroicons-beaker" class="w-6 h-6 text-orange-500" />
+            <summary>{{ t('nutrition_header') }}</summary>
+            <div class="mt-6 space-y-6">
+              <h3 v-if="nutritionEstimate" class="text-sm font-medium">
+                {{ t('journey_estimated_fuel_use') }}
+              </h3>
+              <dl v-if="nutritionEstimate" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div v-for="item in nutritionEstimate" :key="item.label" class="space-y-1">
+                  <dt class="text-sm text-muted">{{ item.label }}</dt>
+                  <dd class="text-xl font-semibold tabular-nums">{{ item.value }}</dd>
                 </div>
-                <div class="flex flex-col">
-                  <h2
-                    class="text-xl sm:text-2xl font-black uppercase tracking-tighter text-black dark:text-white"
+              </dl>
+              <dl class="flex flex-wrap gap-x-8 gap-y-4 text-sm">
+                <div>
+                  <dt class="text-muted">{{ t('nutrition_actual_energy') }}</dt>
+                  <dd class="mt-1 font-medium tabular-nums">
+                    {{ workout.kilojoules != null ? `${workout.kilojoules} kJ` : '—' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-muted">{{ t('nutrition_planned_energy') }}</dt>
+                  <dd class="mt-1 font-medium tabular-nums">
+                    {{ plannedKJ ? `${plannedKJ} kJ` : t('nutrition_no_target') }}
+                  </dd>
+                </div>
+                <div v-if="workout.plannedWorkout?.tss">
+                  <dt class="text-muted">{{ t('nutrition_energy_delta') }}</dt>
+                  <dd class="mt-1 font-medium tabular-nums">
+                    {{ t('nutrition_vs_plan', { delta: (kJDelta > 0 ? '+' : '') + kJDelta }) }}
+                  </dd>
+                </div>
+              </dl>
+              <fieldset class="space-y-3">
+                <legend class="text-sm font-medium">{{ t('nutrition_digestion_header') }}</legend>
+                <div class="flex items-center gap-2">
+                  <UButton
+                    v-for="i in 5"
+                    :key="i"
+                    :color="stomachFeel === i ? 'primary' : 'neutral'"
+                    :variant="stomachFeel === i ? 'solid' : 'soft'"
+                    class="min-h-11 min-w-11 justify-center"
+                    :aria-pressed="stomachFeel === i"
+                    :aria-label="t('journey_digestion_rating', { rating: i })"
+                    @click="updateStomachFeel(i)"
+                    >{{ i }}</UButton
                   >
-                    {{ t('nutrition_header') }}
-                  </h2>
-                  <span
-                    class="font-mono text-[10px] text-zinc-600 dark:text-zinc-500 uppercase tracking-widest"
-                    >Metabolic & Intake Balance</span
-                  >
                 </div>
-              </div>
-
-              <div v-if="workout.plannedWorkout?.tss" class="text-right flex flex-col items-end">
-                <span
-                  class="font-mono text-[9px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-widest mb-1"
-                  >{{ t('nutrition_energy_delta') }}</span
-                >
-                <div
-                  class="text-xl font-black tabular-nums tracking-tighter"
-                  :class="kJDelta >= 10 ? 'text-red-500' : 'text-[#00DC82]'"
-                >
-                  {{ t('nutrition_vs_plan', { delta: (kJDelta > 0 ? '+' : '') + kJDelta }) }}
+                <div class="flex justify-between max-w-64 text-xs text-muted">
+                  <span>{{ t('nutrition_digestion_poor') }}</span>
+                  <span>{{ t('nutrition_digestion_great') }}</span>
                 </div>
-              </div>
-            </div>
-
-            <!-- MAIN HUD CONTENT -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center relative z-10">
-              <!-- MACRO GRID -->
-              <div v-if="nutritionEstimate" class="grid grid-cols-2 gap-3 sm:gap-4">
-                <div
-                  v-for="item in nutritionEstimate"
-                  :key="item.label"
-                  class="relative group/tile overflow-hidden p-4 rounded-2xl bg-white dark:bg-white/[0.02] border border-zinc-200 dark:border-white/5 shadow-sm dark:shadow-inner transition-all hover:bg-zinc-100 dark:hover:bg-white/[0.04]"
-                >
-                  <!-- 1px Gradient Border Overlay -->
-                  <div
-                    class="absolute inset-0 pointer-events-none opacity-0 group-hover/tile:opacity-100 transition-opacity border border-primary-500/30 rounded-2xl"
-                  />
-
-                  <div class="flex flex-col relative z-10">
-                    <div class="flex items-center gap-2 mb-2">
-                      <UIcon :name="item.icon" class="w-3.5 h-3.5" :class="item.iconClass" />
-                      <span
-                        class="font-mono text-[8px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-widest"
-                        >{{ item.label }}</span
-                      >
-                    </div>
-                    <div class="flex items-baseline gap-1">
-                      <span
-                        class="text-2xl font-black text-black dark:text-white tracking-tighter"
-                        >{{ item.value.split(' ')[0] }}</span
-                      >
-                      <span
-                        class="text-[10px] font-bold text-zinc-600 dark:text-zinc-500 uppercase opacity-60"
-                        >{{ item.value.split(' ')[1] }}</span
-                      >
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- ENERGY DELTA BAR -->
-              <div class="flex flex-col gap-6">
-                <div class="flex flex-col gap-2">
-                  <div class="flex justify-between items-end">
-                    <span
-                      class="font-mono text-[9px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-widest"
-                      >{{ t('nutrition_actual_energy') }} /
-                      {{ t('nutrition_planned_energy') }}</span
-                    >
-                    <span
-                      class="font-mono text-[9px] font-bold text-zinc-600 dark:text-zinc-400 tabular-nums"
-                    >
-                      {{ workout.kilojoules || 0 }} / {{ plannedKJ || 0 }} kJ
-                    </span>
-                  </div>
-
-                  <div
-                    class="relative h-4 w-full bg-zinc-200 dark:bg-white/5 rounded-full overflow-hidden border border-zinc-300 dark:border-white/5"
-                  >
-                    <!-- Progress Bar -->
-                    <div
-                      class="absolute inset-y-0 left-0 bg-gradient-to-r from-orange-600 to-orange-400 transition-all duration-1000 shadow-[0_0_15px_rgba(251,146,60,0.3)]"
-                      :style="{
-                        width:
-                          Math.min(((workout.kilojoules || 0) / (plannedKJ || 1)) * 100, 100) + '%'
-                      }"
-                    >
-                      <!-- Glowing Leading Edge -->
-                      <div class="absolute right-0 top-0 bottom-0 w-1 bg-white/40 blur-[2px]" />
-                    </div>
-
-                    <!-- Demand Marker (Plan) -->
-                    <div
-                      class="absolute inset-y-0 border-l border-zinc-400 dark:border-white/20 z-20"
-                      style="left: 100%"
-                    />
-                  </div>
-
-                  <div
-                    class="flex justify-between text-[8px] font-black text-zinc-500 dark:text-zinc-600 uppercase tracking-widest px-1"
-                  >
-                    <span>Deficit</span>
-                    <span>Surplus</span>
-                  </div>
-                </div>
-
-                <!-- STOMACH FEEL HUD -->
-                <div
-                  class="p-5 rounded-2xl bg-white dark:bg-white/[0.02] border border-zinc-200 dark:border-white/5 flex flex-col gap-4 shadow-sm dark:shadow-inner"
-                >
-                  <span
-                    class="font-mono text-[9px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-widest text-center"
-                    >{{ t('nutrition_digestion_header') }}</span
-                  >
-                  <div class="flex items-center justify-center gap-3">
-                    <button
-                      v-for="i in 5"
-                      :key="i"
-                      class="w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg transition-all duration-300 relative group/pill shadow-sm"
-                      :class="[
-                        stomachFeel === i
-                          ? 'bg-[#00DC82] text-black scale-110 shadow-[0_0_20px_rgba(0,220,130,0.4)] z-20'
-                          : 'bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-white/10'
-                      ]"
-                      @click="
-                        () => {
-                          void updateStomachFeel(i)
-                        }
-                      "
-                    >
-                      {{ i }}
-                    </button>
-                  </div>
-                  <div class="flex justify-between px-2">
-                    <span
-                      class="text-[8px] font-black text-zinc-400 dark:text-zinc-600 uppercase tracking-[0.2em] opacity-60"
-                      >{{ t('nutrition_digestion_poor') }}</span
-                    >
-                    <span
-                      class="text-[8px] font-black text-zinc-400 dark:text-zinc-600 uppercase tracking-[0.2em] opacity-60"
-                      >{{ t('nutrition_digestion_great') }}</span
-                    >
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Recovery Correction Banner (Compact HUD Style) -->
-            <div
-              v-if="kJDelta >= 10"
-              class="p-4 bg-red-500/5 rounded-2xl border border-red-500/10 flex items-start gap-4 relative z-10"
-            >
-              <UIcon
-                name="i-heroicons-exclamation-triangle"
-                class="w-6 h-6 text-red-500 shrink-0"
+              </fieldset>
+              <UAlert
+                v-if="kJDelta >= 10"
+                color="warning"
+                variant="soft"
+                icon="i-heroicons-exclamation-triangle"
+                :title="t('nutrition_adjustment_title')"
+                :description="
+                  t('nutrition_adjustment_desc', { delta: kJDelta, carbs: recoveryCarbBump })
+                "
               />
-              <div class="flex flex-col">
-                <h3
-                  class="font-black text-red-600 dark:text-red-400 text-xs uppercase tracking-widest mb-1"
-                >
-                  {{ t('nutrition_adjustment_title') }}
-                </h3>
-                <p class="text-[11px] text-zinc-600 dark:text-zinc-400 font-medium leading-relaxed">
-                  {{ t('nutrition_adjustment_desc', { delta: kJDelta, carbs: recoveryCarbBump }) }}
-                </p>
-              </div>
             </div>
-          </div>
+          </details>
 
           <!-- AI Analysis Section -->
           <div
@@ -2247,9 +663,7 @@
             class="scroll-mt-20 space-y-0 sm:space-y-8"
             :style="sectionStyle('analysis')"
           >
-            <h2
-              class="hidden sm:block text-base font-black uppercase tracking-[0.25em] text-zinc-500 px-5 sm:px-0 mb-4 sm:mb-0"
-            >
+            <h2 class="text-xl font-semibold text-default mb-4 sm:mb-0">
               {{ t('analysis_header') }}
             </h2>
 
@@ -2267,17 +681,17 @@
 
             <!-- DETAILED INSIGHT HUD -->
             <div
-              class="bg-zinc-50 dark:bg-gray-900 rounded-none sm:rounded-3xl shadow-sm dark:shadow-2xl p-6 sm:p-10 border-x-0 sm:border-x border-y border-zinc-200 dark:border-white/5 relative overflow-hidden"
+              class="bg-zinc-50 dark:bg-gray-900 rounded-none sm:rounded-3xl shadow-none p-6 sm:p-10 border-x-0 sm:border-x border-y border-zinc-200 dark:border-white/5 relative overflow-hidden"
             >
-              <div class="flex items-center justify-between mb-10 relative z-10">
-                <div class="flex items-center gap-3">
+              <div class="flex flex-wrap items-center justify-between gap-4 mb-6 relative z-10">
+                <div class="flex flex-wrap items-center gap-3">
                   <div
                     class="w-10 h-10 rounded-xl flex items-center justify-center bg-primary-500/10 border border-primary-500/20"
                   >
                     <UIcon name="i-heroicons-sparkles" class="w-5 h-5 text-primary-500" />
                   </div>
                   <h3
-                    class="text-lg sm:text-xl font-black uppercase tracking-tighter text-black dark:text-white"
+                    class="text-lg sm:text-xl font-semibold tracking-tight text-black dark:text-white"
                   >
                     {{ t('analysis_detail_title') }}
                   </h3>
@@ -2290,7 +704,7 @@
                     <p class="text-xs font-semibold text-amber-900 dark:text-amber-100">
                       {{ t('analysis_quota_skipped_title') }}
                     </p>
-                    <p class="text-[11px] text-amber-800/90 dark:text-amber-200 mt-1">
+                    <p class="text-xs text-amber-800/90 dark:text-amber-200 mt-1">
                       {{ t('analysis_quota_skipped_desc') }}
                     </p>
                     <div class="flex flex-wrap gap-2 mt-3">
@@ -2328,7 +742,7 @@
                     color="primary"
                     variant="solid"
                     size="md"
-                    class="font-black uppercase tracking-widest text-[11px] px-6"
+                    class="font-semibold text-xs px-6"
                     :loading="analyzingWorkout"
                     :disabled="analyzingWorkout"
                     @click="
@@ -2345,7 +759,7 @@
                     color="neutral"
                     variant="subtle"
                     size="sm"
-                    class="font-black uppercase tracking-widest text-[10px] bg-white dark:bg-white/5 border-zinc-200 dark:border-white/10"
+                    class="font-semibold text-xs bg-white dark:bg-white/5 border-zinc-200 dark:border-white/10"
                     :loading="analyzingWorkout"
                     :disabled="analyzingWorkout"
                     @click="
@@ -2362,7 +776,7 @@
                     color="primary"
                     variant="outline"
                     size="sm"
-                    class="font-black uppercase tracking-widest text-[10px] hidden sm:flex"
+                    class="font-semibold text-sm min-h-11"
                     :loading="publishingSummary"
                     :disabled="publishingSummary || analyzingWorkout"
                     @click="
@@ -2380,22 +794,20 @@
               <div v-if="workout.aiAnalysisJson" class="space-y-12 relative z-10">
                 <!-- Coach's Briefing (Executive Summary) -->
                 <div
-                  class="bg-white dark:bg-white/[0.03] backdrop-blur-md rounded-2xl p-8 border border-zinc-200 dark:border-white/10 relative overflow-hidden group/briefing shadow-sm dark:shadow-none"
+                  class="bg-white dark:bg-white/[0.03] backdrop-blur-md rounded-2xl p-8 border border-zinc-200 dark:border-white/10 relative overflow-hidden group/briefing shadow-none"
                 >
-                  <div
-                    class="absolute top-0 left-0 w-1.5 h-full bg-primary-500 shadow-[0_0_15px_#00DC82]"
-                  />
+                  <div class="absolute top-0 left-0 w-1.5 h-full bg-primary-500 shadow-none" />
                   <h3
-                    class="font-mono text-[9px] font-black uppercase tracking-[0.3em] text-zinc-600 dark:text-zinc-500 mb-5 flex items-center gap-2"
+                    class="tabular-nums text-xs font-semibold text-zinc-600 dark:text-zinc-500 mb-5 flex items-center gap-2"
                   >
                     <UIcon
                       name="i-heroicons-light-bulb"
-                      class="w-4 h-4 text-primary-500 animate-pulse"
+                      class="w-4 h-4 text-primary-500 motion-safe:animate-pulse"
                     />
-                    Key Strategic Takeaway
+                    What your coach noticed
                   </h3>
                   <p
-                    class="text-lg text-zinc-800 dark:text-zinc-100 leading-relaxed font-medium drop-shadow-sm whitespace-pre-wrap"
+                    class="text-lg text-zinc-800 dark:text-zinc-100 leading-relaxed font-medium whitespace-pre-wrap"
                   >
                     {{ workout.aiAnalysisJson.executive_summary }}
                   </p>
@@ -2409,18 +821,18 @@
                   <div
                     v-for="(section, index) in workout.aiAnalysisJson.sections"
                     :key="index"
-                    class="overflow-hidden border border-zinc-200 dark:border-white/5 bg-white dark:bg-white/[0.01] rounded-2xl group/section hover:bg-zinc-50 dark:hover:bg-white/[0.03] transition-all duration-500 shadow-sm dark:shadow-none"
+                    class="overflow-hidden border border-zinc-200 dark:border-white/5 bg-white dark:bg-white/[0.01] rounded-2xl group/section hover:bg-zinc-50 dark:hover:bg-white/[0.03] transition-all duration-500 shadow-none"
                   >
                     <div
                       class="px-6 py-4 border-b border-zinc-100 dark:border-white/5 flex items-center justify-between bg-zinc-50/50 dark:bg-white/[0.02]"
                     >
                       <h3
-                        class="font-mono text-[9px] font-black uppercase tracking-[0.25em] text-zinc-500 dark:text-zinc-400"
+                        class="tabular-nums text-xs font-semibold text-zinc-500 dark:text-zinc-400"
                       >
                         {{ section.title }}
                       </h3>
                       <div
-                        class="px-2 py-0.5 rounded border font-black uppercase tracking-widest text-[8px] transition-colors duration-500"
+                        class="px-2 py-0.5 rounded border font-semibold text-xs transition-colors duration-500"
                         :class="getStatusPillClass(section.status)"
                       >
                         {{ section.status_label || section.status }}
@@ -2431,7 +843,7 @@
                         <li
                           v-for="(point, pIndex) in section.analysis_points"
                           :key="pIndex"
-                          class="flex items-start gap-3 text-sm text-zinc-700 dark:text-zinc-300 font-medium leading-relaxed"
+                          class="flex items-start gap-3 text-sm text-zinc-700 dark:text-default font-medium leading-relaxed"
                         >
                           <span
                             class="i-heroicons-chevron-right w-4 h-4 mt-0.5 text-primary-500/50 flex-shrink-0"
@@ -2447,19 +859,19 @@
                 <!-- Strategic Recommendations HUD -->
                 <div
                   v-if="workout.aiAnalysisJson.recommendations?.length"
-                  class="overflow-hidden border border-zinc-200 dark:border-white/5 bg-white dark:bg-white/[0.01] rounded-2xl shadow-sm dark:shadow-inner"
+                  class="overflow-hidden border border-zinc-200 dark:border-white/5 bg-white dark:bg-white/[0.01] rounded-2xl shadow-none dark:shadow-inner"
                 >
                   <div
                     class="px-8 py-5 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-white/[0.02]"
                   >
                     <h3
-                      class="font-mono text-[9px] font-black uppercase tracking-[0.3em] text-zinc-500 dark:text-zinc-400 flex items-center gap-2"
+                      class="tabular-nums text-xs font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-2"
                     >
                       <UIcon
                         name="i-heroicons-clipboard-document-list"
                         class="w-4 h-4 text-primary-500"
                       />
-                      Command Corrections
+                      What to try next
                     </h3>
                   </div>
                   <div class="px-8 py-10 space-y-8">
@@ -2471,14 +883,14 @@
                     >
                       <div class="flex items-center gap-3 mb-2">
                         <h4
-                          class="text-base font-black text-black dark:text-white uppercase tracking-tight"
+                          class="text-base font-semibold text-black dark:text-white tracking-tight"
                         >
                           {{ rec.title }}
                         </h4>
                         <span
                           v-if="rec.priority"
                           :class="getPriorityBadgeClass(rec.priority)"
-                          class="text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5"
+                          class="text-xs px-2 py-0.5 rounded-full font-semibold border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5"
                         >
                           {{ rec.priority }}
                         </span>
@@ -2502,7 +914,7 @@
                 >
                   <div
                     v-if="workout.aiAnalysisJson.strengths?.length"
-                    class="rounded-2xl p-8 border border-[#00DC82]/10 bg-white dark:bg-[#00DC82]/[0.02] relative overflow-hidden group/str shadow-sm dark:shadow-none"
+                    class="rounded-2xl p-8 border border-[#00DC82]/10 bg-white dark:bg-[#00DC82]/[0.02] relative overflow-hidden group/str shadow-none"
                   >
                     <div
                       class="absolute top-0 right-0 p-4 opacity-5 group-hover/str:opacity-10 transition-opacity"
@@ -2510,9 +922,9 @@
                       <UIcon name="i-heroicons-bolt" class="w-20 h-20 text-[#00DC82]" />
                     </div>
                     <h3
-                      class="font-mono text-[9px] font-black uppercase tracking-[0.3em] text-[#00DC82] mb-6 flex items-center gap-2"
+                      class="tabular-nums text-xs font-semibold text-[#00DC82] mb-6 flex items-center gap-2"
                     >
-                      Performance Strengths
+                      What went well
                     </h3>
                     <ul class="space-y-4">
                       <li
@@ -2531,7 +943,7 @@
 
                   <div
                     v-if="workout.aiAnalysisJson.weaknesses?.length"
-                    class="rounded-2xl p-8 border border-orange-500/10 bg-white dark:bg-orange-500/[0.02] relative overflow-hidden group/weak shadow-sm dark:shadow-none"
+                    class="rounded-2xl p-8 border border-orange-500/10 bg-white dark:bg-orange-500/[0.02] relative overflow-hidden group/weak shadow-none"
                   >
                     <div
                       class="absolute top-0 right-0 p-4 opacity-5 group-hover/weak:opacity-10 transition-opacity"
@@ -2539,9 +951,9 @@
                       <UIcon name="i-heroicons-fire" class="w-20 h-20 text-orange-500" />
                     </div>
                     <h3
-                      class="font-mono text-[9px] font-black uppercase tracking-[0.3em] text-orange-600 dark:text-orange-400 mb-6 flex items-center gap-2"
+                      class="tabular-nums text-xs font-semibold text-orange-600 dark:text-orange-400 mb-6 flex items-center gap-2"
                     >
-                      Technical Limitors
+                      What to work on
                     </h3>
                     <ul class="space-y-4">
                       <li
@@ -2564,10 +976,8 @@
                   v-if="workout.aiAnalyzedAt"
                   class="flex justify-between items-center pt-8 border-t border-zinc-100 dark:border-white/5"
                 >
-                  <div
-                    class="font-mono text-[9px] font-black text-zinc-400 dark:text-zinc-600 uppercase tracking-[0.2em]"
-                  >
-                    Intelligence Sync Completed • {{ formatDate(workout.aiAnalyzedAt) }}
+                  <div class="tabular-nums text-xs font-semibold text-zinc-400 dark:text-zinc-600">
+                    Analysis completed {{ formatDate(workout.aiAnalyzedAt) }}
                   </div>
                 </div>
               </div>
@@ -2576,20 +986,15 @@
               <div v-else-if="workout.aiAnalysis" class="space-y-6 relative z-10">
                 <div class="prose prose-sm dark:prose-invert max-w-none px-2">
                   <!-- eslint-disable vue/no-v-html -- markdown-rendered analysis -->
-                  <div
-                    class="text-zinc-300 font-medium leading-relaxed"
-                    v-html="renderedAnalysis"
-                  />
+                  <div class="text-default font-medium leading-relaxed" v-html="renderedAnalysis" />
                   <!-- eslint-enable vue/no-v-html -->
                 </div>
                 <div
                   v-if="workout.aiAnalyzedAt"
                   class="flex justify-between items-center pt-8 border-t border-white/5"
                 >
-                  <div
-                    class="font-mono text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em]"
-                  >
-                    Legacy Audit Sync • {{ formatDate(workout.aiAnalyzedAt) }}
+                  <div class="tabular-nums text-xs font-semibold text-zinc-600">
+                    Analysis completed {{ formatDate(workout.aiAnalyzedAt) }}
                   </div>
                 </div>
               </div>
@@ -2604,18 +1009,17 @@
                     class="w-10 h-10 text-zinc-600 opacity-40 group-hover:text-primary-500 transition-colors"
                   />
                 </div>
-                <p class="text-sm font-black uppercase tracking-[0.3em] text-white mb-2">
-                  Intelligence Audit Pending
+                <p class="text-sm font-semibold text-default mb-2">
+                  Your coaching review is ready to begin
                 </p>
                 <p class="text-xs text-zinc-500 max-w-sm mx-auto leading-relaxed">
-                  Run deep multi-channel analysis to identify technical limitors and metabolic
-                  breakthroughs.
+                  Analyze this session to understand what went well and what to try next.
                 </p>
                 <UButton
                   size="lg"
                   color="primary"
                   variant="solid"
-                  class="mt-10 font-black uppercase tracking-[0.2em] text-[11px] px-10 py-4 shadow-[0_0_30px_rgba(0,220,130,0.2)] rounded-xl"
+                  class="mt-10 font-semibold text-xs px-10 py-4 shadow-none rounded-xl"
                   @click="
                     () => {
                       void analyzeWorkout()
@@ -2629,22 +1033,20 @@
               <div v-else class="text-center py-24 relative z-10">
                 <div class="relative w-20 h-20 mx-auto mb-8">
                   <div
-                    class="absolute inset-0 rounded-full border-2 border-primary-500/20 animate-ping"
+                    class="absolute inset-0 rounded-full border-2 border-primary-500/20 motion-safe:animate-ping"
                   />
                   <div
-                    class="absolute inset-0 rounded-full border-t-2 border-primary-500 animate-spin"
+                    class="absolute inset-0 rounded-full border-t-2 border-primary-500 motion-safe:animate-spin"
                   />
                   <UIcon
                     name="i-heroicons-cpu-chip"
-                    class="absolute inset-0 m-auto w-8 h-8 text-primary-500 animate-pulse"
+                    class="absolute inset-0 m-auto w-8 h-8 text-primary-500 motion-safe:animate-pulse"
                   />
                 </div>
-                <p class="text-sm text-white font-black uppercase tracking-[0.3em] animate-pulse">
+                <p class="text-sm text-default font-semibold motion-safe:animate-pulse">
                   {{ t('analysis_analyzing') }}
                 </p>
-                <p class="text-[10px] font-mono text-zinc-500 uppercase mt-2 tracking-widest">
-                  Cross-referencing metabolic zones
-                </p>
+                <p class="text-xs tabular-nums text-zinc-500 mt-2">Reviewing your session data</p>
               </div>
             </div>
           </div>
@@ -2656,13 +1058,11 @@
             class="scroll-mt-20 space-y-6"
             :style="sectionStyle('power-curve')"
           >
-            <h2
-              class="text-base font-black uppercase tracking-[0.25em] text-zinc-600 dark:text-zinc-500 px-5 sm:px-0"
-            >
+            <h2 class="text-base font-semibold text-zinc-600 dark:text-zinc-500 px-5 sm:px-0">
               {{ t('sections_power_curve') }}
             </h2>
             <div
-              class="bg-zinc-50 dark:bg-gray-900 rounded-none sm:rounded-3xl shadow-sm dark:shadow-2xl p-6 sm:p-10 border-x-0 sm:border-x border-y border-zinc-200 dark:border-white/5 relative overflow-hidden"
+              class="bg-zinc-50 dark:bg-gray-900 rounded-none sm:rounded-3xl shadow-none p-6 sm:p-10 border-x-0 sm:border-x border-y border-zinc-200 dark:border-white/5 relative overflow-hidden"
             >
               <PowerCurveChart :workout-id="workout.id" />
             </div>
@@ -2676,7 +1076,7 @@
             :style="sectionStyle('intervals')"
           >
             <h2
-              class="text-base font-black uppercase tracking-[0.25em] text-zinc-600 dark:text-zinc-500 px-5 sm:px-0 flex items-center justify-between w-full"
+              class="text-base font-semibold text-zinc-600 dark:text-zinc-500 px-5 sm:px-0 flex items-center justify-between w-full"
             >
               <span>{{ t('sections_intervals') }}</span>
               <UButton
@@ -2684,14 +1084,14 @@
                 size="xs"
                 variant="ghost"
                 color="neutral"
-                class="font-black uppercase tracking-widest text-[9px]"
+                class="font-semibold text-xs"
                 :to="`/workouts/${workout.id}/intervals`"
               >
                 {{ t('interval_audit') }}
               </UButton>
             </h2>
             <div
-              class="bg-zinc-50 dark:bg-gray-900 rounded-none sm:rounded-3xl shadow-sm dark:shadow-2xl p-0 border-x-0 sm:border-x border-y border-zinc-200 dark:border-white/5 relative overflow-hidden"
+              class="bg-zinc-50 dark:bg-gray-900 rounded-none sm:rounded-3xl shadow-none p-0 border-x-0 sm:border-x border-y border-zinc-200 dark:border-white/5 relative overflow-hidden"
             >
               <IntervalsAnalysis
                 :workout-id="workout.id"
@@ -2707,7 +1107,7 @@
             class="scroll-mt-20 space-y-4"
             :style="sectionStyle('advanced')"
           >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-5 sm:px-0">
+            <h2 class="text-base font-semibold text-gray-400 px-5 sm:px-0">
               {{ t('sections_advanced') }}
             </h2>
             <AdvancedWorkoutMetrics :workout-id="workout.id" @open-metric="handleOpenMetric" />
@@ -2721,7 +1121,7 @@
             :style="sectionStyle('map')"
           >
             <h2
-              class="text-base font-black uppercase tracking-widest text-gray-400 px-4 sm:px-0 flex items-center justify-between w-full"
+              class="text-base font-semibold text-gray-400 px-4 sm:px-0 flex items-center justify-between w-full"
             >
               <span>{{ t('sections_map') }}</span>
               <UButton
@@ -2729,7 +1129,7 @@
                 size="xs"
                 variant="ghost"
                 color="neutral"
-                class="font-black uppercase tracking-widest text-[9px]"
+                class="font-semibold text-xs"
                 :to="`/workouts/${workout.id}/map`"
               >
                 {{ t('map_analysis') }}
@@ -2753,7 +1153,7 @@
             class="scroll-mt-20 space-y-4"
             :style="sectionStyle('pacing')"
           >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-5 sm:px-0">
+            <h2 class="text-base font-semibold text-gray-400 px-5 sm:px-0">
               {{ t('sections_pacing') }}
             </h2>
             <PacingAnalysis
@@ -2770,7 +1170,7 @@
             class="scroll-mt-20 space-y-4"
             :style="sectionStyle('timeline')"
           >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-5 sm:px-0">
+            <h2 class="text-base font-semibold text-gray-400 px-5 sm:px-0">
               {{ t('sections_timeline') }}
             </h2>
             <WorkoutTimeline :workout-id="workout.id" />
@@ -2783,7 +1183,7 @@
             class="scroll-mt-20 space-y-4"
             :style="sectionStyle('zones')"
           >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-5 sm:px-0">
+            <h2 class="text-base font-semibold text-gray-400 px-5 sm:px-0">
               {{ t('sections_zones') }}
             </h2>
             <ZoneChart
@@ -2800,7 +1200,7 @@
             class="scroll-mt-20 space-y-4"
             :style="sectionStyle('efficiency')"
           >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-5 sm:px-0">
+            <h2 class="text-base font-semibold text-gray-400 px-5 sm:px-0">
               {{ t('sections_efficiency') }}
             </h2>
             <EfficiencyMetricsCard
@@ -2816,22 +1216,6 @@
             />
           </div>
 
-          <!-- Personal Notes -->
-          <div
-            v-if="isSectionEnabled('notes')"
-            id="notes"
-            class="scroll-mt-20 px-0 sm:px-0"
-            :style="sectionStyle('notes')"
-          >
-            <NotesEditor
-              v-model="workout.notes"
-              :notes-updated-at="workout.notesUpdatedAt"
-              :api-endpoint="`/api/workouts/${workout.id}/notes`"
-              class="rounded-none sm:rounded-xl border-x-0 sm:border-x border-y shadow-none sm:shadow"
-              @update:notes-updated-at="workout.notesUpdatedAt = $event"
-            />
-          </div>
-
           <!-- Detailed Metrics Section -->
           <div
             v-if="shouldRenderSection('metrics')"
@@ -2839,16 +1223,17 @@
             class="scroll-mt-20 space-y-4"
             :style="sectionStyle('metrics')"
           >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-5 sm:px-0">
+            <h2 class="text-base font-semibold text-gray-400 px-5 sm:px-0">
               {{ t('sections_metrics') }}
             </h2>
             <div
               class="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-none sm:shadow p-6 border-x-0 sm:border-x border-y border-gray-100 dark:border-gray-800 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3"
             >
-              <div
+              <button
                 v-for="metric in availableMetrics"
                 :key="metric.key"
-                class="flex justify-between py-2.5 border-b border-gray-100 dark:border-gray-800 group cursor-pointer hover:bg-gray-50/50 dark:hover:bg-gray-800/50 px-2 -mx-2 transition-colors"
+                type="button"
+                class="flex min-h-11 text-left focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 justify-between py-2.5 border-b border-gray-100 dark:border-gray-800 group cursor-pointer hover:bg-gray-50/50 dark:hover:bg-gray-800/50 px-2 -mx-2 transition-colors"
                 @click="
                   () => {
                     void handleOpenMetric({ key: metric.label, value: metric.value })
@@ -2863,7 +1248,7 @@
                     arrow
                   >
                     <span
-                      class="text-[10px] font-black uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 dark:border-gray-700 cursor-help group-hover:text-primary-500 group-hover:border-primary-300 transition-colors"
+                      class="text-xs font-semibold text-gray-500 border-b border-dashed border-gray-300 dark:border-gray-700 cursor-help group-hover:text-primary-500 group-hover:border-primary-300 transition-colors"
                       >{{ metric.label }}</span
                     >
                     <template #content>
@@ -2872,7 +1257,7 @@
                   </UTooltip>
                   <span
                     v-else
-                    class="text-[10px] font-black uppercase tracking-widest text-gray-500 group-hover:text-primary-500 transition-colors"
+                    class="text-xs font-semibold text-gray-500 group-hover:text-primary-500 transition-colors"
                   >
                     {{ metric.label }}
                   </span>
@@ -2881,13 +1266,13 @@
                     color="neutral"
                     variant="soft"
                     size="xs"
-                    class="uppercase tracking-widest font-black text-[8px]"
+                    class="font-semibold text-xs"
                   >
                     FIT
                   </UBadge>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="text-sm font-black text-black dark:text-white">{{
+                  <span class="text-sm font-semibold text-black dark:text-white">{{
                     metric.value
                   }}</span>
                   <UIcon
@@ -2895,7 +1280,7 @@
                     class="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100"
                   />
                 </div>
-              </div>
+              </button>
             </div>
 
             <div
@@ -2907,45 +1292,29 @@
                   <div class="flex items-center gap-2">
                     <UIcon name="i-heroicons-beaker" class="w-5 h-5 text-amber-500" />
                     <div class="flex flex-col">
-                      <h3
-                        class="text-sm font-black uppercase tracking-widest text-gray-900 dark:text-white"
-                      >
+                      <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
                         Calculated Workout Facts
                       </h3>
-                      <div
-                        class="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500"
-                      >
+                      <div class="text-xs font-bold text-gray-400 dark:text-gray-500">
                         Derived training interpretation signals for this workout
                       </div>
                     </div>
                   </div>
                   <div class="flex items-center gap-2">
-                    <UBadge
-                      color="primary"
-                      variant="soft"
-                      class="font-black uppercase tracking-widest text-[9px]"
-                    >
+                    <UBadge color="primary" variant="soft" class="font-semibold text-xs">
                       Schema: {{ analysisFactsVersionLabel }}
                     </UBadge>
-                    <UBadge
-                      color="success"
-                      variant="soft"
-                      class="font-black uppercase tracking-widest text-[9px]"
-                    >
+                    <UBadge color="success" variant="soft" class="font-semibold text-xs">
                       Included: {{ includedPromptFactsCount }}
                     </UBadge>
-                    <UBadge
-                      color="neutral"
-                      variant="soft"
-                      class="font-black uppercase tracking-widest text-[9px]"
-                    >
+                    <UBadge color="neutral" variant="soft" class="font-semibold text-xs">
                       Ignored: {{ ignoredPromptFactsCount }}
                     </UBadge>
                     <UButton
                       color="neutral"
                       variant="ghost"
                       size="sm"
-                      class="font-black uppercase tracking-widest text-[10px]"
+                      class="font-semibold text-xs"
                       :icon="
                         analysisFactsOpen ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'
                       "
@@ -2963,9 +1332,7 @@
                   v-if="!analysisFactsOpen"
                   class="rounded-xl bg-amber-50/70 dark:bg-amber-950/20 p-4 border border-amber-100 dark:border-amber-900/40"
                 >
-                  <div
-                    class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-2"
-                  >
+                  <div class="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-2">
                     Collapsed Summary
                   </div>
                   <div class="flex flex-wrap gap-2">
@@ -2974,7 +1341,7 @@
                       :key="badge.key"
                       :color="getSummaryBadgeColor(badge.value)"
                       variant="soft"
-                      class="font-black uppercase tracking-widest text-[9px]"
+                      class="font-semibold text-xs"
                     >
                       {{ badge.label }}: {{ formatFactValue(badge.value) }}
                     </UBadge>
@@ -2988,7 +1355,7 @@
                       :key="badge.key"
                       :color="getSummaryBadgeColor(badge.value)"
                       variant="soft"
-                      class="font-black uppercase tracking-widest text-[9px]"
+                      class="font-semibold text-xs"
                     >
                       {{ badge.label }}: {{ formatFactValue(badge.value) }}
                     </UBadge>
@@ -3003,9 +1370,7 @@
                       <div
                         class="px-4 py-3 bg-gray-50/70 dark:bg-gray-950/50 border-b border-gray-100 dark:border-gray-800"
                       >
-                        <h4
-                          class="text-[10px] font-black uppercase tracking-widest text-gray-900 dark:text-white"
-                        >
+                        <h4 class="text-xs font-semibold text-gray-900 dark:text-white">
                           {{ group.label }}
                         </h4>
                       </div>
@@ -3022,7 +1387,7 @@
                             arrow
                           >
                             <div
-                              class="font-black uppercase tracking-widest text-gray-400 border-b border-dashed border-gray-300 dark:border-gray-700 inline-block cursor-help"
+                              class="font-semibold text-gray-400 border-b border-dashed border-gray-300 dark:border-gray-700 inline-block cursor-help"
                             >
                               {{ entry.label }}
                             </div>
@@ -3056,19 +1421,19 @@
             class="scroll-mt-20 space-y-4"
             :style="sectionStyle('streams')"
           >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-5 sm:px-0">
+            <h2 class="text-base font-semibold text-gray-400 px-5 sm:px-0">
               {{ t('sections_streams') }}
             </h2>
             <div
               class="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-none sm:shadow p-6 border-x-0 sm:border-x border-y border-gray-100 dark:border-gray-800 flex flex-wrap gap-2.5"
             >
-              <UBadge
+              <UButton
                 v-for="stream in availableStreams"
                 :key="stream.key"
                 color="neutral"
-                variant="subtle"
+                variant="soft"
                 size="sm"
-                class="cursor-pointer hover:bg-primary-50 dark:hover:bg-primary-950 transition-colors uppercase font-black tracking-widest text-[9px] px-2.5 py-1"
+                class="min-h-11 cursor-pointer hover:bg-primary-50 dark:hover:bg-primary-950 transition-colors font-semibold text-xs px-2.5 py-1"
                 @click="
                   () => {
                     void openStreamModal({
@@ -3081,14 +1446,14 @@
                 "
               >
                 {{ stream.label }}
-              </UBadge>
+              </UButton>
               <UButton
                 v-if="hasExtrasMeta"
                 icon="i-heroicons-code-bracket-square"
                 color="neutral"
                 variant="soft"
                 size="sm"
-                class="uppercase font-black tracking-widest text-[9px] px-2.5 py-1"
+                class="font-semibold text-xs px-2.5 py-1"
                 @click="
                   () => {
                     isExtrasMetaModalOpen = true
@@ -3107,7 +1472,7 @@
             class="scroll-mt-20 space-y-4"
             :style="sectionStyle('duplicates')"
           >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-5 sm:px-0">
+            <h2 class="text-base font-semibold text-gray-400 px-5 sm:px-0">
               {{ t('version_header') }}
             </h2>
             <div
@@ -3124,9 +1489,7 @@
                     class="w-6 h-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0"
                   />
                   <div>
-                    <h3
-                      class="font-bold text-yellow-900 dark:text-yellow-100 uppercase tracking-tight"
-                    >
+                    <h3 class="font-bold text-yellow-900 dark:text-yellow-100 tracking-tight">
                       {{ t('version_duplicate_title') }}
                     </h3>
                     <p class="text-sm text-yellow-800 dark:text-yellow-200 mt-1">
@@ -3134,9 +1497,7 @@
                     </p>
 
                     <div v-if="workout.canonicalWorkout" class="mt-4">
-                      <p
-                        class="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-2"
-                      >
+                      <p class="text-xs font-semibold text-gray-500 mb-2">
                         {{ t('version_original_ref') }}
                       </p>
                       <div
@@ -3154,13 +1515,11 @@
                             >
                               <div class="min-w-0 flex-1">
                                 <div
-                                  class="font-black text-gray-900 dark:text-white truncate uppercase tracking-tight"
+                                  class="font-semibold text-gray-900 dark:text-white truncate tracking-tight"
                                 >
                                   {{ workout.canonicalWorkout.title }}
                                 </div>
-                                <div
-                                  class="text-[10px] text-gray-500 mt-1 font-bold uppercase tracking-widest"
-                                >
+                                <div class="text-xs text-gray-500 mt-1 font-bold">
                                   {{ formatDate(workout.canonicalWorkout.date) }}
                                 </div>
                               </div>
@@ -3188,7 +1547,7 @@
                                   <span
                                     v-else
                                     :class="getSourceBadgeClass(workout.canonicalWorkout.source)"
-                                    class="py-0 px-1.5 text-[10px]"
+                                    class="py-0 px-1.5 text-xs"
                                   >
                                     {{ getWorkoutSourceLabel(workout.canonicalWorkout, t) }}
                                   </span>
@@ -3252,7 +1611,7 @@
                     class="w-6 h-6 text-blue-600 dark:text-blue-400 flex-shrink-0"
                   />
                   <div>
-                    <h3 class="font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                    <h3 class="font-semibold text-gray-900 dark:text-white tracking-tight">
                       {{ t('version_linked_duplicates') }}
                     </h3>
                     <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 font-medium">
@@ -3279,26 +1638,20 @@
                         >
                           <div class="min-w-0 flex-1">
                             <div
-                              class="font-black text-gray-900 dark:text-white truncate uppercase tracking-tight"
+                              class="font-semibold text-gray-900 dark:text-white truncate tracking-tight"
                             >
                               {{ dup.title }}
                             </div>
-                            <div
-                              class="text-[10px] text-gray-500 mt-1 font-bold uppercase tracking-widest"
-                            >
+                            <div class="text-xs text-gray-500 mt-1 font-bold">
                               {{ formatDate(dup.date) }}
                             </div>
                           </div>
                           <div
                             class="flex items-center justify-between sm:justify-end gap-4 shrink-0"
                           >
-                            <UBadge
-                              color="warning"
-                              variant="subtle"
-                              size="xs"
-                              class="font-bold uppercase tracking-widest"
-                              >{{ t('sections_duplicates') }}</UBadge
-                            >
+                            <UBadge color="warning" variant="subtle" size="xs" class="font-bold">{{
+                              t('sections_duplicates')
+                            }}</UBadge>
                             <div class="flex justify-end">
                               <UiDataAttribution
                                 v-if="
@@ -3320,7 +1673,7 @@
                               <span
                                 v-else
                                 :class="getSourceBadgeClass(dup.source)"
-                                class="py-0 px-1.5 text-[10px]"
+                                class="py-0 px-1.5 text-xs"
                               >
                                 {{ getWorkoutSourceLabel(dup, t) }}
                               </span>
@@ -3361,7 +1714,7 @@
                     class="w-6 h-6 text-primary-600 dark:text-primary-400 flex-shrink-0"
                   />
                   <div>
-                    <h3 class="font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                    <h3 class="font-semibold text-gray-900 dark:text-white tracking-tight">
                       {{ t('version_prescribed_plan') }}
                     </h3>
                     <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 font-medium">
@@ -3372,37 +1725,29 @@
 
                 <NuxtLink
                   :to="`/workouts/planned/${workout.plannedWorkout.id}`"
-                  class="block p-4 bg-primary-50 dark:bg-primary-950/20 rounded-xl border border-primary-100 dark:border-primary-900/50 hover:border-primary-500 dark:hover:border-primary-500 transition-all shadow-sm"
+                  class="block p-4 bg-primary-50 dark:bg-primary-950/20 rounded-xl border border-primary-100 dark:border-primary-900/50 hover:border-primary-500 dark:hover:border-primary-500 transition-all shadow-none"
                 >
                   <div
                     class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4"
                   >
                     <div class="min-w-0 flex-1">
-                      <div
-                        class="font-black text-gray-900 dark:text-white uppercase tracking-tight"
-                      >
+                      <div class="font-semibold text-gray-900 dark:text-white tracking-tight">
                         {{ workout.plannedWorkout.title }}
                       </div>
-                      <div
-                        class="text-[10px] text-gray-500 mt-1 flex items-center gap-2 font-bold uppercase tracking-widest"
-                      >
+                      <div class="text-xs text-gray-500 mt-1 flex items-center gap-2 font-bold">
                         {{ formatDateUTC(workout.plannedWorkout.date) }}
                         <span
                           v-if="workout.plannedWorkout.type"
-                          class="px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-700 text-[10px] font-black uppercase tracking-widest"
+                          class="px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-700 text-xs font-semibold"
                         >
                           {{ workout.plannedWorkout.type }}
                         </span>
                       </div>
                     </div>
                     <div class="flex items-center justify-between sm:justify-end gap-2 shrink-0">
-                      <UBadge
-                        color="primary"
-                        variant="solid"
-                        size="xs"
-                        class="font-black uppercase tracking-widest"
-                        >{{ t('legend_plan') }}</UBadge
-                      >
+                      <UBadge color="primary" variant="solid" size="xs" class="font-semibold">{{
+                        t('legend_plan')
+                      }}</UBadge>
                       <UIcon name="i-heroicons-arrow-right" class="w-4 h-4 text-gray-400" />
                     </div>
                   </div>
@@ -3417,7 +1762,7 @@
             class="scroll-mt-20 space-y-4"
             :style="sectionStyle('raw-data')"
           >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-5 sm:px-0">
+            <h2 class="text-base font-semibold text-gray-400 px-5 sm:px-0">
               {{ t('raw_data_header') }}
             </h2>
             <JsonViewer
@@ -3437,6 +1782,13 @@
               :initial-feedback-text="workout.feedbackText"
             />
           </div>
+        </div>
+        <div v-else class="space-y-4 py-12 text-center">
+          <h1 class="text-2xl font-semibold">{{ t('journey_not_found') }}</h1>
+          <p class="text-sm text-muted">{{ t('journey_not_found_hint') }}</p>
+          <UButton color="neutral" variant="soft" class="min-h-11" @click="goBack">
+            {{ t('back_to_data') }}
+          </UButton>
         </div>
       </div>
     </template>
@@ -3640,9 +1992,7 @@
               class="w-6 h-6 text-orange-600 dark:text-orange-400 flex-shrink-0"
             />
             <div>
-              <h3
-                class="font-semibold text-orange-900 dark:text-orange-100 uppercase tracking-tight text-xs"
-              >
+              <h3 class="font-semibold text-orange-900 dark:text-orange-100 tracking-tight text-xs">
                 {{ t('modal_delete_sync_note_title') }}
               </h3>
               <p class="text-xs text-orange-800 dark:text-orange-200 mt-1">
@@ -3769,6 +2119,46 @@
     | 'streams'
     | 'duplicates'
     | 'raw-data'
+
+  type WorkoutJourneyView = 'summary' | 'analysis' | 'details'
+  const workoutJourneyView = ref<WorkoutJourneyView>('summary')
+  const workoutJourneyViews = computed(() => [
+    { value: 'summary' as const, label: t.value('journey_summary') },
+    { value: 'analysis' as const, label: t.value('journey_analysis') },
+    { value: 'details' as const, label: t.value('journey_details') }
+  ])
+  const workoutJourneySectionGroups: Record<WorkoutSectionKey, WorkoutJourneyView> = {
+    overview: 'summary',
+    'training-impact': 'summary',
+    exercises: 'summary',
+    nutrition: 'summary',
+    notes: 'summary',
+    analysis: 'analysis',
+    'power-curve': 'analysis',
+    intervals: 'analysis',
+    advanced: 'analysis',
+    map: 'analysis',
+    pacing: 'analysis',
+    timeline: 'analysis',
+    zones: 'analysis',
+    efficiency: 'analysis',
+    metrics: 'details',
+    streams: 'details',
+    duplicates: 'details',
+    'raw-data': 'details'
+  }
+
+  function isJourneySectionVisible(sectionKey: WorkoutSectionKey) {
+    return (
+      workoutJourneySectionGroups[sectionKey] === workoutJourneyView.value &&
+      isSectionEnabled(sectionKey)
+    )
+  }
+
+  function selectWorkoutJourneyView(view: WorkoutJourneyView) {
+    workoutJourneyView.value = view
+    deferredSectionsReady.value = true
+  }
 
   interface WorkoutSectionSettings {
     [key: string]: {
@@ -5242,6 +3632,32 @@
     }
   })
 
+  const journeyTrainingImpact = computed(() => [
+    {
+      key: 'Fitness (CTL)',
+      label: 'Fitness',
+      value: workout.value?.ctl != null ? Math.round(workout.value.ctl) : null
+    },
+    {
+      key: 'Fatigue (ATL)',
+      label: 'Fatigue',
+      value: workout.value?.atl != null ? Math.round(workout.value.atl) : null
+    },
+    {
+      key: 'TSS (Load)',
+      label: 'Training load',
+      value:
+        workout.value?.tss != null || workout.value?.trainingLoad != null
+          ? Math.round(workout.value.tss ?? workout.value.trainingLoad)
+          : null
+    },
+    {
+      key: 'Form (TSB)',
+      label: 'Form',
+      value: Number.isFinite(calculateForm(workout.value)) ? calculateForm(workout.value) : null
+    }
+  ])
+
   const workoutSectionSettings = computed<WorkoutSectionSettings>(() => {
     const saved =
       (userStore.user?.dashboardSettings?.workoutDetailSections as
@@ -5270,7 +3686,7 @@
 
   const workoutNavSections = computed(() =>
     workoutSectionCatalog.value
-      .filter((section) => isSectionEnabled(section.key))
+      .filter((section) => isJourneySectionVisible(section.key))
       .sort(
         (a, b) =>
           (workoutSectionSettings.value[a.key]?.order ?? 0) -
@@ -5296,7 +3712,7 @@
 
   function shouldRenderSection(sectionKey: WorkoutSectionKey) {
     return (
-      isSectionEnabled(sectionKey) &&
+      isJourneySectionVisible(sectionKey) &&
       (deferredSectionsReady.value || !deferredSectionKeys.has(sectionKey))
     )
   }
@@ -5322,7 +3738,7 @@
 
   function sectionStyle(sectionKey: WorkoutSectionKey) {
     return {
-      order: workoutSectionSettings.value[sectionKey]?.order ?? 0
+      order: sectionKey === 'notes' ? -10 : (workoutSectionSettings.value[sectionKey]?.order ?? 0)
     }
   }
 
@@ -5976,6 +4392,9 @@
 
   // Scroll to section
   function scrollToSection(sectionId: string) {
+    if (!sectionId) return
+    const section = workoutSectionCatalog.value.find((entry) => entry.anchorId === sectionId)
+    if (section) workoutJourneyView.value = workoutJourneySectionGroups[section.key]
     trackWorkoutSectionView(sectionId)
     if (!deferredSectionsReady.value) {
       deferredSectionsReady.value = true
@@ -5983,7 +4402,10 @@
 
     void nextTick(() => {
       const element = document.getElementById(sectionId)
-      element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      element?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start'
+      })
     })
   }
 
@@ -6257,6 +4679,18 @@
     }
   })
 
+  watch(
+    [() => route.hash, loading],
+    ([hash, isLoading]) => {
+      if (isLoading || error.value || !workout.value || !hash) return
+      const sectionId = hash.slice(1)
+      if (workoutSectionCatalog.value.some((section) => section.anchorId === sectionId)) {
+        scrollToSection(sectionId)
+      }
+    },
+    { flush: 'post' }
+  )
+
   onBeforeUnmount(() => {
     isPageActive.value = false
 
@@ -6275,6 +4709,8 @@
         deferredSectionsTimer = null
       }
       deferredSectionsReady.value = false
+      workoutJourneyView.value = 'summary'
+      showTagEditor.value = false
       fetchWorkout()
     }
   )
@@ -6285,16 +4721,39 @@
 </script>
 
 <style scoped>
-  @keyframes pulse-slow {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.7;
-    }
+  .session-intro {
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--ui-border);
   }
-  .animate-pulse-slow {
-    animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  .session-coach {
+    max-width: 48rem;
+  }
+  .session-disclosure {
+    border-top: 1px solid var(--ui-border);
+    padding-top: 1.25rem;
+  }
+  .session-disclosure > summary {
+    cursor: pointer;
+    padding-block: 0.5rem;
+    font-weight: 600;
+    min-height: 2.75rem;
+  }
+  .session-description > summary:focus-visible,
+  .session-disclosure > summary:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 4px;
+    border-radius: 0.25rem;
+  }
+  .session-section-select {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--ui-border);
+    border-radius: 0.5rem;
+    background: var(--ui-bg);
+    max-width: 100%;
+  }
+  .session-section-select:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 2px;
   }
 </style>

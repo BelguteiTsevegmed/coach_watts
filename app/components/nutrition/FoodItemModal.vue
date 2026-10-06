@@ -1,7 +1,7 @@
 <template>
   <UModal
     v-model:open="isOpen"
-    :title="isEditing ? 'Edit Food Entry' : 'Add Food Entry'"
+    :title="isEditing ? t('journey_edit_food') : t('journey_log_food')"
     :ui="{
       content: 'z-[9999]',
       overlay: 'z-[9998]'
@@ -10,13 +10,14 @@
   >
     <template #header>
       <div class="flex items-center justify-between w-full">
-        <h3 class="text-lg font-black uppercase tracking-tight">
-          {{ isEditing ? 'Edit Food Entry' : 'Add Food Entry' }}
+        <h3 class="text-lg font-medium tracking-tight">
+          {{ isEditing ? t('journey_edit_food') : t('journey_log_food') }}
         </h3>
         <UButton
           color="neutral"
           variant="ghost"
           icon="i-heroicons-x-mark"
+          :aria-label="t('journey_close')"
           @click="
             () => {
               isOpen = false
@@ -28,12 +29,12 @@
 
     <template #body>
       <UForm :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
-        <UFormField label="Meal Type" name="mealType">
+        <UFormField :label="t('journey_meal')" name="mealType">
           <USelect v-model="state.mealType" :items="mealTypes" class="w-full" />
         </UFormField>
 
         <div class="flex items-end gap-2">
-          <UFormField label="Food Name" name="name" class="flex-1">
+          <UFormField :label="t('journey_food_name')" name="name" class="flex-1">
             <UInput
               v-model="state.name"
               placeholder="e.g. Oatmeal with blueberries"
@@ -51,18 +52,9 @@
               }
             "
           >
-            Search DB
+            {{ t('journey_search_foods') }}
           </UButton>
         </div>
-
-        <UFormField label="Absorption Type" name="absorptionType">
-          <USelect
-            v-model="state.absorptionType"
-            :items="absorptionTypes"
-            class="w-full"
-            placeholder="Select absorption rate"
-          />
-        </UFormField>
 
         <div class="grid grid-cols-2 gap-4">
           <UFormField label="Amount" name="amount">
@@ -73,24 +65,39 @@
           </UFormField>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <UFormField label="Calories" name="calories">
-            <UInput v-model="state.calories" type="number" class="w-full" />
-          </UFormField>
-          <UFormField label="Carbs (g)" name="carbs">
-            <UInput v-model="state.carbs" type="number" class="w-full" />
-          </UFormField>
-          <UFormField label="Protein (g)" name="protein">
-            <UInput v-model="state.protein" type="number" class="w-full" />
-          </UFormField>
-          <UFormField label="Fat (g)" name="fat">
-            <UInput v-model="state.fat" type="number" class="w-full" />
-          </UFormField>
-        </div>
+        <details class="border-t border-default">
+          <summary class="cursor-pointer py-4 text-sm font-medium">
+            {{ t('journey_food_facts') }}
+          </summary>
+          <div class="space-y-4 pb-4">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <UFormField label="Calories" name="calories">
+                <UInput v-model="state.calories" type="number" class="w-full" />
+              </UFormField>
+              <UFormField label="Carbs (g)" name="carbs">
+                <UInput v-model="state.carbs" type="number" class="w-full" />
+              </UFormField>
+              <UFormField label="Protein (g)" name="protein">
+                <UInput v-model="state.protein" type="number" class="w-full" />
+              </UFormField>
+              <UFormField label="Fat (g)" name="fat">
+                <UInput v-model="state.fat" type="number" class="w-full" />
+              </UFormField>
+            </div>
 
-        <UFormField label="Time (optional)" name="logged_at">
-          <UInput v-model="state.logged_at" type="time" class="w-full" />
-        </UFormField>
+            <UFormField label="Time (optional)" name="logged_at">
+              <UInput v-model="state.logged_at" type="time" class="w-full" />
+            </UFormField>
+            <UFormField label="Absorption Type" name="absorptionType">
+              <USelect
+                v-model="state.absorptionType"
+                :items="absorptionTypes"
+                class="w-full"
+                placeholder="Select absorption rate"
+              />
+            </UFormField>
+          </div>
+        </details>
       </UForm>
     </template>
 
@@ -145,8 +152,10 @@
 
 <script setup lang="ts">
   import { z } from 'zod'
+  import { useTranslate } from '@tolgee/vue'
   import { ABSORPTION_PROFILES } from '~/utils/nutrition-absorption'
   import type { FoodItemPayload } from './FoodSearchModal.vue'
+  const { t } = useTranslate('nutrition')
 
   const props = defineProps<{
     nutritionId?: string

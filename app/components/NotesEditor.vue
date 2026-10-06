@@ -1,263 +1,154 @@
 <template>
-  <div
-    class="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-none sm:shadow p-6 border-x-0 sm:border-x border-y border-gray-100 dark:border-gray-800"
-  >
-    <div class="flex items-center justify-between mb-8">
-      <h2
-        class="text-base font-black uppercase tracking-widest text-gray-900 dark:text-white flex items-center gap-2"
-      >
-        <UIcon name="i-heroicons-document-text" class="w-5 h-5 text-primary-500" />
-        Personal Session Notes
-      </h2>
+  <section class="notes-editor">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <h2 class="text-xl font-semibold">{{ title || 'Notes' }}</h2>
       <UButton
-        v-if="!isEditing"
+        v-if="!isEditing && hasNotes"
         icon="i-heroicons-pencil"
         color="neutral"
         variant="ghost"
-        size="sm"
-        class="font-black uppercase tracking-widest text-[10px]"
-        @click="
-          () => {
-            void startEditing()
-          }
-        "
+        class="min-h-11"
+        @click="startEditing"
+        >Edit note</UButton
       >
-        {{ hasNotes ? 'Edit' : 'Add Notes' }}
-      </UButton>
-      <div v-else class="flex gap-2">
+    </div>
+
+    <div v-if="!isEditing && !hasNotes">
+      <p class="max-w-prose text-sm text-muted leading-relaxed">
+        {{ emptyHint || 'Add anything you want to remember about this day.' }}
+      </p>
+      <UButton
+        color="neutral"
+        variant="soft"
+        icon="i-heroicons-plus"
+        class="mt-4 min-h-11"
+        @click="startEditing"
+        >Add a note</UButton
+      >
+    </div>
+
+    <div v-if="!isEditing && hasNotes" class="space-y-3">
+      <!-- eslint-disable vue/no-v-html -- markdown-rendered notes -->
+      <div
+        class="prose prose-sm dark:prose-invert max-w-prose text-default leading-relaxed"
+        v-html="renderedNotes"
+      />
+      <!-- eslint-enable vue/no-v-html -->
+      <p v-if="notesUpdatedAt" class="text-xs text-muted">Saved {{ formatDate(notesUpdatedAt) }}</p>
+    </div>
+
+    <div v-if="isEditing" class="space-y-4">
+      <div class="notes-writing-area rounded-xl border border-default bg-default overflow-hidden">
+        <details v-if="editor" class="border-b border-default px-4">
+          <summary class="min-h-11 py-3 cursor-pointer text-sm text-muted">Formatting</summary>
+          <div class="mb-3 flex flex-wrap gap-1">
+            <UButton
+              icon="i-lucide-bold"
+              color="neutral"
+              variant="ghost"
+              class="min-h-11 min-w-11"
+              aria-label="Bold"
+              :aria-pressed="editor?.isActive('bold')"
+              :class="{ 'text-primary bg-elevated': editor?.isActive('bold') }"
+              @click="
+                () => {
+                  void editor?.chain().focus().toggleBold().run()
+                }
+              "
+            />
+            <UButton
+              icon="i-lucide-italic"
+              color="neutral"
+              variant="ghost"
+              class="min-h-11 min-w-11"
+              aria-label="Italic"
+              :aria-pressed="editor?.isActive('italic')"
+              :class="{ 'text-primary bg-elevated': editor?.isActive('italic') }"
+              @click="
+                () => {
+                  void editor?.chain().focus().toggleItalic().run()
+                }
+              "
+            />
+            <UButton
+              icon="i-lucide-heading-2"
+              color="neutral"
+              variant="ghost"
+              class="min-h-11 min-w-11"
+              aria-label="Heading"
+              :aria-pressed="editor?.isActive('heading', { level: 2 })"
+              :class="{ 'text-primary bg-elevated': editor?.isActive('heading', { level: 2 }) }"
+              @click="
+                () => {
+                  void editor?.chain().focus().toggleHeading({ level: 2 }).run()
+                }
+              "
+            />
+            <UButton
+              icon="i-lucide-list"
+              color="neutral"
+              variant="ghost"
+              class="min-h-11 min-w-11"
+              aria-label="Bullet list"
+              :aria-pressed="editor?.isActive('bulletList')"
+              :class="{ 'text-primary bg-elevated': editor?.isActive('bulletList') }"
+              @click="
+                () => {
+                  void editor?.chain().focus().toggleBulletList().run()
+                }
+              "
+            />
+            <UButton
+              icon="i-lucide-list-ordered"
+              color="neutral"
+              variant="ghost"
+              class="min-h-11 min-w-11"
+              aria-label="Numbered list"
+              :aria-pressed="editor?.isActive('orderedList')"
+              :class="{ 'text-primary bg-elevated': editor?.isActive('orderedList') }"
+              @click="
+                () => {
+                  void editor?.chain().focus().toggleOrderedList().run()
+                }
+              "
+            />
+            <UButton
+              icon="i-lucide-undo"
+              color="neutral"
+              variant="ghost"
+              class="min-h-11 min-w-11"
+              aria-label="Undo"
+              :disabled="!editor?.can().undo()"
+              @click="
+                () => {
+                  void editor?.chain().focus().undo().run()
+                }
+              "
+            />
+          </div>
+        </details>
+        <EditorContent :editor="editor" class="px-4 py-4" />
+      </div>
+      <div class="flex items-center gap-2">
         <UButton
           icon="i-heroicons-check"
-          color="primary"
-          size="sm"
-          class="font-black uppercase tracking-widest text-[10px]"
           :loading="saving"
           :disabled="saving"
-          @click="
-            () => {
-              void saveNotes()
-            }
-          "
+          class="min-h-11"
+          @click="saveNotes"
+          >Save note</UButton
         >
-          Save
-        </UButton>
         <UButton
-          icon="i-heroicons-x-mark"
           color="neutral"
           variant="ghost"
-          size="sm"
-          class="font-black uppercase tracking-widest text-[10px]"
           :disabled="saving"
-          @click="
-            () => {
-              void cancelEditing()
-            }
-          "
+          class="min-h-11"
+          @click="cancelEditing"
+          >Cancel</UButton
         >
-          Cancel
-        </UButton>
       </div>
     </div>
-
-    <!-- Empty State (not editing, no notes) -->
-    <div
-      v-if="!isEditing && !hasNotes"
-      class="text-center py-12 bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800"
-    >
-      <div class="text-gray-500 dark:text-gray-400">
-        <div
-          class="w-16 h-16 bg-white dark:bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-gray-100 dark:border-gray-800"
-        >
-          <UIcon name="i-heroicons-document-text" class="w-8 h-8 opacity-30" />
-        </div>
-        <p class="text-sm font-black uppercase tracking-widest text-gray-500">
-          Telemetry Log Empty
-        </p>
-        <p class="text-xs mt-2 text-gray-400 max-w-xs mx-auto uppercase font-bold tracking-widest">
-          Capture your subjective insights, equipment notes, or metabolic observations.
-        </p>
-        <UButton
-          size="xs"
-          color="primary"
-          variant="soft"
-          class="mt-6 font-black uppercase tracking-widest text-[9px]"
-          @click="
-            () => {
-              void startEditing()
-            }
-          "
-        >
-          Initialize Note
-        </UButton>
-      </div>
-    </div>
-
-    <!-- Display Notes (not editing, has notes) - Rendered HTML -->
-    <div v-if="!isEditing && hasNotes" class="space-y-4">
-      <div
-        class="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 p-6"
-      >
-        <!-- eslint-disable vue/no-v-html -- markdown-rendered notes -->
-        <div
-          class="prose prose-sm dark:prose-invert max-w-none font-medium leading-relaxed text-gray-700 dark:text-gray-300"
-          v-html="renderedNotes"
-        />
-        <!-- eslint-enable vue/no-v-html -->
-      </div>
-      <div
-        v-if="notesUpdatedAt"
-        class="flex items-center justify-center gap-2 text-[9px] font-black text-gray-400 uppercase tracking-widest pt-2"
-      >
-        <UIcon name="i-heroicons-clock" class="w-3 h-3" />
-        <span>Log Synchronized • {{ formatDate(notesUpdatedAt) }}</span>
-      </div>
-    </div>
-
-    <!-- Editor (is editing) -->
-    <div v-if="isEditing" class="space-y-4">
-      <div
-        class="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-950 shadow-inner"
-      >
-        <!-- Custom Toolbar -->
-        <div
-          v-if="editor"
-          class="bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-3 py-2.5 flex flex-wrap gap-1.5"
-        >
-          <!-- Bold -->
-          <UButton
-            icon="i-lucide-bold"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            class="hover:bg-primary-50 dark:hover:bg-primary-950"
-            :class="{
-              'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400':
-                editor?.isActive('bold')
-            }"
-            @click="
-              () => {
-                editor?.chain().focus().toggleBold().run()
-              }
-            "
-          />
-          <!-- Italic -->
-          <UButton
-            icon="i-lucide-italic"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            class="hover:bg-primary-50 dark:hover:bg-primary-950"
-            :class="{
-              'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400':
-                editor?.isActive('italic')
-            }"
-            @click="
-              () => {
-                editor?.chain().focus().toggleItalic().run()
-              }
-            "
-          />
-
-          <div class="w-px h-5 bg-gray-200 dark:bg-gray-800 mx-1 align-middle" />
-
-          <!-- Heading -->
-          <UButton
-            icon="i-lucide-heading-2"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            class="hover:bg-primary-50 dark:hover:bg-primary-950"
-            :class="{
-              'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400':
-                editor?.isActive('heading', { level: 2 })
-            }"
-            @click="
-              () => {
-                editor?.chain().focus().toggleHeading({ level: 2 }).run()
-              }
-            "
-          />
-
-          <div class="w-px h-5 bg-gray-200 dark:bg-gray-800 mx-1" />
-
-          <!-- Bullet List -->
-          <UButton
-            icon="i-lucide-list"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            class="hover:bg-primary-50 dark:hover:bg-primary-950"
-            :class="{
-              'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400':
-                editor?.isActive('bulletList')
-            }"
-            @click="
-              () => {
-                editor?.chain().focus().toggleBulletList().run()
-              }
-            "
-          />
-          <!-- Ordered List -->
-          <UButton
-            icon="i-lucide-list-ordered"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            class="hover:bg-primary-50 dark:hover:bg-primary-950"
-            :class="{
-              'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400':
-                editor?.isActive('orderedList')
-            }"
-            @click="
-              () => {
-                editor?.chain().focus().toggleOrderedList().run()
-              }
-            "
-          />
-
-          <div class="w-px h-5 bg-gray-200 dark:bg-gray-800 mx-1" />
-
-          <!-- Undo -->
-          <UButton
-            icon="i-lucide-undo"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            class="hover:bg-primary-50 dark:hover:bg-primary-950"
-            :disabled="!editor?.can().undo()"
-            @click="
-              () => {
-                editor?.chain().focus().undo().run()
-              }
-            "
-          />
-        </div>
-
-        <!-- Editor Content -->
-        <EditorContent :editor="editor" class="px-6 py-4 min-h-[250px]" />
-      </div>
-      <div
-        class="flex items-start gap-3 p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30"
-      >
-        <UIcon
-          name="i-heroicons-information-circle"
-          class="w-4 h-4 mt-0.5 text-blue-500 flex-shrink-0"
-        />
-        <div class="space-y-1">
-          <p
-            class="text-[10px] font-black uppercase tracking-widest text-blue-900 dark:text-blue-300"
-          >
-            Format Instructions
-          </p>
-          <p class="text-[10px] font-medium text-blue-800 dark:text-blue-200 leading-relaxed">
-            Use standard markdown or the toolbar above. Keyboard shortcuts supported:
-            <span class="font-black">CMD+B</span> (Bold),
-            <span class="font-black">CMD+I</span> (Italic),
-            <span class="font-black">CMD+ENTER</span> (Save).
-          </p>
-        </div>
-      </div>
-    </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -273,6 +164,8 @@
     modelValue?: string | null
     notesUpdatedAt?: string | Date | null
     apiEndpoint: string
+    title?: string
+    emptyHint?: string
   }>()
 
   // Initialize Turndown for HTML to Markdown conversion
@@ -305,14 +198,17 @@
     extensions: [
       StarterKit,
       Placeholder.configure({
-        placeholder: 'Add your personal notes, observations, or insights here...'
+        placeholder: 'What would you like to remember?'
       })
     ],
     content: '',
     editable: true,
     editorProps: {
       attributes: {
-        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[300px]'
+        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[160px]',
+        'aria-label': 'Write a note',
+        'aria-multiline': 'true',
+        role: 'textbox'
       }
     }
   })
@@ -367,8 +263,8 @@
         isEditing.value = false
 
         toast.add({
-          title: 'Notes Saved',
-          description: 'Your notes have been saved successfully',
+          title: 'Note saved',
+          description: 'Your note is saved.',
           color: 'success',
           icon: 'i-heroicons-check-circle'
         })
@@ -376,8 +272,8 @@
     } catch (e: any) {
       console.error('Error saving notes:', e)
       toast.add({
-        title: 'Save Failed',
-        description: e.data?.message || e.message || 'Failed to save notes',
+        title: 'Could not save note',
+        description: e.data?.message || e.message || 'Try saving your note again.',
         color: 'error',
         icon: 'i-heroicons-exclamation-circle'
       })
@@ -398,6 +294,14 @@
 </script>
 
 <style scoped>
+  .notes-writing-area:focus-within {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 3px;
+  }
+  summary:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 2px;
+  }
   :deep(.ProseMirror) {
     outline: none;
   }
@@ -405,7 +309,7 @@
   :deep(.ProseMirror p.is-editor-empty:first-child::before) {
     content: attr(data-placeholder);
     float: left;
-    color: rgb(156 163 175);
+    color: var(--ui-text-muted);
     pointer-events: none;
     height: 0;
   }

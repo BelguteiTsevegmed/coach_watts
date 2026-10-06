@@ -14,95 +14,97 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <UIcon :name="macroInfo.icon" class="w-6 h-6" :class="macroInfo.iconColor" />
-            <h3 class="text-lg font-black uppercase tracking-tight text-gray-900 dark:text-white">
+            <h3 class="text-lg font-medium tracking-tight text-gray-900 dark:text-white">
               {{ label }} Analysis
             </h3>
           </div>
-          <div class="text-2xl font-black" :class="macroInfo.iconColor">
+          <div class="text-2xl font-medium" :class="macroInfo.iconColor">
             {{ Math.round(actual) }}{{ unit }}
           </div>
         </div>
 
-        <!-- Target Summary -->
-        <div
-          class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800"
-        >
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-xs font-bold text-gray-400 uppercase tracking-widest"
-              >Total Daily Target</span
-            >
-            <span class="text-sm font-black text-gray-900 dark:text-white"
-              >{{ Math.round(target) }}{{ unit }}</span
-            >
-          </div>
-          <div class="h-1.5 w-full bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden mt-2">
-            <div
-              class="h-full bg-primary-500 rounded-full"
-              :style="{ width: `${Math.min((actual / target) * 100, 100)}%` }"
-            />
-          </div>
-        </div>
-
-        <!-- Logic Breakdown -->
-        <div class="space-y-4">
-          <h4
-            class="text-[10px] font-black uppercase text-gray-400 tracking-widest flex items-center gap-1"
-          >
-            <UIcon name="i-heroicons-cpu-chip" class="w-3.5 h-3.5" />
-            Calculation logic
-          </h4>
-
+        <template v-if="target > 0">
+          <!-- Target Summary -->
           <div
-            v-for="item in breakdown"
-            :key="item.label"
-            class="flex items-start justify-between py-2 border-b border-gray-100 dark:border-gray-800 last:border-0"
+            class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800"
           >
-            <div class="space-y-0.5">
-              <div
-                class="text-sm font-bold text-gray-700 dark:text-gray-200 flex items-center gap-1.5"
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-xs font-bold text-gray-400">Total Daily Target</span>
+              <span class="text-sm font-medium text-gray-900 dark:text-white"
+                >{{ Math.round(target) }}{{ unit }}</span
               >
-                <span>{{ item.label }}</span>
-                <UTooltip v-if="item.badgeLabel && item.badgeTooltip" :text="item.badgeTooltip">
-                  <UBadge
-                    size="xs"
-                    variant="subtle"
-                    :color="(item.badgeColor as any) || 'neutral'"
-                    class="font-black uppercase tracking-wide text-[9px] px-1.5 py-0.5 leading-none"
-                  >
-                    {{ item.badgeLabel }}
-                  </UBadge>
-                </UTooltip>
-              </div>
-              <div class="text-[10px] text-gray-400 font-medium leading-tight max-w-[220px]">
-                {{ item.description }}
-              </div>
             </div>
-            <div class="text-sm font-black text-gray-900 dark:text-white whitespace-nowrap">
-              {{ item.value }}
+            <div
+              class="h-1.5 w-full bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden mt-2"
+            >
+              <div
+                class="h-full bg-primary-500 rounded-full"
+                :style="{ width: `${Math.min((actual / target) * 100, 100)}%` }"
+              />
             </div>
           </div>
-        </div>
 
-        <!-- Coach Tip -->
-        <div
-          class="bg-primary-50 dark:bg-primary-950/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900"
-        >
-          <p
-            class="text-sm font-bold text-primary-700 dark:text-primary-300 flex items-center gap-2"
+          <!-- Logic Breakdown -->
+          <div class="space-y-4">
+            <h4 class="text-xs font-medium text-gray-400 flex items-center gap-1">
+              <UIcon name="i-heroicons-cpu-chip" class="w-3.5 h-3.5" />
+              Calculation logic
+            </h4>
+
+            <div
+              v-for="item in breakdown"
+              :key="item.label"
+              class="flex items-start justify-between py-2 border-b border-gray-100 dark:border-gray-800 last:border-0"
+            >
+              <div class="space-y-0.5">
+                <div
+                  class="text-sm font-bold text-gray-700 dark:text-gray-200 flex items-center gap-1.5"
+                >
+                  <span>{{ item.label }}</span>
+                  <UTooltip v-if="item.badgeLabel && item.badgeTooltip" :text="item.badgeTooltip">
+                    <UBadge
+                      size="xs"
+                      variant="subtle"
+                      :color="(item.badgeColor as any) || 'neutral'"
+                      class="font-medium text-xs px-1.5 py-0.5 leading-none"
+                    >
+                      {{ item.badgeLabel }}
+                    </UBadge>
+                  </UTooltip>
+                </div>
+                <div class="text-xs text-gray-400 font-medium leading-tight max-w-[220px]">
+                  {{ item.description }}
+                </div>
+              </div>
+              <div class="text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                {{ item.value }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Coach Tip -->
+          <div
+            class="bg-primary-50 dark:bg-primary-950/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900"
           >
-            <UIcon name="i-heroicons-light-bulb" class="w-4 h-4" />
-            Coach Insight
-          </p>
-          <p class="text-xs text-primary-600 dark:text-primary-400 mt-1 leading-relaxed italic">
-            {{ coachTip }}
-          </p>
-        </div>
-
+            <p
+              class="text-sm font-bold text-primary-700 dark:text-primary-300 flex items-center gap-2"
+            >
+              <UIcon name="i-heroicons-light-bulb" class="w-4 h-4" />
+              Coach Insight
+            </p>
+            <p class="text-xs text-primary-600 dark:text-primary-400 mt-1 leading-relaxed italic">
+              {{ coachTip }}
+            </p>
+          </div>
+        </template>
+        <p v-else class="text-sm text-muted leading-relaxed">
+          {{ t('journey_no_target_description') }}
+        </p>
         <UButton
           color="neutral"
           variant="soft"
           block
-          class="font-bold uppercase tracking-tight text-xs"
+          class="font-bold tracking-tight text-xs"
           @click="
             () => {
               isOpen = false
@@ -117,6 +119,8 @@
 </template>
 
 <script setup lang="ts">
+  import { useTranslate } from '@tolgee/vue'
+  const { t } = useTranslate('nutrition')
   const props = defineProps<{
     modelValue: boolean
     label: string

@@ -7,6 +7,7 @@
         variant="ghost"
         size="xs"
         class="group/up"
+        aria-label="Helpful"
         :loading="loading === 'THUMBS_UP'"
         @click="
           () => {
@@ -38,6 +39,7 @@
         variant="ghost"
         size="xs"
         class="group/down"
+        aria-label="Not helpful"
         :loading="loading === 'THUMBS_DOWN'"
         @click="
           () => {
@@ -71,6 +73,7 @@
         size="xs"
         target="_blank"
         class="group/log"
+        aria-label="View AI log"
         @click="
           () => {
             void trackAiLogView()

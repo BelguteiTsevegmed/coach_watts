@@ -1,103 +1,55 @@
 <template>
-  <UCard
-    v-if="status"
-    :ui="{
-      root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
-      body: 'p-4 sm:p-5'
-    }"
-    class="border-y sm:border border-primary-500/30 bg-primary-50/40 dark:bg-primary-950/20"
-  >
-    <div class="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div class="space-y-2 min-w-0 flex-1">
-        <div class="flex items-start gap-2">
-          <UIcon
-            v-if="status.importState === 'importing'"
-            name="i-heroicons-arrow-path"
-            class="w-5 h-5 text-primary-500 animate-spin shrink-0 mt-0.5"
-          />
-          <UIcon
-            v-else-if="status.importState === 'failed'"
-            name="i-heroicons-exclamation-triangle"
-            class="w-5 h-5 text-red-500 shrink-0 mt-0.5"
-          />
-          <UIcon
-            v-else
-            name="i-heroicons-sparkles"
-            class="w-5 h-5 text-primary-500 shrink-0 mt-0.5"
-          />
-          <h2 class="font-bold text-gray-900 dark:text-white leading-snug flex-1 min-w-0">
-            {{ headline }}
-          </h2>
-          <UButton
-            v-if="!status.activationComplete"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            icon="i-heroicons-x-mark"
-            class="shrink-0 -mt-1 -mr-1 sm:hidden"
-            aria-label="Dismiss setup progress"
-            @click="emit('dismiss')"
-          />
-        </div>
-        <p class="text-sm text-gray-600 dark:text-gray-300">{{ description }}</p>
-        <p v-if="status.workoutCount > 0 || status.wellnessCount > 0" class="text-xs text-gray-500">
-          {{
-            t('setup_progress_data_summary', {
-              workouts: status.workoutCount,
-              wellness: status.wellnessCount
-            })
-          }}
-        </p>
-      </div>
-
-      <div class="flex w-full sm:w-auto flex-col sm:flex-row gap-2 shrink-0 sm:justify-end">
-        <UButton
-          v-if="status.importState === 'failed'"
-          color="primary"
-          variant="solid"
-          size="sm"
-          block
-          icon="i-heroicons-arrow-path"
-          class="sm:w-auto"
-          @click="emit('sync')"
-        >
-          {{ t('setup_progress_retry_sync') }}
-        </UButton>
-        <UButton
-          v-if="status.hasFirstInsight && !status.activationComplete"
-          color="primary"
-          variant="solid"
-          size="sm"
-          block
-          class="sm:w-auto"
-          @click="emit('complete')"
-        >
-          {{ t('setup_progress_view_insight') }}
-        </UButton>
-        <UButton
-          v-if="!status.hasIntegration"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          block
-          class="sm:w-auto"
-          to="/settings/apps"
-        >
-          {{ t('setup_progress_connect_apps') }}
-        </UButton>
-        <UButton
-          v-if="!status.activationComplete"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          icon="i-heroicons-x-mark"
-          class="hidden sm:inline-flex"
-          aria-label="Dismiss setup progress"
-          @click="emit('dismiss')"
-        />
-      </div>
+  <section v-if="status" class="space-y-4">
+    <div>
+      <h2 class="font-medium">{{ headline }}</h2>
+      <p class="mt-2 text-sm text-muted leading-relaxed">{{ description }}</p>
+      <p v-if="status.workoutCount > 0 || status.wellnessCount > 0" class="mt-2 text-sm text-muted">
+        {{
+          t('setup_progress_data_summary', {
+            workouts: status.workoutCount,
+            wellness: status.wellnessCount
+          })
+        }}
+      </p>
     </div>
-  </UCard>
+    <div class="flex flex-wrap gap-3">
+      <UButton
+        v-if="status.importState === 'failed'"
+        color="neutral"
+        variant="outline"
+        @click="emit('sync')"
+        >{{ t('setup_progress_retry_sync') }}</UButton
+      >
+      <UButton
+        v-else-if="status.hasFirstInsight && !status.activationComplete"
+        color="neutral"
+        variant="outline"
+        @click="emit('complete')"
+        >{{ t('setup_progress_view_insight') }}</UButton
+      >
+      <UButton
+        v-else-if="!status.hasPrimaryGoal && !status.hasUsableData"
+        to="/profile/goals?new=1&returnTo=/dashboard"
+        color="neutral"
+        variant="outline"
+        >{{ td('journey_setup_goal_action') }}</UButton
+      >
+      <UButton
+        v-else-if="!status.hasActivePlan && !status.hasUsableData"
+        to="/plan?returnTo=/dashboard"
+        color="neutral"
+        variant="outline"
+        >{{ td('journey_setup_plan_action') }}</UButton
+      >
+      <UButton
+        v-else-if="!status.hasIntegration"
+        to="/settings/apps"
+        color="neutral"
+        variant="outline"
+        >{{ t('setup_progress_connect_apps') }}</UButton
+      >
+    </div>
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -115,6 +67,7 @@
   }>()
 
   const { t } = useTranslate('onboarding')
+  const { t: td } = useTranslate('dashboard')
 
   const headline = computed(() => {
     if (!props.status) return ''

@@ -738,9 +738,9 @@
 </script>
 
 <template>
-  <div class="flex-shrink-0 border-t border-gray-200 dark:border-gray-800">
+  <div class="flex-shrink-0 bg-default">
     <UContainer
-      class="space-y-3 px-2 py-2 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:px-4 sm:py-4 sm:pb-4"
+      class="max-w-[800px] space-y-3 px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:px-6 sm:py-4 sm:pb-5"
     >
       <input
         ref="imageInputRef"
@@ -797,24 +797,34 @@
           </div>
           <button
             type="button"
-            aria-label="Remove attachment"
-            class="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"
+            :aria-label="t('input_remove_attachment')"
+            class="absolute right-0 top-0 flex min-h-11 min-w-11 items-center justify-center rounded-bl-xl bg-black/70 text-white focus-visible:outline-2 focus-visible:outline-white"
             @click="
               () => {
                 void removeAttachment(attachment.id)
               }
             "
           >
-            <UIcon name="i-heroicons-x-mark" class="h-3.5 w-3.5" />
+            <UIcon name="i-heroicons-x-mark" class="h-4 w-4" />
           </button>
-          <div class="border-t border-gray-200 px-2 py-1 text-[11px] dark:border-gray-800">
+          <div class="border-t border-default px-2 py-2 text-xs">
             <div class="truncate">{{ attachment.filename || 'Image' }}</div>
             <div class="text-gray-500">{{ formatFileSize(attachment.size) }}</div>
           </div>
         </div>
       </div>
 
-      <div class="min-h-5 flex items-center text-xs text-gray-500 dark:text-gray-400">
+      <div
+        v-if="
+          uploadingCount > 0 ||
+          isRecording ||
+          isTranscribing ||
+          props.queuedCount ||
+          isRecordingWebcamVideo
+        "
+        role="status"
+        class="flex items-center text-sm text-muted"
+      >
         <span v-if="uploadingCount > 0">{{ t('input_uploading_attachment') }}</span>
         <span v-else-if="isRecording">{{ t('input_recording_voice') }}</span>
         <span v-else-if="isTranscribing">{{ t('input_transcribing') }}</span>
@@ -833,9 +843,10 @@
         :error="error"
         :disabled="composerDisabled"
         :placeholder="placeholderText"
+        :aria-label="t('input_label')"
         :ui="{
           root: 'w-full',
-          base: 'max-h-[min(400px,40vh)] overflow-hidden flex flex-col ps-9',
+          base: 'max-h-[min(400px,40vh)] overflow-hidden flex flex-col ps-12 min-h-14 text-base',
           leading: 'inset-y-0 ps-0 flex items-center'
         }"
         @update:model-value="emit('update:modelValue', $event)"
@@ -849,22 +860,22 @@
               size="md"
               square
               icon="i-heroicons-plus"
-              class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              class="min-h-11 min-w-11 text-muted"
               :disabled="composerDisabled"
-              aria-label="Add attachment"
+              :aria-label="t('input_add_attachment')"
             />
           </UDropdownMenu>
         </template>
 
         <UButton
-          :color="isRecording ? 'error' : showInlineMic ? 'primary' : 'neutral'"
-          :variant="isRecording ? 'solid' : showInlineMic ? 'solid' : 'ghost'"
+          :color="isRecording ? 'error' : 'neutral'"
+          :variant="isRecording ? 'solid' : 'ghost'"
           size="md"
           square
           :icon="isRecording ? 'i-heroicons-stop-circle' : 'i-heroicons-microphone'"
-          class="shrink-0"
+          class="min-h-11 min-w-11 shrink-0"
           :disabled="props.disabled || isTranscribing"
-          :aria-label="isRecording ? 'Stop dictation' : 'Start dictation'"
+          :aria-label="isRecording ? t('input_voice_stop') : t('input_voice_start')"
           @click="
             () => {
               void toggleRecording()
@@ -873,15 +884,21 @@
         />
         <UChatPromptSubmit
           v-if="hasAttachmentOnlyMessage"
-          class="ml-1"
-          :status="status"
+          class="ml-1 min-h-11 min-w-11"
+          :aria-label="
+            props.hasActiveTurn || props.queuedCount ? t('input_queue') : t('input_send')
+          "
+          status="ready"
           :disabled="composerDisabled"
           :on-click="handleSubmit"
         />
         <UChatPromptSubmit
           v-else-if="!showInlineMic"
-          class="ml-1"
-          :status="status"
+          class="ml-1 min-h-11 min-w-11"
+          :aria-label="
+            props.hasActiveTurn || props.queuedCount ? t('input_queue') : t('input_send')
+          "
+          status="ready"
           :disabled="composerDisabled"
         />
       </UChatPrompt>

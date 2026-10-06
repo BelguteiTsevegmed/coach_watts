@@ -1,477 +1,233 @@
 <template>
   <UDashboardPanel id="performance">
-    <template #header>
-      <UDashboardNavbar :title="t('page_title')">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-        <template #right>
+    <template #body>
+      <div class="mx-auto w-full max-w-[52rem] space-y-10 px-5 py-8 sm:px-10 sm:py-12 pb-24">
+        <PerformanceSettingsModal v-model:open="isPerformanceSettingsModalOpen" />
+        <div class="flex flex-wrap items-start justify-between gap-6">
+          <div class="max-w-xl">
+            <h1
+              class="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-4xl"
+            >
+              {{ t('page_title') }}
+            </h1>
+            <p class="mt-3 text-base leading-7 text-gray-600 dark:text-gray-400">
+              {{ t('journey_intro') }}
+            </p>
+          </div>
           <div class="flex items-center gap-2">
-            <ClientOnly>
-              <DashboardTriggerMonitorButton />
-            </ClientOnly>
+            <ClientOnly><DashboardTriggerMonitorButton /></ClientOnly>
             <UButton
               icon="i-heroicons-adjustments-horizontal"
               color="neutral"
-              variant="outline"
-              size="sm"
+              variant="ghost"
               @click="
                 () => {
                   isPerformanceSettingsModalOpen = true
                 }
               "
+              >{{ t('nav_customize') }}</UButton
             >
-              {{ t('nav_customize') }}
-            </UButton>
+          </div>
+          <div v-if="isGarminConnected" class="flex items-center gap-2 text-xs text-gray-500">
+            <span>{{ tc('attribution_garmin') }}</span>
+            <img
+              src="/images/logos/Garmin-Tag-black-high-res.png"
+              class="h-4 w-auto dark:hidden"
+              alt="Garmin"
+            />
+            <img
+              src="/images/logos/Garmin-Tag-white-high-res.png"
+              class="hidden h-4 w-auto dark:block"
+              alt="Garmin"
+            />
+          </div>
+        </div>
+
+        <section :aria-label="t('overview_label')" class="space-y-6">
+          <div class="flex flex-wrap gap-4">
+            <div class="space-y-2">
+              <label for="progress-period" class="block text-sm text-gray-600 dark:text-gray-400">{{
+                t('filter_period')
+              }}</label>
+              <USelect
+                id="progress-period"
+                v-model="selectedPeriod"
+                :items="periodOptions"
+                class="w-40"
+                color="neutral"
+                variant="outline"
+              />
+            </div>
+            <div class="space-y-2">
+              <label for="progress-scope" class="block text-sm text-gray-600 dark:text-gray-400">{{
+                t('filter_activity')
+              }}</label>
+              <USelectMenu
+                id="progress-scope"
+                v-model="workoutScope"
+                :aria-label="t('filter_activity')"
+                :items="workoutScopeOptions"
+                value-key="value"
+                label-key="label"
+                class="w-52"
+                color="neutral"
+                variant="outline"
+              />
+            </div>
+          </div>
+          <div
+            v-if="workoutLoading"
+            role="status"
+            aria-live="polite"
+            class="py-6 text-gray-600 dark:text-gray-400"
+          >
+            {{ t('overview_loading') }}
+          </div>
+          <div v-else-if="workoutError" role="alert" class="space-y-3 py-6">
+            <h2 id="progress-overview-title" class="text-xl font-medium">
+              {{ t('overview_error') }}
+            </h2>
+            <p class="text-gray-600 dark:text-gray-400">{{ t('overview_error_help') }}</p>
+            <UButton color="neutral" variant="outline" @click="refreshWorkouts()">{{
+              t('retry')
+            }}</UButton>
+          </div>
+          <div
+            v-else-if="trainingSessionCount > 0"
+            class="space-y-3 py-3"
+            data-testid="progress-overview"
+          >
+            <h2
+              id="progress-overview-title"
+              class="text-2xl font-medium tracking-tight text-gray-900 dark:text-white sm:text-3xl"
+            >
+              {{ t('overview_sessions', { count: trainingSessionCount }) }}
+            </h2>
+            <p class="max-w-2xl leading-7 text-gray-600 dark:text-gray-400">
+              {{
+                hasScore(workoutData?.summary?.avgOverall)
+                  ? t('overview_execution', { score: formatScore(workoutData.summary.avgOverall) })
+                  : t('overview_unreviewed')
+              }}
+            </p>
+            <p
+              v-if="
+                sectionSettings.athleteProfile?.visible !== false &&
+                hasScore(profileData?.scores?.trainingConsistency)
+              "
+              class="text-sm text-gray-500 dark:text-gray-400"
+            >
+              {{
+                t('overview_consistency', {
+                  score: formatScore(profileData.scores.trainingConsistency)
+                })
+              }}
+            </p>
+          </div>
+          <div v-else class="space-y-3 py-3" data-testid="progress-empty">
+            <h2 id="progress-overview-title" class="text-2xl font-medium tracking-tight">
+              {{ t('overview_empty') }}
+            </h2>
+            <p class="max-w-xl leading-7 text-gray-600 dark:text-gray-400">
+              {{ t('overview_empty_help') }}
+            </p>
+            <UButton to="/workouts" color="primary" variant="solid">{{
+              t('view_training')
+            }}</UButton>
+          </div>
+          <div
+            class="flex flex-wrap items-center gap-4 border-t border-gray-200 pt-5 dark:border-gray-800"
+          >
             <UButton
               :loading="generatingExplanations"
               color="primary"
               variant="solid"
               icon="i-heroicons-sparkles"
-              size="sm"
-              class="font-bold"
-              @click="
-                () => {
-                  void generateExplanations()
-                }
-              "
+              @click="generateExplanations()"
             >
-              <span class="sm:hidden">{{ t('nav_generate') }}</span>
-              <span class="hidden sm:inline">{{ t('nav_generate_insights') }}</span>
+              {{ t('nav_generate_insights') }}
             </UButton>
+            <span class="text-sm text-gray-500 dark:text-gray-400">{{ t('insights_help') }}</span>
           </div>
-        </template>
-      </UDashboardNavbar>
-    </template>
+        </section>
 
-    <template #body>
-      <div class="relative p-0 sm:p-6 space-y-4 sm:space-y-6 pb-24">
-        <PerformanceSettingsModal v-model:open="isPerformanceSettingsModalOpen" />
         <div
-          v-if="isGarminConnected"
-          class="px-4 pt-1 sm:px-0 sm:pt-0 sm:absolute sm:right-6 sm:top-6 sm:z-10"
+          class="divide-y divide-gray-200 border-y border-gray-200 dark:divide-gray-800 dark:border-gray-800"
         >
-          <div class="flex items-center gap-1.5">
-            <span
-              class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
+          <details
+            v-if="hasTrainingTopic"
+            class="group"
+            data-testid="progress-training"
+            @toggle="updateDisclosure($event, 'training')"
+          >
+            <summary
+              class="flex cursor-pointer list-none items-center justify-between gap-5 py-6 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
             >
-              {{ tc('attribution_garmin') }}
-            </span>
-            <img
-              src="/images/logos/Garmin-Tag-black-high-res.png"
-              class="h-5 w-auto dark:hidden"
-              alt="Garmin"
-            />
-            <img
-              src="/images/logos/Garmin-Tag-white-high-res.png"
-              class="hidden h-5 w-auto dark:block"
-              alt="Garmin"
-            />
-          </div>
-        </div>
-
-        <!-- Dashboard Branding -->
-        <div class="px-4 sm:px-0">
-          <h1 class="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
-            {{ t('branding_title') }}
-          </h1>
-          <p
-            class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em] mt-1 italic"
-          >
-            {{ t('branding_subtitle') }}
-          </p>
-        </div>
-
-        <!-- 1. Activity Highlights (Big Numbers) -->
-        <div v-if="sectionSettings.highlights?.visible !== false" class="space-y-4">
-          <div
-            class="flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-0"
-          >
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400">
-              {{ t('highlights_header') }}
-            </h2>
-            <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <USelectMenu
-                v-model="highlightsScope"
-                :items="workoutScopeOptions"
-                value-key="value"
-                label-key="label"
-                class="w-full sm:w-52"
-                size="xs"
-                color="neutral"
-                variant="outline"
+              <div>
+                <h2 class="text-xl font-medium text-gray-900 dark:text-white">
+                  {{ t('topic_training') }}
+                </h2>
+                <p class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">
+                  {{ t('topic_training_help') }}
+                </p>
+              </div>
+              <UIcon
+                name="i-heroicons-chevron-down"
+                class="size-5 shrink-0 text-gray-400 group-open:rotate-180"
+                aria-hidden="true"
               />
-              <USelect
-                v-model="highlightsPeriod"
-                :items="periodOptions"
-                size="xs"
-                class="w-full sm:w-36"
-                color="neutral"
-                variant="outline"
-              />
-            </div>
-          </div>
-          <ActivityHighlights
-            :period="highlightsPeriod"
-            :sport="scopeToSport(highlightsScope)"
-            :tags="scopeToTags(highlightsScope)"
-          />
-        </div>
+            </summary>
+            <div v-if="openTopics.training" class="space-y-8 pb-8">
+              <!-- 1. Activity Highlights (Big Numbers) -->
+              <div v-if="sectionSettings.highlights?.visible !== false" class="space-y-4">
+                <div
+                  class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:px-0"
+                >
+                  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    {{ t('highlights_header') }}
+                  </h2>
+                  <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                    <USelectMenu
+                      v-model="highlightsScope"
+                      :items="workoutScopeOptions"
+                      value-key="value"
+                      label-key="label"
+                      class="w-full sm:w-52"
+                      size="xs"
+                      color="neutral"
+                      variant="outline"
+                    />
+                    <USelect
+                      v-model="highlightsPeriod"
+                      :items="periodOptions"
+                      size="xs"
+                      class="w-full sm:w-36"
+                      color="neutral"
+                      variant="outline"
+                    />
+                  </div>
+                </div>
+                <ActivityHighlights
+                  :period="highlightsPeriod"
+                  :sport="scopeToSport(highlightsScope)"
+                  :tags="scopeToTags(highlightsScope)"
+                />
+              </div>
 
-        <!-- 2. Athlete Profile Scores -->
-        <div v-if="sectionSettings.athleteProfile?.visible !== false" class="space-y-4">
-          <div class="flex items-center justify-between px-4 sm:px-0">
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400">
-              {{ t('profile_header') }}
-            </h2>
-            <UBadge
-              v-if="profileData?.scores?.lastUpdated"
-              color="neutral"
-              variant="soft"
-              size="sm"
-              class="font-black uppercase tracking-widest text-[9px]"
-            >
-              {{ t('profile_sync', { date: formatDateLocal(profileData.scores.lastUpdated) }) }}
-            </UBadge>
-          </div>
-
-          <div v-if="profileLoading" class="flex justify-center py-12">
-            <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-primary" />
-          </div>
-
-          <div v-else-if="profileData" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <ScoreCard
-              :title="t('profile_fitness_title')"
-              :score="profileData.scores?.currentFitness"
-              :explanation="
-                profileData.scores?.currentFitnessExplanationJson
-                  ? t('profile_click_detailed')
-                  : profileData.scores?.currentFitnessExplanation
-              "
-              icon="i-heroicons-bolt"
-              color="blue"
-              @click="
-                (data) =>
-                  openModalWithStructured(data, profileData?.scores?.currentFitnessExplanationJson)
-              "
-            />
-            <ScoreCard
-              :title="t('profile_recovery_title')"
-              :score="profileData.scores?.recoveryCapacity"
-              :explanation="
-                profileData.scores?.recoveryCapacityExplanationJson
-                  ? t('profile_click_detailed')
-                  : profileData.scores?.recoveryCapacityExplanation
-              "
-              icon="i-heroicons-heart"
-              color="green"
-              @click="
-                (data) =>
-                  openModalWithStructured(
-                    data,
-                    profileData?.scores?.recoveryCapacityExplanationJson
-                  )
-              "
-            />
-            <ScoreCard
-              v-if="nutritionEnabled"
-              :title="t('profile_nutrition_title')"
-              :score="profileData.scores?.nutritionCompliance"
-              :explanation="
-                profileData.scores?.nutritionComplianceExplanationJson
-                  ? t('profile_click_detailed')
-                  : profileData.scores?.nutritionComplianceExplanation
-              "
-              icon="i-heroicons-cake"
-              color="purple"
-              @click="
-                (data) =>
-                  openModalWithStructured(
-                    data,
-                    profileData?.scores?.nutritionComplianceExplanationJson
-                  )
-              "
-            />
-            <ScoreCard
-              :title="t('profile_consistency_title')"
-              :score="profileData.scores?.trainingConsistency"
-              :explanation="
-                profileData.scores?.trainingConsistencyExplanationJson
-                  ? t('profile_click_detailed')
-                  : profileData.scores?.trainingConsistencyExplanation
-              "
-              icon="i-heroicons-calendar"
-              color="orange"
-              @click="
-                (data) =>
-                  openModalWithStructured(
-                    data,
-                    profileData?.scores?.trainingConsistencyExplanationJson
-                  )
-              "
-            />
-          </div>
-        </div>
-
-        <!-- Personal Bests Summary -->
-        <div
-          v-if="sectionSettings.records?.visible !== false && hasPersonalBests"
-          class="space-y-4"
-        >
-          <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-4 sm:px-0">
-            {{ t('bests_header') }}
-          </h2>
-          <PerformanceBestsSummary :personal-bests="profileData?.personalBests || []" />
-        </div>
-
-        <!-- Score Detail Modal -->
-        <ScoreDetailModal
-          v-model="showModal"
-          :title="modalData.title"
-          :score="modalData.score"
-          :explanation="modalData.explanation"
-          :analysis-data="modalData.analysisData"
-          :color="modalData.color"
-        />
-
-        <!-- 3. PMC Chart (Performance Management Chart) -->
-        <div v-if="sectionSettings.pmc?.visible !== false && nutritionEnabled" class="space-y-4">
-          <PerformancePmcCard
-            v-model:period="pmcPeriod"
-            :period-options="pmcPeriodOptions"
-            :settings="chartSettings.pmc"
-            @settings="
-              openChartSettings('pmc', t('pmc_title'), {
-                max: 150,
-                step: 5,
-                showOverlays: false,
-                showWellnessEventsOption: true
-              })
-            "
-          />
-        </div>
-
-        <!-- 4. Power Duration Curve -->
-        <div v-if="sectionSettings.powerCurve?.visible !== false" class="space-y-4">
-          <PerformancePowerCurveCard
-            v-model:period="powerCurvePeriod"
-            v-model:scope="powerCurveScope"
-            :period-options="periodOptions"
-            :scope-options="workoutScopeOptions"
-            :sport="scopeToSport(powerCurveScope)"
-            :tags="scopeToTags(powerCurveScope)"
-            :settings="chartSettings.powerCurve"
-            @settings="
-              openChartSettings('powerCurve', t('power_curve_title'), {
-                unit: 'W',
-                max: 1500,
-                step: 50,
-                showOverlays: false,
-                showFreshnessBandsOption: true
-              })
-            "
-          />
-        </div>
-
-        <!-- 5. Efficiency & Decoupling -->
-        <div v-if="sectionSettings.efficiency?.visible !== false" class="space-y-4">
-          <PerformanceEfficiencyCard
-            v-model:period="efficiencyPeriod"
-            v-model:scope="efficiencyScope"
-            :period-options="periodOptions"
-            :scope-options="workoutScopeOptions"
-            :sport="scopeToSport(efficiencyScope)"
-            :tags="scopeToTags(efficiencyScope)"
-            :settings="chartSettings.efficiency"
-            @settings="
-              openChartSettings('efficiency', t('efficiency_title'), {
-                max: 5,
-                step: 0.1,
-                showOverlays: false
-              })
-            "
-          />
-        </div>
-
-        <!-- 7. FTP Evolution Chart -->
-        <div v-if="sectionSettings.ftp?.visible !== false" class="space-y-4">
-          <PerformanceFtpEvolutionCard
-            v-model:period="ftpPeriod"
-            v-model:scope="ftpScope"
-            :period-options="ftpPeriodOptions"
-            :scope-options="workoutScopeOptions"
-            :sport="scopeToSport(ftpScope)"
-            :tags="scopeToTags(ftpScope)"
-            :settings="chartSettings.ftp"
-            @settings="
-              openChartSettings('ftp', t('ftp_evolution_title'), {
-                unit: 'W',
-                max: 500,
-                step: 10,
-                showOverlays: false,
-                showEstimatedFtpOption: true
-              })
-            "
-          />
-        </div>
-
-        <!-- 8. Training Intensity Distribution -->
-        <div v-if="sectionSettings.distribution?.visible !== false" class="space-y-4">
-          <PerformanceIntensityDistributionCard
-            v-model:period="distributionPeriod"
-            v-model:scope="distributionScope"
-            :period-options="distributionPeriodOptions"
-            :scope-options="workoutScopeOptions"
-            :sport="scopeToSport(distributionScope)"
-            :tags="scopeToTags(distributionScope)"
-            :settings="chartSettings.distribution"
-            @settings="
-              openChartSettings('distribution', t('intensity_dist_title'), {
-                unit: 'h',
-                max: 50,
-                step: 1,
-                showOverlays: false
-              })
-            "
-          />
-        </div>
-
-        <!-- 9. Workout Scores -->
-        <div v-if="sectionSettings.workoutScores?.visible !== false" class="space-y-4">
-          <div
-            class="flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-0"
-          >
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">
-              {{ t('workout_header') }}
-            </h2>
-            <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <USelectMenu
-                v-model="workoutScope"
-                :items="workoutScopeOptions"
-                value-key="value"
-                label-key="label"
-                class="w-full sm:w-52"
-                size="xs"
-                color="neutral"
-                variant="outline"
-              />
-              <USelect
-                v-model="selectedPeriod"
-                :items="periodOptions"
-                class="w-full sm:w-36"
-                size="xs"
-                color="neutral"
-                variant="outline"
-              />
-            </div>
-          </div>
-
-          <div v-if="workoutLoading" class="flex justify-center py-12">
-            <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-primary" />
-          </div>
-
-          <div v-else-if="workoutData" class="space-y-6">
-            <!-- Score Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <ScoreCard
-                :title="t('workout_overall_title')"
-                :score="workoutData.summary?.avgOverall"
-                icon="i-heroicons-star"
-                color="yellow"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    workoutData &&
-                    openWorkoutModal(
-                      t('workout_overall_full'),
-                      workoutData.summary?.avgOverall,
-                      'yellow'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('workout_technical_title')"
-                :score="workoutData.summary?.avgTechnical"
-                icon="i-heroicons-cog"
-                color="blue"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    workoutData &&
-                    openWorkoutModal(
-                      t('workout_technical_full'),
-                      workoutData.summary?.avgTechnical,
-                      'blue'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('workout_effort_title')"
-                :score="workoutData.summary?.avgEffort"
-                icon="i-heroicons-fire"
-                color="red"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    workoutData &&
-                    openWorkoutModal(
-                      t('workout_effort_full'),
-                      workoutData.summary?.avgEffort,
-                      'red'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('workout_pacing_title')"
-                :score="workoutData.summary?.avgPacing"
-                icon="i-heroicons-chart-bar"
-                color="green"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    workoutData &&
-                    openWorkoutModal(
-                      t('workout_pacing_full'),
-                      workoutData.summary?.avgPacing,
-                      'green'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('workout_execution_title')"
-                :score="workoutData.summary?.avgExecution"
-                icon="i-heroicons-check-circle"
-                color="purple"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    workoutData &&
-                    openWorkoutModal(
-                      t('workout_execution_full'),
-                      workoutData.summary?.avgExecution,
-                      'purple'
-                    )
-                "
-              />
-            </div>
-
-            <!-- Trend Chart and Radar Chart Side by Side -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <!-- Score Trends (2/3 width) -->
-              <div class="lg:col-span-2 space-y-4">
-                <PerformanceScoreTrajectoryCard
-                  :title="t('trajectory_workout_title')"
-                  :data="workoutData.workouts"
-                  type="workout"
-                  :settings="chartSettings.performance"
+              <!-- 8. Training Intensity Distribution -->
+              <div v-if="sectionSettings.distribution?.visible !== false" class="space-y-4">
+                <PerformanceIntensityDistributionCard
+                  v-model:period="distributionPeriod"
+                  v-model:scope="distributionScope"
+                  :period-options="distributionPeriodOptions"
+                  :scope-options="workoutScopeOptions"
+                  :sport="scopeToSport(distributionScope)"
+                  :tags="scopeToTags(distributionScope)"
+                  :settings="chartSettings.distribution"
                   @settings="
-                    openChartSettings('performance', t('trajectory_workout_title'), {
-                      max: 10,
+                    openChartSettings('distribution', t('intensity_dist_title'), {
+                      unit: 'h',
+                      max: 50,
                       step: 1,
                       showOverlays: false
                     })
@@ -479,148 +235,325 @@
                 />
               </div>
 
-              <!-- Current Balance (1/3 width) -->
-              <div class="lg:col-span-1 space-y-4">
-                <UCard
-                  :ui="{
-                    root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
-                    body: 'p-4 sm:p-6'
-                  }"
-                >
-                  <template #header>
-                    <h3 class="text-base font-black uppercase tracking-widest text-gray-400">
-                      {{ t('execution_balance_header') }}
-                    </h3>
-                  </template>
-                  <div class="h-[320px]">
-                    <ClientOnly>
-                      <RadarChart
-                        :scores="{
-                          overall: workoutData.summary?.avgOverall,
-                          technical: workoutData.summary?.avgTechnical,
-                          effort: workoutData.summary?.avgEffort,
-                          pacing: workoutData.summary?.avgPacing,
-                          execution: workoutData.summary?.avgExecution
-                        }"
-                        type="workout"
-                      />
-                    </ClientOnly>
+              <section v-if="sectionSettings.workoutScores?.visible !== false" class="space-y-5">
+                <h3 class="text-lg font-semibold">{{ t('workout_header') }}</h3>
+                <p v-if="workoutLoading" role="status" class="text-gray-500">
+                  {{ t('overview_loading') }}
+                </p>
+                <div v-else-if="workoutError" role="alert" class="space-y-3">
+                  <p>{{ t('overview_error_help') }}</p>
+                  <UButton color="neutral" variant="outline" @click="refreshWorkouts()">{{
+                    t('retry')
+                  }}</UButton>
+                </div>
+                <div v-else-if="trainingSessionCount > 0" class="space-y-8">
+                  <div class="divide-y divide-gray-100 dark:divide-gray-800">
+                    <button
+                      v-for="metric in workoutMetrics"
+                      :key="metric.key"
+                      type="button"
+                      :disabled="!hasScore(metric.score)"
+                      class="flex w-full items-center justify-between gap-5 py-4 text-left focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default"
+                      @click="openWorkoutModal(metric.title, metric.score, metric.color)"
+                    >
+                      <span class="text-sm font-medium">{{ metric.label }}</span>
+                      <span
+                        class="flex items-center gap-3 text-sm tabular-nums text-gray-600 dark:text-gray-400"
+                      >
+                        {{
+                          hasScore(metric.score)
+                            ? `${formatScore(metric.score)} / 10`
+                            : t('score_missing')
+                        }}
+                        <UIcon
+                          v-if="hasScore(metric.score)"
+                          name="i-heroicons-chevron-right"
+                          class="size-4"
+                          aria-hidden="true"
+                        />
+                      </span>
+                    </button>
                   </div>
-                </UCard>
+                  <PerformanceScoreTrajectoryCard
+                    :title="t('trajectory_workout_title')"
+                    :data="workoutData.workouts"
+                    type="workout"
+                    :settings="chartSettings.performance"
+                    @settings="
+                      openChartSettings('performance', t('trajectory_workout_title'), {
+                        max: 10,
+                        step: 1,
+                        showOverlays: false
+                      })
+                    "
+                  />
+
+                  <details
+                    :open="openComparisons.workout"
+                    class="space-y-4"
+                    @toggle="updateComparison($event, 'workout')"
+                  >
+                    <summary
+                      class="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      {{ t('execution_balance_header') }}
+                    </summary>
+                    <div v-if="openComparisons.workout" class="h-[320px]">
+                      <ClientOnly
+                        ><RadarChart
+                          :scores="{
+                            overall: workoutData.summary?.avgOverall,
+                            technical: workoutData.summary?.avgTechnical,
+                            effort: workoutData.summary?.avgEffort,
+                            pacing: workoutData.summary?.avgPacing,
+                            execution: workoutData.summary?.avgExecution
+                          }"
+                          type="workout"
+                      /></ClientOnly>
+                    </div>
+                  </details>
+                </div>
+                <p v-else class="leading-7 text-gray-500">{{ t('training_empty') }}</p>
+              </section>
+            </div>
+          </details>
+
+          <details
+            v-if="hasFitnessTopic"
+            class="group"
+            data-testid="progress-fitness"
+            @toggle="updateDisclosure($event, 'fitness')"
+          >
+            <summary
+              class="flex cursor-pointer list-none items-center justify-between gap-5 py-6 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+            >
+              <div>
+                <h2 class="text-xl font-medium text-gray-900 dark:text-white">
+                  {{ t('topic_fitness') }}
+                </h2>
+                <p class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">
+                  {{ t('topic_fitness_help') }}
+                </p>
               </div>
+              <UIcon
+                name="i-heroicons-chevron-down"
+                class="size-5 shrink-0 text-gray-400 group-open:rotate-180"
+                aria-hidden="true"
+              />
+            </summary>
+            <div v-if="openTopics.fitness" class="space-y-8 pb-8">
+              <section v-if="sectionSettings.athleteProfile?.visible !== false" class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold">{{ t('profile_header') }}</h3>
+                  <p v-if="profileData?.scores?.lastUpdated" class="text-xs text-gray-500">
+                    {{
+                      t('profile_sync', { date: formatDateLocal(profileData.scores.lastUpdated) })
+                    }}
+                  </p>
+                </div>
+                <p v-if="profileLoading" role="status" class="text-gray-500">
+                  {{ t('profile_loading') }}
+                </p>
+                <div v-else-if="profileError" role="alert" class="space-y-3">
+                  <p>{{ t('profile_error') }}</p>
+                  <UButton color="neutral" variant="outline" @click="refreshProfile()">{{
+                    t('retry')
+                  }}</UButton>
+                </div>
+                <div v-else class="divide-y divide-gray-100 dark:divide-gray-800">
+                  <button
+                    v-for="metric in profileMetrics"
+                    :key="metric.key"
+                    type="button"
+                    :disabled="!hasScore(metric.score)"
+                    class="flex w-full items-center justify-between gap-5 py-4 text-left focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default"
+                    @click="openModalWithStructured(metric, metric.analysisData)"
+                  >
+                    <span class="text-sm font-medium">{{ metric.title }}</span>
+                    <span
+                      class="flex items-center gap-3 text-sm tabular-nums text-gray-600 dark:text-gray-400"
+                    >
+                      {{
+                        hasScore(metric.score)
+                          ? `${formatScore(metric.score)} / 10`
+                          : t('score_missing')
+                      }}
+                      <UIcon
+                        v-if="hasScore(metric.score)"
+                        name="i-heroicons-chevron-right"
+                        class="size-4"
+                        aria-hidden="true"
+                      />
+                    </span>
+                  </button>
+                </div>
+                <p
+                  v-if="
+                    !profileLoading &&
+                    !profileError &&
+                    !profileMetrics.some((metric) => hasScore(metric.score))
+                  "
+                  class="text-sm leading-6 text-gray-500"
+                >
+                  {{ t('profile_empty') }}
+                </p>
+              </section>
+              <!-- 3. PMC Chart (Performance Management Chart) -->
+              <div v-if="sectionSettings.pmc?.visible !== false" class="space-y-4">
+                <PerformancePmcCard
+                  v-model:period="pmcPeriod"
+                  :period-options="pmcPeriodOptions"
+                  :settings="chartSettings.pmc"
+                  @settings="
+                    openChartSettings('pmc', t('pmc_title'), {
+                      max: 150,
+                      step: 5,
+                      showOverlays: false,
+                      showWellnessEventsOption: true
+                    })
+                  "
+                />
+              </div>
+
+              <!-- 4. Power Duration Curve -->
+              <div v-if="sectionSettings.powerCurve?.visible !== false" class="space-y-4">
+                <PerformancePowerCurveCard
+                  v-model:period="powerCurvePeriod"
+                  v-model:scope="powerCurveScope"
+                  :period-options="periodOptions"
+                  :scope-options="workoutScopeOptions"
+                  :sport="scopeToSport(powerCurveScope)"
+                  :tags="scopeToTags(powerCurveScope)"
+                  :settings="chartSettings.powerCurve"
+                  @settings="
+                    openChartSettings('powerCurve', t('power_curve_title'), {
+                      unit: 'W',
+                      max: 1500,
+                      step: 50,
+                      showOverlays: false,
+                      showFreshnessBandsOption: true
+                    })
+                  "
+                />
+              </div>
+
+              <!-- 5. Efficiency & Decoupling -->
+              <div v-if="sectionSettings.efficiency?.visible !== false" class="space-y-4">
+                <PerformanceEfficiencyCard
+                  v-model:period="efficiencyPeriod"
+                  v-model:scope="efficiencyScope"
+                  :period-options="periodOptions"
+                  :scope-options="workoutScopeOptions"
+                  :sport="scopeToSport(efficiencyScope)"
+                  :tags="scopeToTags(efficiencyScope)"
+                  :settings="chartSettings.efficiency"
+                  @settings="
+                    openChartSettings('efficiency', t('efficiency_title'), {
+                      max: 5,
+                      step: 0.1,
+                      showOverlays: false
+                    })
+                  "
+                />
+              </div>
+
+              <!-- 7. FTP Evolution Chart -->
+              <div v-if="sectionSettings.ftp?.visible !== false" class="space-y-4">
+                <PerformanceFtpEvolutionCard
+                  v-model:period="ftpPeriod"
+                  v-model:scope="ftpScope"
+                  :period-options="ftpPeriodOptions"
+                  :scope-options="workoutScopeOptions"
+                  :sport="scopeToSport(ftpScope)"
+                  :tags="scopeToTags(ftpScope)"
+                  :settings="chartSettings.ftp"
+                  @settings="
+                    openChartSettings('ftp', t('ftp_evolution_title'), {
+                      unit: 'W',
+                      max: 500,
+                      step: 10,
+                      showOverlays: false,
+                      showEstimatedFtpOption: true
+                    })
+                  "
+                />
+              </div>
+
+              <section v-if="sectionSettings.records?.visible !== false" class="space-y-4">
+                <h3 class="text-lg font-semibold">{{ t('bests_header') }}</h3>
+                <PerformanceBestsSummary
+                  v-if="hasPersonalBests"
+                  :personal-bests="profileData?.personalBests || []"
+                />
+                <p v-else class="text-sm leading-6 text-gray-500">{{ t('records_empty') }}</p>
+              </section>
             </div>
-          </div>
-        </div>
+          </details>
 
-        <!-- 10. Nutrition Scores -->
-        <div
-          v-if="sectionSettings.nutritionScores?.visible !== false && nutritionEnabled"
-          class="space-y-4"
-        >
-          <div class="px-1">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">
-              {{ t('nutrition_header') }}
-            </h2>
-          </div>
-
-          <div v-if="nutritionLoading" class="flex justify-center py-12">
-            <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-primary-500" />
-          </div>
-
-          <div v-else-if="nutritionData" class="space-y-6">
-            <!-- Score Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <ScoreCard
-                :title="t('workout_overall_title')"
-                :score="nutritionData.summary?.avgOverall"
-                icon="i-heroicons-star"
-                color="yellow"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    nutritionData &&
-                    openNutritionModal(
-                      t('nutrition_overall_full'),
-                      nutritionData.summary?.avgOverall,
-                      'yellow'
-                    )
-                "
+          <details
+            v-if="nutritionEnabled && sectionSettings.nutritionScores?.visible !== false"
+            class="group"
+            data-testid="progress-fueling"
+            @toggle="updateDisclosure($event, 'fueling')"
+          >
+            <summary
+              class="flex cursor-pointer list-none items-center justify-between gap-5 py-6 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+            >
+              <div>
+                <h2 class="text-xl font-medium text-gray-900 dark:text-white">
+                  {{ t('topic_fueling') }}
+                </h2>
+                <p class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">
+                  {{ t('topic_fueling_help') }}
+                </p>
+              </div>
+              <UIcon
+                name="i-heroicons-chevron-down"
+                class="size-5 shrink-0 text-gray-400 group-open:rotate-180"
+                aria-hidden="true"
               />
-              <ScoreCard
-                :title="t('nutrition_macro_title')"
-                :score="nutritionData.summary?.avgMacroBalance"
-                icon="i-heroicons-scale"
-                color="blue"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    nutritionData &&
-                    openNutritionModal(
-                      t('nutrition_macro_full'),
-                      nutritionData.summary?.avgMacroBalance,
-                      'blue'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('nutrition_quality_title')"
-                :score="nutritionData.summary?.avgQuality"
-                icon="i-heroicons-sparkles"
-                color="green"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    nutritionData &&
-                    openNutritionModal(
-                      t('nutrition_quality_full'),
-                      nutritionData.summary?.avgQuality,
-                      'green'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('nutrition_adherence_title')"
-                :score="nutritionData.summary?.avgAdherence"
-                icon="i-heroicons-check-badge"
-                color="purple"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    nutritionData &&
-                    openNutritionModal(
-                      t('nutrition_adherence_full'),
-                      nutritionData.summary?.avgAdherence,
-                      'purple'
-                    )
-                "
-              />
-              <ScoreCard
-                :title="t('nutrition_hydration_title')"
-                :score="nutritionData.summary?.avgHydration"
-                icon="i-heroicons-beaker"
-                color="cyan"
-                compact
-                :explanation="t('workout_click_insights')"
-                @click="
-                  () =>
-                    nutritionData &&
-                    openNutritionModal(
-                      t('nutrition_hydration_full'),
-                      nutritionData.summary?.avgHydration,
-                      'cyan'
-                    )
-                "
-              />
-            </div>
-
-            <!-- Trend Chart and Radar Chart Side by Side -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <!-- Score Trends (2/3 width) -->
-              <div class="lg:col-span-2 space-y-4">
+            </summary>
+            <div v-if="openTopics.fueling" class="space-y-8 pb-8">
+              <p v-if="nutritionLoading" role="status" class="text-gray-500">
+                {{ t('nutrition_loading') }}
+              </p>
+              <div v-else-if="nutritionError" role="alert" class="space-y-3">
+                <p>{{ t('nutrition_error') }}</p>
+                <UButton color="neutral" variant="outline" @click="refreshNutrition()">{{
+                  t('retry')
+                }}</UButton>
+              </div>
+              <div
+                v-else-if="nutritionMetrics.some((metric) => hasScore(metric.score))"
+                class="space-y-8"
+              >
+                <div class="divide-y divide-gray-100 dark:divide-gray-800">
+                  <button
+                    v-for="metric in nutritionMetrics"
+                    :key="metric.key"
+                    type="button"
+                    :disabled="!hasScore(metric.score)"
+                    class="flex w-full items-center justify-between gap-5 py-4 text-left focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default"
+                    @click="openNutritionModal(metric.title, metric.score, metric.color)"
+                  >
+                    <span class="text-sm font-medium">{{ metric.label }}</span>
+                    <span
+                      class="flex items-center gap-3 text-sm tabular-nums text-gray-600 dark:text-gray-400"
+                    >
+                      {{
+                        hasScore(metric.score)
+                          ? `${formatScore(metric.score)} / 10`
+                          : t('score_missing')
+                      }}
+                      <UIcon
+                        v-if="hasScore(metric.score)"
+                        name="i-heroicons-chevron-right"
+                        class="size-4"
+                        aria-hidden="true"
+                      />
+                    </span>
+                  </button>
+                </div>
                 <PerformanceScoreTrajectoryCard
                   :title="t('trajectory_nutrition_title')"
                   :data="nutritionData.nutrition"
@@ -634,24 +567,20 @@
                     })
                   "
                 />
-              </div>
 
-              <!-- Current Balance (1/3 width) -->
-              <div class="lg:col-span-1 space-y-4">
-                <UCard
-                  :ui="{
-                    root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
-                    body: 'p-4 sm:p-6'
-                  }"
+                <details
+                  :open="openComparisons.nutrition"
+                  class="space-y-4"
+                  @toggle="updateComparison($event, 'nutrition')"
                 >
-                  <template #header>
-                    <h3 class="text-base font-black uppercase tracking-widest text-gray-400">
-                      {{ t('metabolic_balance_header') }}
-                    </h3>
-                  </template>
-                  <div class="h-[320px]">
-                    <ClientOnly>
-                      <RadarChart
+                  <summary
+                    class="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    {{ t('metabolic_balance_header') }}
+                  </summary>
+                  <div v-if="openComparisons.nutrition" class="h-[320px]">
+                    <ClientOnly
+                      ><RadarChart
                         :scores="{
                           overall: nutritionData.summary?.avgOverall,
                           macroBalance: nutritionData.summary?.avgMacroBalance,
@@ -660,15 +589,37 @@
                           hydration: nutritionData.summary?.avgHydration
                         }"
                         type="nutrition"
-                      />
-                    </ClientOnly>
+                    /></ClientOnly>
                   </div>
-                </UCard>
+                </details>
+              </div>
+              <div v-else class="space-y-3">
+                <p class="leading-7 text-gray-500">{{ t('nutrition_empty') }}</p>
+                <UButton to="/nutrition" color="neutral" variant="outline">{{
+                  t('view_fueling')
+                }}</UButton>
               </div>
             </div>
-          </div>
+          </details>
         </div>
-
+        <p
+          v-if="
+            !hasTrainingTopic &&
+            !hasFitnessTopic &&
+            (!nutritionEnabled || sectionSettings.nutritionScores?.visible === false)
+          "
+          class="text-sm text-gray-500"
+        >
+          {{ t('topics_hidden') }}
+        </p>
+        <ScoreDetailModal
+          v-model="showModal"
+          :title="modalData.title"
+          :score="modalData.score"
+          :explanation="modalData.explanation"
+          :analysis-data="modalData.analysisData"
+          :color="modalData.color"
+        />
         <ChartSettingsModal
           v-if="activeMetricSettings"
           :metric-key="activeMetricSettings.key"
@@ -693,9 +644,6 @@
 <script setup lang="ts">
   import { useTranslate } from '@tolgee/vue'
   import ActivityHighlights from '~/components/ActivityHighlights.vue'
-  import PowerCurveChart from '~/components/PowerCurveChart.vue'
-  import EfficiencyTrendChart from '~/components/EfficiencyTrendChart.vue'
-  import ReadinessCorrelationChart from '~/components/ReadinessCorrelationChart.vue'
   import ChartSettingsModal from '~/components/charts/ChartSettingsModal.vue'
   import PerformanceSettingsModal from '~/components/performance/PerformanceSettingsModal.vue'
   import PerformancePmcCard from '~/components/performance/PerformancePmcCard.vue'
@@ -705,14 +653,12 @@
   import PerformanceIntensityDistributionCard from '~/components/performance/PerformanceIntensityDistributionCard.vue'
   import PerformanceScoreTrajectoryCard from '~/components/performance/PerformanceScoreTrajectoryCard.vue'
   import PerformanceBestsSummary from '~/components/performance/PerformanceBestsSummary.vue'
-  import ChartDataLabels from 'chartjs-plugin-datalabels'
 
   const { t } = useTranslate('performance')
   const { t: tc } = useTranslate('common')
 
   const userStore = useUserStore()
   const integrationStore = useIntegrationStore()
-  const theme = useTheme()
   const { formatDate: baseFormatDate } = useFormat()
   const isGarminConnected = computed(() => {
     return (
@@ -794,6 +740,25 @@
     return merged
   })
 
+  const openTopics = reactive({ training: false, fitness: false, fueling: false })
+  const openComparisons = reactive({ workout: false, nutrition: false })
+  const updateDisclosure = (event: Event, topic: keyof typeof openTopics) => {
+    openTopics[topic] = (event.currentTarget as HTMLDetailsElement).open
+  }
+  const updateComparison = (event: Event, topic: keyof typeof openComparisons) => {
+    openComparisons[topic] = (event.currentTarget as HTMLDetailsElement).open
+  }
+  const hasTrainingTopic = computed(() =>
+    ['highlights', 'distribution', 'workoutScores'].some(
+      (key) => sectionSettings.value[key]?.visible !== false
+    )
+  )
+  const hasFitnessTopic = computed(() =>
+    ['athleteProfile', 'records', 'pmc', 'powerCurve', 'efficiency', 'ftp'].some(
+      (key) => sectionSettings.value[key]?.visible !== false
+    )
+  )
+
   function openChartSettings(key: string, title: string, options: any = {}) {
     activeMetricSettings.value = { key, title, ...options }
   }
@@ -808,29 +773,26 @@
       userStore.user?.nutritionTrackingEnabled !== false
   )
 
-  useHead({
-    title: 'Performance Scores',
+  useHead(() => ({
+    title: t.value('page_title'),
     meta: [
       {
         name: 'description',
-        content:
-          'Detailed analysis of your athletic performance, including FTP evolution, training load, nutrition quality, and workout execution.'
+        content: t.value('meta_description')
       },
-      { property: 'og:title', content: 'Performance Scores | Coach Watts' },
+      { property: 'og:title', content: `${t.value('page_title')} | Coach Watts` },
       {
         property: 'og:description',
-        content:
-          'Detailed analysis of your athletic performance, including FTP evolution, training load, nutrition quality, and workout execution.'
+        content: t.value('meta_description')
       }
     ]
-  })
+  }))
 
   const selectedPeriod = ref<number | string>(30)
   const highlightsPeriod = ref<number | string>(30)
   const highlightsScope = ref<string>('all')
   const efficiencyPeriod = ref<number | string>(90)
   const efficiencyScope = ref<string>('all')
-  const readinessPeriod = ref<number | string>(30)
   const powerCurvePeriod = ref<number | string>(90)
   const powerCurveScope = ref<string>('all')
   const workoutScope = ref<string>('all')
@@ -894,14 +856,14 @@
   const workoutScopeOptions = computed(() => {
     const groups: Array<Array<{ label: string; value?: string; type?: 'label' }>> = [
       [
-        { label: 'Sports', type: 'label' },
+        { label: t.value('scope_sports'), type: 'label' },
         ...sportOptions.value.map((option) => ({ label: option.label, value: option.value }))
       ]
     ]
 
     if (availableWorkoutTags.value.length > 0) {
       groups.push([
-        { label: 'Tags', type: 'label' },
+        { label: t.value('scope_tags'), type: 'label' },
         ...availableWorkoutTags.value.map((tag: any) => ({
           label: tag.label,
           value: `tag:${tag.value}`
@@ -976,9 +938,133 @@
     }
   }
 
-  const { data: profileData, pending: profileLoading } = profileResult as any
-  const { data: workoutData, pending: workoutLoading } = workoutResult as any
-  const { data: nutritionData, pending: nutritionLoading } = nutritionResult as any
+  const {
+    data: profileData,
+    pending: profileLoading,
+    error: profileError,
+    refresh: refreshProfile
+  } = profileResult as any
+  const {
+    data: workoutData,
+    pending: workoutLoading,
+    error: workoutError,
+    refresh: refreshWorkouts
+  } = workoutResult as any
+  const {
+    data: nutritionData,
+    pending: nutritionLoading,
+    error: nutritionError,
+    refresh: refreshNutrition
+  } = nutritionResult as any
+
+  const hasScore = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isFinite(value)
+  const formatScore = (value: number) => Number(value.toFixed(1)).toString()
+  // The API's total counts real sessions; trend rows also contain synthesized rest days.
+  const trainingSessionCount = computed(() => {
+    const count = workoutData.value?.summary?.total
+    return typeof count === 'number' && Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0
+  })
+  type ScoreColor = 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'cyan'
+  const profileMetrics = computed(() =>
+    [
+      { key: 'currentFitness', titleKey: 'profile_fitness_title', color: 'blue' },
+      { key: 'recoveryCapacity', titleKey: 'profile_recovery_title', color: 'green' },
+      ...(nutritionEnabled.value
+        ? [{ key: 'nutritionCompliance', titleKey: 'profile_nutrition_title', color: 'purple' }]
+        : []),
+      { key: 'trainingConsistency', titleKey: 'profile_consistency_title', color: 'orange' }
+    ].map((metric) => ({
+      key: metric.key,
+      title: t.value(metric.titleKey),
+      score: profileData.value?.scores?.[metric.key] ?? null,
+      explanation:
+        profileData.value?.scores?.[`${metric.key}Explanation`] ||
+        t.value('profile_no_explanation'),
+      analysisData: profileData.value?.scores?.[`${metric.key}ExplanationJson`],
+      color: metric.color as ScoreColor
+    }))
+  )
+  const workoutMetrics = computed(() =>
+    [
+      {
+        key: 'avgOverall',
+        label: 'workout_overall_title',
+        title: 'workout_overall_full',
+        color: 'yellow'
+      },
+      {
+        key: 'avgTechnical',
+        label: 'workout_technical_title',
+        title: 'workout_technical_full',
+        color: 'blue'
+      },
+      {
+        key: 'avgEffort',
+        label: 'workout_effort_title',
+        title: 'workout_effort_full',
+        color: 'red'
+      },
+      {
+        key: 'avgPacing',
+        label: 'workout_pacing_title',
+        title: 'workout_pacing_full',
+        color: 'green'
+      },
+      {
+        key: 'avgExecution',
+        label: 'workout_execution_title',
+        title: 'workout_execution_full',
+        color: 'purple'
+      }
+    ].map((metric) => ({
+      key: metric.key,
+      label: t.value(metric.label),
+      title: t.value(metric.title),
+      score: workoutData.value?.summary?.[metric.key] ?? null,
+      color: metric.color
+    }))
+  )
+  const nutritionMetrics = computed(() =>
+    [
+      {
+        key: 'avgOverall',
+        label: 'workout_overall_title',
+        title: 'nutrition_overall_full',
+        color: 'yellow'
+      },
+      {
+        key: 'avgMacroBalance',
+        label: 'nutrition_macro_title',
+        title: 'nutrition_macro_full',
+        color: 'blue'
+      },
+      {
+        key: 'avgQuality',
+        label: 'nutrition_quality_title',
+        title: 'nutrition_quality_full',
+        color: 'green'
+      },
+      {
+        key: 'avgAdherence',
+        label: 'nutrition_adherence_title',
+        title: 'nutrition_adherence_full',
+        color: 'purple'
+      },
+      {
+        key: 'avgHydration',
+        label: 'nutrition_hydration_title',
+        title: 'nutrition_hydration_full',
+        color: 'cyan'
+      }
+    ].map((metric) => ({
+      key: metric.key,
+      label: t.value(metric.label),
+      title: t.value(metric.title),
+      score: nutritionData.value?.summary?.[metric.key] ?? null,
+      color: metric.color
+    }))
+  )
   // Modal state
   const showModal = ref(false)
   const loadingExplanation = ref(false)
@@ -1003,23 +1089,6 @@
 
   // Toast for notifications
   const toast = useToast()
-
-  // Handle score card click (for cards with plain text explanation)
-  const openModal = (data: {
-    title: string
-    score?: number | null
-    explanation?: string | null
-    color?: 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'cyan'
-  }) => {
-    modalData.value = {
-      title: data.title,
-      score: data.score ?? null,
-      explanation: data.explanation ?? null,
-      analysisData: undefined,
-      color: data.color
-    }
-    showModal.value = true
-  }
 
   // Handle score card click with structured data
   const openModalWithStructured = (
@@ -1057,7 +1126,7 @@
 
   // Handle workout aggregate score click - fetch from database or trigger generation
   const openWorkoutModal = async (title: string, score: number | null, color?: string) => {
-    if (!score || !workoutData.value) return
+    if (!hasScore(score) || !workoutData.value) return
 
     modalData.value = {
       title,
@@ -1070,8 +1139,7 @@
     loadingExplanation.value = true
 
     if (scopeToTags(workoutScope.value).length > 0) {
-      modalData.value.explanation =
-        'Detailed AI insights are currently unavailable for tag-filtered subsets.'
+      modalData.value.explanation = t.value('tag_insights_unavailable')
       loadingExplanation.value = false
       return
     }
@@ -1136,7 +1204,7 @@
 
   // Handle nutrition aggregate score click - fetch from database or trigger generation
   const openNutritionModal = async (title: string, score: number | null, color?: string) => {
-    if (!score || !nutritionData.value) return
+    if (!hasScore(score) || !nutritionData.value) return
 
     modalData.value = {
       title,

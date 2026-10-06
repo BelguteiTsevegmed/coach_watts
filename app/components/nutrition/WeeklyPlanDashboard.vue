@@ -8,8 +8,8 @@
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <h3 class="text-sm font-black uppercase tracking-tight leading-tight">
-                Weekly Nutrition Plan
+              <h3 class="text-sm font-medium tracking-tight leading-tight">
+                {{ t('journey_weekly_plan') }}
               </h3>
               <div class="flex items-center gap-1">
                 <UButton
@@ -17,6 +17,7 @@
                   variant="ghost"
                   size="xs"
                   icon="i-lucide-chevron-left"
+                  :aria-label="t('journey_previous_week')"
                   @click="
                     () => {
                       void emit('prev-week')
@@ -28,6 +29,7 @@
                   variant="ghost"
                   size="xs"
                   icon="i-lucide-chevron-right"
+                  :aria-label="t('journey_next_week')"
                   @click="
                     () => {
                       void emit('next-week')
@@ -36,7 +38,7 @@
                 />
               </div>
             </div>
-            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+            <p class="text-xs font-bold text-gray-500">
               {{ format(parseISO(startDate), 'MMM d') }} - {{ format(parseISO(endDate), 'MMM d') }}
             </p>
           </div>
@@ -55,7 +57,7 @@
               }
             "
           >
-            Generate Draft
+            {{ t('journey_prepare_draft') }}
           </UButton>
           <UButton
             color="neutral"
@@ -68,7 +70,7 @@
               }
             "
           >
-            Grocery List
+            {{ t('grocery_button') }}
           </UButton>
           <UButton
             color="neutral"
@@ -88,48 +90,52 @@
       </div>
     </template>
 
-    <div
-      class="grid grid-cols-2 gap-2 border-b border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-900/40 sm:grid-cols-4"
-    >
+    <details class="border-b border-default px-4">
+      <summary class="cursor-pointer py-4 text-sm text-muted">
+        {{ t('journey_plan_details') }}
+      </summary>
       <div
-        class="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900"
+        class="grid grid-cols-2 gap-2 border-b border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-900/40 sm:grid-cols-4"
       >
-        <p class="text-[9px] font-black uppercase tracking-wider text-gray-500">Days Complete</p>
-        <p data-testid="plan-days-complete" class="text-lg font-black">
-          {{ weeklyStats.daysComplete }}
-        </p>
-      </div>
-      <div
-        class="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900"
-      >
-        <p class="text-[9px] font-black uppercase tracking-wider text-gray-500">Days With Gaps</p>
-        <p class="text-lg font-black text-warning-600">{{ weeklyStats.daysWithGaps }}</p>
-      </div>
-      <div
-        class="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900"
-      >
-        <p class="text-[9px] font-black uppercase tracking-wider text-gray-500">Planned / Target</p>
-        <p class="text-lg font-black">
-          {{ weeklyStats.plannedCarbs }}g / {{ weeklyStats.targetCarbs }}g
-        </p>
-      </div>
-      <div
-        class="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900"
-      >
-        <p class="text-[9px] font-black uppercase tracking-wider text-gray-500">Plan Sync Age</p>
-        <p
-          data-testid="plan-sync-age"
-          class="text-lg font-black"
-          :class="planSyncStale ? 'text-warning-600' : ''"
+        <div
+          class="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900"
         >
-          {{ planSyncAgeLabel }}
-        </p>
-        <p v-if="planSyncStale" class="text-[9px] font-bold text-warning-600">
-          Re-sync to match current training
-        </p>
+          <p class="text-xs font-medium text-gray-500">Days Complete</p>
+          <p data-testid="plan-days-complete" class="text-lg font-medium">
+            {{ weeklyStats.daysComplete }}
+          </p>
+        </div>
+        <div
+          class="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900"
+        >
+          <p class="text-xs font-medium text-gray-500">Days With Gaps</p>
+          <p class="text-lg font-medium text-warning-600">{{ weeklyStats.daysWithGaps }}</p>
+        </div>
+        <div
+          class="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900"
+        >
+          <p class="text-xs font-medium text-gray-500">Planned / Target</p>
+          <p class="text-lg font-medium">
+            {{ weeklyStats.plannedCarbs }}g / {{ weeklyStats.targetCarbs }}g
+          </p>
+        </div>
+        <div
+          class="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900"
+        >
+          <p class="text-xs font-medium text-gray-500">Plan Sync Age</p>
+          <p
+            data-testid="plan-sync-age"
+            class="text-lg font-medium"
+            :class="planSyncStale ? 'text-warning-600' : ''"
+          >
+            {{ planSyncAgeLabel }}
+          </p>
+          <p v-if="planSyncStale" class="text-xs font-bold text-warning-600">
+            Re-sync to match current training
+          </p>
+        </div>
       </div>
-    </div>
-
+    </details>
     <div
       v-if="loadError"
       class="m-3 flex items-center justify-between gap-3 rounded-lg border border-error-200 bg-error-50 p-3 text-sm text-error-700 dark:border-error-800 dark:bg-error-900/20 dark:text-error-300"
@@ -144,20 +150,10 @@
       <table class="w-full border-collapse text-left">
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-800/50">
-            <th class="w-28 p-3 text-[10px] font-black uppercase tracking-widest text-gray-400">
-              Day
-            </th>
-            <th class="p-3 text-[10px] font-black uppercase tracking-widest text-gray-400">
-              Training
-            </th>
-            <th class="p-3 text-[10px] font-black uppercase tracking-widest text-gray-400">
-              Fueling Plan
-            </th>
-            <th
-              class="w-44 p-3 text-right text-[10px] font-black uppercase tracking-widest text-gray-400"
-            >
-              Target
-            </th>
+            <th class="w-28 p-3 text-xs font-medium text-gray-400">Day</th>
+            <th class="p-3 text-xs font-medium text-gray-400">Training</th>
+            <th class="p-3 text-xs font-medium text-gray-400">Fueling Plan</th>
+            <th class="w-44 p-3 text-right text-xs font-medium text-gray-400">Target</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -177,18 +173,25 @@
             "
           >
             <td class="p-3">
-              <p class="text-[10px] font-black uppercase text-gray-400">
+              <p class="text-xs font-medium text-gray-400">
                 {{ format(parseISO(day.date), 'EEE') }}
               </p>
               <div class="mt-1 flex items-center gap-1.5">
-                <p class="text-sm font-black tracking-tight">
+                <button
+                  type="button"
+                  class="text-sm font-medium tracking-tight text-left underline-offset-4 hover:underline"
+                  :aria-label="
+                    t('journey_open_day_plan', { date: format(parseISO(day.date), 'MMMM d') })
+                  "
+                  @click.stop="openDayDrawer(day)"
+                >
                   {{ format(parseISO(day.date), 'MMM d') }}
-                </p>
+                </button>
                 <UBadge
                   :color="getStateColor(day.state)"
                   variant="soft"
                   size="xs"
-                  class="font-black"
+                  class="font-medium"
                 >
                   State {{ day.state }}
                 </UBadge>
@@ -209,9 +212,7 @@
                     {{ w.title }}
                   </UBadge>
                 </div>
-                <div
-                  class="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-500"
-                >
+                <div class="flex flex-wrap gap-2 text-xs font-bold text-gray-500">
                   <span v-if="sumDurationSec(day.workouts) > 0"
                     >{{ Math.round(sumDurationSec(day.workouts) / 60) }}m</span
                   >
@@ -241,6 +242,7 @@
                     v-for="(win, idx) in day.windows"
                     :key="`${day.date}-${win.type}-${win.label || ''}-${idx}`"
                     type="button"
+                    :aria-label="windowTooltip(win)"
                     class="group relative"
                     @click.stop="openDayDrawer(day, win)"
                   >
@@ -261,7 +263,7 @@
                     color="warning"
                     variant="soft"
                     size="xs"
-                    class="ml-1 font-black"
+                    class="ml-1 font-medium"
                   >
                     {{ day.criticalMissingCount }} critical missing
                   </UBadge>
@@ -278,17 +280,15 @@
                     {{ mealTitle }}
                   </UBadge>
                 </div>
-                <p v-else class="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                  No meals selected
-                </p>
+                <p v-else class="text-xs font-bold text-gray-400">No meals selected</p>
               </div>
             </td>
 
             <td class="p-3 text-right">
-              <p class="text-sm font-black text-gray-900 dark:text-white">
+              <p class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ Math.round(day.totalCarbs) }}g
               </p>
-              <p class="text-[9px] font-bold uppercase tracking-tighter text-gray-400">
+              <p class="text-xs font-bold tracking-tighter text-gray-400">
                 {{ Math.round(day.plannedCarbs) }}g planned
               </p>
               <UProgress
@@ -314,25 +314,21 @@
       <div v-if="activeDay" class="space-y-4 p-4">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">
-              Fueling Script
-            </p>
-            <p class="text-lg font-black">{{ format(parseISO(activeDay.date), 'EEEE, MMM d') }}</p>
+            <p class="text-xs font-medium text-gray-500">Fueling Script</p>
+            <p class="text-lg font-medium">{{ format(parseISO(activeDay.date), 'EEEE, MMM d') }}</p>
           </div>
           <UBadge
             :color="getStateColor(activeDay.state)"
             variant="soft"
             size="sm"
-            class="font-black"
+            class="font-medium"
           >
             State {{ activeDay.state }}
           </UBadge>
         </div>
 
         <div class="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
-          <p class="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-500">
-            Training
-          </p>
+          <p class="mb-2 text-xs font-medium text-gray-500">Training</p>
           <div v-if="activeDay.workouts.length" class="space-y-2">
             <div
               v-for="workout in activeDay.workouts"
@@ -354,7 +350,7 @@
 
         <div class="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
           <div class="mb-3 flex items-center justify-between">
-            <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Windows</p>
+            <p class="text-xs font-medium text-gray-500">Windows</p>
             <UBadge
               v-if="activeDay.criticalMissingCount > 0"
               color="warning"
@@ -389,7 +385,7 @@
                     </span>
                     {{ formatWindowLabel(win) }}
                   </p>
-                  <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                  <p class="text-xs font-bold text-gray-500">
                     {{ win.targetCarbs }}g C / {{ win.targetProtein }}g P /
                     {{ win.targetKcal }} kcal
                   </p>
@@ -419,16 +415,14 @@
                   v-if="hasMealDetails(win) && isMealExpanded(win, idx)"
                   class="mt-2 rounded-md border border-gray-200 bg-gray-50 p-2 dark:border-gray-800 dark:bg-gray-900/40"
                 >
-                  <div
-                    class="grid grid-cols-3 gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-500"
-                  >
+                  <div class="grid grid-cols-3 gap-2 text-xs font-bold text-gray-500">
                     <span>{{ Number(win.meal?.totals?.carbs || 0) }}g carbs</span>
                     <span>{{ Number(win.meal?.totals?.protein || 0) }}g protein</span>
                     <span>{{ Number(win.meal?.totals?.kcal || 0) }} kcal</span>
                   </div>
                   <p
                     v-if="Number(win.meal?.prepMinutes || 0) > 0 || win.meal?.absorptionType"
-                    class="mt-1 text-[10px] text-gray-500"
+                    class="mt-1 text-xs text-gray-500"
                   >
                     {{ win.meal?.absorptionType || 'Balanced' }} absorption
                     <span v-if="Number(win.meal?.prepMinutes || 0) > 0">
@@ -439,9 +433,7 @@
                     v-if="Array.isArray(win.meal?.ingredients) && win.meal.ingredients.length"
                     class="mt-2"
                   >
-                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                      Ingredients
-                    </p>
+                    <p class="text-xs font-medium text-gray-500">Ingredients</p>
                     <div class="mt-1 flex flex-wrap gap-1">
                       <UBadge
                         v-for="ingredient in win.meal.ingredients"
@@ -454,7 +446,7 @@
                       </UBadge>
                     </div>
                   </div>
-                  <p v-if="win.meal?.reasoning" class="mt-2 text-[10px] italic text-gray-500">
+                  <p v-if="win.meal?.reasoning" class="mt-2 text-xs italic text-gray-500">
                     {{ win.meal.reasoning }}
                   </p>
                 </div>
@@ -559,7 +551,7 @@
               }
             "
           >
-            Grocery List
+            Grocery list
           </UButton>
           <UButton
             size="sm"
@@ -578,8 +570,10 @@
 
 <script setup lang="ts">
   import { addDays, format, parseISO } from 'date-fns'
+  import { useTranslate } from '@tolgee/vue'
   import { resolveWindowKey } from '#shared/window-keys'
   import { normalizeWindowLabel } from '~/utils/nutrition-window-label'
+  const { t } = useTranslate('nutrition')
 
   const toast = useToast()
   const userStore = useUserStore()

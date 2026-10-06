@@ -1,7 +1,7 @@
 <template>
   <div
     v-bind="attrs"
-    class="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 sm:p-6 border border-orange-100 dark:border-orange-800 space-y-4 shadow-sm"
+    class="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 sm:p-6 border border-orange-100 dark:border-orange-800 space-y-4 shadow-none"
   >
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -9,9 +9,7 @@
           <UIcon name="i-heroicons-beaker" class="w-6 h-6 text-orange-600 dark:text-orange-300" />
         </div>
         <div>
-          <h3
-            class="font-semibold text-lg text-orange-900 dark:text-orange-100 uppercase tracking-tight"
-          >
+          <h3 class="font-semibold text-lg text-orange-900 dark:text-orange-100 tracking-tight">
             Nutrition & Fueling Prep
           </h3>
           <div class="text-xs text-orange-700 dark:text-orange-300 font-medium">
@@ -30,7 +28,7 @@
           :loading="updatingStrategy"
           class="min-w-[132px]"
           :ui="{
-            base: 'text-[10px] font-black uppercase tracking-widest'
+            base: 'text-xs font-medium  '
           }"
           @update:model-value="onStrategyChange"
         />
@@ -40,7 +38,7 @@
           color="neutral"
           variant="ghost"
           size="xs"
-          class="font-black uppercase tracking-widest text-[10px]"
+          class="font-medium text-xs"
           @click="
             () => {
               showFuelStateModal = true
@@ -55,7 +53,7 @@
           v-if="isGutTraining"
           color="primary"
           variant="solid"
-          class="animate-pulse font-black text-[10px] uppercase"
+          class="animate-pulse font-medium text-xs"
         >
           Gut Training Session
         </UBadge>
@@ -67,24 +65,20 @@
       <div
         class="bg-white/50 dark:bg-black/20 p-3 rounded-lg border border-orange-100 dark:border-orange-800"
       >
-        <div
-          class="text-[10px] uppercase font-black text-orange-600 dark:text-orange-400 tracking-widest mb-1"
-        >
+        <div class="text-xs font-medium text-orange-600 dark:text-orange-400 mb-1">
           Target Fluid
         </div>
-        <div class="text-xl font-black text-orange-900 dark:text-orange-100">
+        <div class="text-xl font-medium text-orange-900 dark:text-orange-100">
           {{ (intraWindow?.targetFluid / 1000).toFixed(1) }} L
         </div>
       </div>
       <div
         class="bg-white/50 dark:bg-black/20 p-3 rounded-lg border border-orange-100 dark:border-orange-800"
       >
-        <div
-          class="text-[10px] uppercase font-black text-orange-600 dark:text-orange-400 tracking-widest mb-1"
-        >
+        <div class="text-xs font-medium text-orange-600 dark:text-orange-400 mb-1">
           Target Sodium
         </div>
-        <div class="text-xl font-black text-orange-900 dark:text-orange-100">
+        <div class="text-xl font-medium text-orange-900 dark:text-orange-100">
           {{ intraWindow?.targetSodium }} mg
         </div>
       </div>
@@ -96,9 +90,7 @@
       class="space-y-2 pt-2 border-t border-orange-100 dark:border-orange-800/50"
     >
       <div class="flex items-center justify-between">
-        <div
-          class="text-xs font-bold text-orange-700 dark:text-orange-300 uppercase tracking-wider flex items-center gap-1"
-        >
+        <div class="text-xs font-bold text-orange-700 dark:text-orange-300 flex items-center gap-1">
           <UIcon name="i-heroicons-list-bullet" class="w-4 h-4" />
           Intra-Workout Script (Total {{ intraWindow.targetCarbs }}g Carbs)
         </div>
@@ -107,7 +99,7 @@
           variant="soft"
           color="primary"
           size="xs"
-          class="font-black text-[8px] uppercase"
+          class="font-medium text-[8px]"
           :class="{ 'animate-pulse': fuelState === 3 }"
         >
           {{ strategyLabel }}
@@ -139,20 +131,20 @@
       <!-- Pre-Workout -->
       <div v-if="preWindow" class="space-y-2">
         <div
-          class="text-[10px] font-black uppercase text-orange-600 dark:text-orange-400 tracking-widest flex items-center gap-1"
+          class="text-xs font-medium text-orange-600 dark:text-orange-400 flex items-center gap-1"
         >
           <UIcon name="i-heroicons-sun" class="w-3.5 h-3.5" />
           Pre-Workout Target
         </div>
         <div class="flex items-center gap-4">
           <div
-            class="flex items-center gap-1.5 text-sm font-black text-orange-900 dark:text-orange-100"
+            class="flex items-center gap-1.5 text-sm font-medium text-orange-900 dark:text-orange-100"
           >
             <UIcon name="i-tabler-bread" class="w-4 h-4 text-yellow-500" />
             {{ preWindow.targetCarbs }}g
           </div>
           <div
-            class="flex items-center gap-1.5 text-sm font-black text-orange-900 dark:text-orange-100"
+            class="flex items-center gap-1.5 text-sm font-medium text-orange-900 dark:text-orange-100"
           >
             <UIcon name="i-tabler-egg" class="w-4 h-4 text-blue-500" />
             {{ preWindow.targetProtein }}g
@@ -163,20 +155,20 @@
       <!-- Post-Workout -->
       <div v-if="postWindow" class="space-y-2">
         <div
-          class="text-[10px] font-black uppercase text-orange-600 dark:text-orange-400 tracking-widest flex items-center gap-1"
+          class="text-xs font-medium text-orange-600 dark:text-orange-400 flex items-center gap-1"
         >
           <UIcon name="i-heroicons-sparkles" class="w-3.5 h-3.5" />
           Post-Workout Recovery
         </div>
         <div class="flex items-center gap-4">
           <div
-            class="flex items-center gap-1.5 text-sm font-black text-orange-900 dark:text-orange-100"
+            class="flex items-center gap-1.5 text-sm font-medium text-orange-900 dark:text-orange-100"
           >
             <UIcon name="i-tabler-bread" class="w-4 h-4 text-yellow-500" />
             {{ postWindow.targetCarbs }}g
           </div>
           <div
-            class="flex items-center gap-1.5 text-sm font-black text-orange-900 dark:text-orange-100"
+            class="flex items-center gap-1.5 text-sm font-medium text-orange-900 dark:text-orange-100"
           >
             <UIcon name="i-tabler-egg" class="w-4 h-4 text-blue-500" />
             {{ postWindow.targetProtein }}g
@@ -199,14 +191,14 @@
       <div class="p-6 space-y-5">
         <div class="flex items-start justify-between gap-3">
           <div>
-            <h3 class="text-lg font-black uppercase tracking-tight text-gray-900 dark:text-white">
+            <h3 class="text-lg font-medium tracking-tight text-gray-900 dark:text-white">
               Fuel State {{ fuelState }} Breakdown
             </h3>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
               How this workout was classified for fueling.
             </p>
           </div>
-          <UBadge color="primary" variant="soft" class="font-black uppercase text-[10px]">
+          <UBadge color="primary" variant="soft" class="font-medium text-xs">
             {{ stateLabel }}
           </UBadge>
         </div>
@@ -217,11 +209,11 @@
           >
             <div>
               <p class="text-sm font-bold text-gray-700 dark:text-gray-200">Workout Intensity</p>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400">
+              <p class="text-xs text-gray-500 dark:text-gray-400">
                 Intensity factor used to pick the fuel state.
               </p>
             </div>
-            <p class="text-sm font-black text-gray-900 dark:text-white">
+            <p class="text-sm font-medium text-gray-900 dark:text-white">
               IF {{ intensityDisplay }}
             </p>
           </div>
@@ -231,11 +223,11 @@
           >
             <div>
               <p class="text-sm font-bold text-gray-700 dark:text-gray-200">Your Thresholds</p>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400">
+              <p class="text-xs text-gray-500 dark:text-gray-400">
                 State 2 starts above State 1 trigger; State 3 starts above State 2 trigger.
               </p>
             </div>
-            <p class="text-sm font-black text-gray-900 dark:text-white whitespace-pre-line">
+            <p class="text-sm font-medium text-gray-900 dark:text-white whitespace-pre-line">
               {{ thresholdsDisplay }}
             </p>
           </div>
@@ -245,12 +237,12 @@
           >
             <div>
               <p class="text-sm font-bold text-gray-700 dark:text-gray-200">Selected Rule</p>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400">
+              <p class="text-xs text-gray-500 dark:text-gray-400">
                 Applied directly from your Fuel State trigger settings.
               </p>
             </div>
             <p
-              class="text-sm font-black text-gray-900 dark:text-white text-right whitespace-pre-line"
+              class="text-sm font-medium text-gray-900 dark:text-white text-right whitespace-pre-line"
             >
               {{ selectedRule }}
             </p>
@@ -261,11 +253,11 @@
           >
             <div>
               <p class="text-sm font-bold text-gray-700 dark:text-gray-200">Workout Context</p>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400">
+              <p class="text-xs text-gray-500 dark:text-gray-400">
                 Session duration and strategy affect script details.
               </p>
             </div>
-            <p class="text-sm font-black text-gray-900 dark:text-white text-right">
+            <p class="text-sm font-medium text-gray-900 dark:text-white text-right">
               {{ workoutContextDisplay }}
             </p>
           </div>
@@ -275,11 +267,11 @@
           >
             <div>
               <p class="text-sm font-bold text-gray-700 dark:text-gray-200">Intra-Workout Target</p>
-              <p class="text-[11px] text-gray-500 dark:text-gray-400">
+              <p class="text-xs text-gray-500 dark:text-gray-400">
                 Final carbs/fluid/sodium from this classification.
               </p>
             </div>
-            <p class="text-sm font-black text-gray-900 dark:text-white text-right">
+            <p class="text-sm font-medium text-gray-900 dark:text-white text-right">
               {{ intraTargetDisplay }}
             </p>
           </div>
@@ -288,9 +280,7 @@
         <div
           class="bg-primary-50 dark:bg-primary-950/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900"
         >
-          <p
-            class="text-xs font-bold text-primary-700 dark:text-primary-300 uppercase tracking-wider"
-          >
+          <p class="text-xs font-bold text-primary-700 dark:text-primary-300">
             What to change if this looks off
           </p>
           <p class="text-xs text-primary-600 dark:text-primary-400 mt-1 leading-relaxed">
@@ -303,7 +293,7 @@
           color="neutral"
           variant="soft"
           block
-          class="font-bold uppercase text-xs tracking-tight"
+          class="font-bold text-xs tracking-tight"
           @click="
             () => {
               showFuelStateModal = false

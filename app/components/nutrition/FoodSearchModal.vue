@@ -12,7 +12,7 @@
       <div class="flex items-center justify-between w-full">
         <div class="flex items-center gap-2">
           <UIcon name="i-heroicons-magnifying-glass-circle" class="w-6 h-6 text-primary-500" />
-          <h3 class="text-lg font-black uppercase tracking-tight">Food Database Search</h3>
+          <h3 class="text-lg font-medium tracking-tight">Food Database Search</h3>
         </div>
         <UButton
           color="neutral"
@@ -136,7 +136,7 @@
                 P: {{ item.nutrients_per_100g.protein_g }}g | C:
                 {{ item.nutrients_per_100g.carbs_g }}g | F: {{ item.nutrients_per_100g.fat_g }}g
               </span>
-              <span class="text-[10px] text-neutral-400 dark:text-neutral-500">(100g)</span>
+              <span class="text-xs text-neutral-400 dark:text-neutral-500">(100g)</span>
             </div>
           </div>
         </div>
@@ -155,7 +155,7 @@
         >
           <div class="flex items-center justify-between">
             <h4
-              class="text-sm font-bold uppercase tracking-wide text-primary-700 dark:text-primary-300 flex items-center gap-1.5"
+              class="text-sm font-bold text-primary-700 dark:text-primary-300 flex items-center gap-1.5"
             >
               <UIcon name="i-heroicons-calculator" class="w-4 h-4" />
               Portion Calculator
@@ -204,26 +204,26 @@
             class="grid grid-cols-4 gap-2 text-center pt-2 border-t border-primary-200/60 dark:border-primary-800/60"
           >
             <div class="p-2 rounded bg-neutral-100 dark:bg-neutral-800/80">
-              <div class="text-[10px] text-neutral-500 uppercase font-semibold">Calories</div>
-              <div class="text-base font-black text-amber-600 dark:text-amber-400">
+              <div class="text-xs text-neutral-500 font-semibold">Calories</div>
+              <div class="text-base font-medium text-amber-600 dark:text-amber-400">
                 {{ calculatedPortion.calories }}
               </div>
             </div>
             <div class="p-2 rounded bg-neutral-100 dark:bg-neutral-800/80">
-              <div class="text-[10px] text-neutral-500 uppercase font-semibold">Carbs</div>
-              <div class="text-base font-black text-blue-600 dark:text-blue-400">
+              <div class="text-xs text-neutral-500 font-semibold">Carbs</div>
+              <div class="text-base font-medium text-blue-600 dark:text-blue-400">
                 {{ calculatedPortion.carbs_g }}g
               </div>
             </div>
             <div class="p-2 rounded bg-neutral-100 dark:bg-neutral-800/80">
-              <div class="text-[10px] text-neutral-500 uppercase font-semibold">Protein</div>
-              <div class="text-base font-black text-emerald-600 dark:text-emerald-400">
+              <div class="text-xs text-neutral-500 font-semibold">Protein</div>
+              <div class="text-base font-medium text-emerald-600 dark:text-emerald-400">
                 {{ calculatedPortion.protein_g }}g
               </div>
             </div>
             <div class="p-2 rounded bg-neutral-100 dark:bg-neutral-800/80">
-              <div class="text-[10px] text-neutral-500 uppercase font-semibold">Fat</div>
-              <div class="text-base font-black text-rose-600 dark:text-rose-400">
+              <div class="text-xs text-neutral-500 font-semibold">Fat</div>
+              <div class="text-base font-medium text-rose-600 dark:text-rose-400">
                 {{ calculatedPortion.fat_g }}g
               </div>
             </div>

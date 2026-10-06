@@ -1,100 +1,16 @@
 <template>
   <UDashboardPanel id="dashboard">
-    <template #header>
-      <UDashboardNavbar :title="t('dashboard_title')">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-        <template #right>
-          <LayoutPageNavbarActions :overflow-items="dashboardOverflowItems">
-            <ClientOnly>
-              <DashboardTriggerMonitorButton />
-              <NotificationDropdown />
-            </ClientOnly>
-            <DashboardReleaseNotification />
-            <UButton
-              to="/workouts/upload"
-              icon="i-heroicons-cloud-arrow-up"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="font-bold"
-              :aria-label="t('header_upload')"
-            >
-              <span class="hidden md:inline">{{ t('header_upload') }}</span>
-            </UButton>
-            <UButton
-              v-if="canUseDashboardActions"
-              :loading="integrationStore.syncingData"
-              :disabled="integrationStore.syncingData"
-              color="neutral"
-              variant="outline"
-              icon="i-heroicons-arrow-path"
-              size="sm"
-              class="font-bold"
-              :aria-label="t('header_sync_data')"
-              @click="
-                () => {
-                  void handleSync()
-                }
-              "
-            >
-              <span class="hidden md:inline">{{ t('header_sync_data') }}</span>
-            </UButton>
-            <UButton
-              to="/chat"
-              icon="i-heroicons-chat-bubble-left-right"
-              color="primary"
-              variant="solid"
-              size="sm"
-              class="font-bold"
-            >
-              <span class="hidden md:inline">{{ t('header_new_chat') }}</span>
-              <span class="md:hidden">{{ t('header_chat') }}</span>
-            </UButton>
-
-            <template #mobile>
-              <LayoutNavbarIconButton
-                v-if="canUseDashboardActions"
-                icon="i-heroicons-arrow-path"
-                :label="t('header_sync_data')"
-                :loading="integrationStore.syncingData"
-                :disabled="integrationStore.syncingData"
-                @click="
-                  () => {
-                    void handleSync()
-                  }
-                "
-              />
-              <LayoutNavbarIconButton
-                to="/chat"
-                icon="i-heroicons-chat-bubble-left-right"
-                :label="t('header_new_chat')"
-                color="primary"
-                variant="solid"
-              />
-            </template>
-          </LayoutPageNavbarActions>
-        </template>
-      </UDashboardNavbar>
-    </template>
-
     <template #body>
       <div class="quick-capture-inset">
         <ClientOnly>
-          <!-- Loading State -->
-          <div
-            v-if="isLoading || onboardingStatusLoading"
-            class="flex justify-center items-center py-24 min-h-[60vh]"
-          >
-            <UIcon name="i-heroicons-arrow-path" class="w-10 h-10 animate-spin text-primary-500" />
+          <div v-if="isLoading" class="today-page py-20" role="status">
+            <USkeleton class="h-7 w-32 mb-10" />
+            <USkeleton class="h-10 w-3/4 mb-4" />
+            <USkeleton class="h-5 w-2/3" />
+            <span class="sr-only">{{ t('journey_loading_title') }}</span>
           </div>
 
-          <!-- Onboarding View (New User) -->
-          <div
-            v-else-if="showFullSetupHub && onboardingStatus"
-            class="p-4 sm:p-6 max-w-6xl mx-auto"
-          >
+          <div v-else-if="showFullSetupHub && onboardingStatus" class="today-page">
             <DashboardOnboardingView
               :status="onboardingStatus"
               @sync="handleSync"
@@ -102,340 +18,179 @@
             />
           </div>
 
-          <!-- Dashboard Grid -->
-          <template v-else>
-            <div class="p-0 sm:p-6 !pt-0 space-y-4 sm:space-y-8">
-              <DashboardSetupProgressCard
-                v-if="showCompactSetupCard && onboardingStatus"
-                :status="onboardingStatus"
-                @sync="handleSync"
-                @complete="handleCompleteSetup"
-                @dismiss="handleCompleteSetup"
-              />
-
-              <!-- Garmin Attribution -->
-              <div v-if="isGarminConnected" class="flex justify-end px-4 sm:px-0">
-                <div class="flex items-center gap-1.5">
-                  <span
-                    class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest"
-                    >{{ t('attribution_garmin') }}</span
-                  >
-                  <img
-                    src="/images/logos/Garmin-Tag-black-high-res.png"
-                    class="h-5 w-auto dark:hidden"
-                    alt="Garmin"
-                  />
-                  <img
-                    src="/images/logos/Garmin-Tag-white-high-res.png"
-                    class="h-5 w-auto hidden dark:block"
-                    alt="Garmin"
-                  />
-                </div>
+          <section v-else class="today-page" aria-label="Today">
+            <header class="today-page__header">
+              <div>
+                <h1 class="text-xl font-semibold">{{ t('dashboard_title') }}</h1>
+                <p class="text-sm text-muted mt-1">{{ todayLabel }}</p>
               </div>
-
-              <div v-if="userStore.isTrialActive" class="px-4 sm:px-0">
-                <div
-                  class="relative overflow-hidden rounded-xl p-4 sm:p-6 shadow-lg group"
-                  :class="isTrialEndingSoon ? 'bg-amber-600' : 'bg-primary-600'"
-                >
-                  <!-- Decorative Icon -->
-                  <div
-                    class="absolute -right-4 -bottom-4 opacity-10 transform -rotate-12 group-hover:scale-110 transition-transform duration-700"
-                  >
-                    <UIcon name="i-heroicons-sparkles" class="w-32 h-32 text-white" />
-                  </div>
-
-                  <div
-                    class="relative flex flex-col md:flex-row md:items-center justify-between gap-4"
-                  >
-                    <div class="flex items-start gap-4">
-                      <div class="p-3 bg-white/20 rounded-xl backdrop-blur-sm shrink-0">
-                        <UIcon name="i-heroicons-bolt-solid" class="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <h3 class="text-white font-black tracking-tight text-lg">
-                            {{ trialAccessTitle }}
-                          </h3>
-                          <UBadge
-                            color="neutral"
-                            variant="subtle"
-                            size="xs"
-                            class="bg-white/12 text-white ring-white/20"
-                          >
-                            {{ t('trial_badge') }}
-                          </UBadge>
-                        </div>
-                        <p class="text-white/80 text-sm font-medium leading-relaxed max-w-xl">
-                          {{
-                            isTrialEndingSoon
-                              ? t('trial_ending_soon_desc', {
-                                  date: trialEndsAtLabel
-                                })
-                              : t('trial_unlock_improvement')
-                          }}
-                        </p>
-                      </div>
-                    </div>
-                    <div
-                      class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0"
-                    >
-                      <UButton
-                        to="/settings/ai"
-                        color="neutral"
-                        variant="subtle"
-                        size="sm"
-                        class="justify-center bg-white/10 hover:bg-white/20 text-white font-bold border-none"
-                      >
-                        {{ t('trial_view_usage') }}
-                      </UButton>
-                      <UButton
-                        to="/settings/billing"
-                        color="neutral"
-                        variant="solid"
-                        size="sm"
-                        class="justify-center bg-white text-primary-600 hover:bg-gray-100 font-bold border-none"
-                      >
-                        {{ t('trial_keep_access') }}
-                      </UButton>
-                    </div>
-                  </div>
-                </div>
+              <div class="flex items-center gap-2">
+                <UButton to="/activities" color="neutral" variant="link" size="sm">{{
+                  t('journey_view_week')
+                }}</UButton>
+                <LayoutPageNavbarActions :overflow-items="dashboardOverflowItems">
+                  <ClientOnly><NotificationDropdown /></ClientOnly>
+                  <UDropdownMenu :items="dashboardOverflowItems">
+                    <UButton
+                      icon="i-heroicons-ellipsis-horizontal"
+                      color="neutral"
+                      variant="ghost"
+                      :aria-label="t('journey_more_actions')"
+                      class="min-h-11 min-w-11"
+                    />
+                  </UDropdownMenu>
+                </LayoutPageNavbarActions>
               </div>
+            </header>
 
-              <DashboardSystemMessageCard />
+            <DashboardTrainingRecommendationCard
+              :completed-workouts="completedToday"
+              :day-loading="loadingDay"
+              :day-error="dayError"
+              @open-details="openRecommendationModal"
+              @open-checkin="openCheckinModal"
+              @retry="retryToday"
+            />
 
-              <DashboardMissingDataBanner
-                v-if="missingFields.length > 0"
-                :missing-fields="missingFields"
-              />
+            <details
+              v-if="nutritionEnabled"
+              class="today-page__disclosure"
+              @toggle="handleFuelingToggle"
+            >
+              <summary>{{ t('journey_fueling') }}</summary>
+              <div v-if="fuelingDepthOpen" class="py-4 pb-7">
+                <p class="text-sm text-muted leading-relaxed">
+                  {{ t('journey_fueling_description') }}
+                </p>
+                <DashboardNutritionFuelingCard
+                  v-if="todayNutrition || todayWorkouts.some((workout) => workout.type !== 'Rest')"
+                  class="mt-5"
+                  :nutrition="todayNutrition"
+                  :workouts="todayWorkouts"
+                  :settings="nutritionSettings"
+                  :weight="userStore.currentWeightKg || undefined"
+                  :loading="loadingNutrition"
+                  @refresh="handleNutritionRefresh"
+                />
+                <UButton v-else to="/nutrition" color="neutral" variant="outline" class="mt-4">{{
+                  t('journey_open_journal')
+                }}</UButton>
+              </div>
+            </details>
 
-              <!-- Row 1: Athlete Profile / Today's Training / Performance Overview & Comparison -->
-              <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8 items-stretch">
-                <!-- Athlete Profile Card - shown when connected -->
+            <details class="today-page__disclosure" @toggle="handleRecoveryToggle">
+              <summary>{{ t('journey_recovery_trends') }}</summary>
+              <div v-if="recoveryDepthOpen" class="space-y-5 py-4 pb-7">
+                <p class="text-sm text-muted">{{ t('journey_trends_description') }}</p>
                 <DashboardAthleteProfileCard
                   @open-wellness="openWellnessModal"
                   @open-training-load="openTrainingLoadModal"
                 />
-
-                <!-- Today's Recommendation Card -->
-                <DashboardTrainingRecommendationCard
-                  @open-details="openRecommendationModal"
-                  @open-checkin="openCheckinModal"
+                <DashboardPerformanceScoresCard
+                  ref="performanceScoresCard"
+                  @open-score-modal="openScoreModal"
+                  @open-training-load="openTrainingLoadModal"
                 />
-
-                <div class="space-y-4 sm:space-y-8 flex flex-col">
-                  <!-- Monthly Progress Comparison -->
-                  <DashboardMonthlyComparisonCard v-if="canUseDashboardActions" />
-
-                  <!-- Performance Overview Card -->
-                  <DashboardPerformanceScoresCard
-                    ref="performanceScoresCard"
-                    @open-score-modal="openScoreModal"
-                    @open-training-load="openTrainingLoadModal"
-                  />
-                </div>
+                <DashboardMonthlyComparisonCard v-if="canUseDashboardActions" />
+                <UButton to="/performance" color="neutral" variant="link">{{
+                  t('journey_open_progress')
+                }}</UButton>
               </div>
+            </details>
 
-              <!-- Row 2: Fueling & Hydration -->
-              <div v-if="nutritionEnabled">
-                <DashboardNutritionFuelingCard
-                  :nutrition="todayNutrition"
-                  :workouts="todayWorkouts"
-                  :settings="nutritionSettings"
-                  :weight="userStore.currentWeightKg || 75"
-                  :loading="loadingNutrition"
-                  @refresh="handleNutritionRefresh"
-                />
-              </div>
-
-              <!-- Row 3: Recent Activity / Next Steps / Connection Status -->
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
-                <!-- Recent Activity Card -->
-                <DashboardRecentActivityCard />
-
-                <div class="space-y-4 sm:space-y-8">
-                  <!-- Upcoming Workouts Card -->
-                  <UCard
-                    :ui="{
-                      root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
-                      body: 'p-4 sm:p-6'
-                    }"
-                    class="flex flex-col"
+            <details class="today-page__disclosure">
+              <summary>{{ t('journey_coming_up') }}</summary>
+              <div class="py-4 pb-7">
+                <p v-if="loadingUpcoming" class="text-sm text-muted" role="status">
+                  {{ t('journey_loading_sessions') }}
+                </p>
+                <div v-else-if="upcomingWorkoutsError">
+                  <p class="text-sm text-muted" role="alert">{{ upcomingWorkoutsError }}</p>
+                  <UButton
+                    class="mt-4"
+                    color="neutral"
+                    variant="outline"
+                    @click="fetchUpcomingWorkouts"
+                    >{{ t('upcoming_workouts_retry') }}</UButton
                   >
-                    <template #header>
-                      <div class="flex items-center justify-between">
-                        <h3
-                          class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest flex items-center gap-2"
-                        >
-                          <UIcon name="i-heroicons-calendar-days" class="w-4 h-4" />
-                          {{ t('upcoming_workouts_header') }}
-                        </h3>
-                        <UButton
-                          to="/plan"
-                          variant="ghost"
-                          color="neutral"
-                          size="xs"
-                          icon="i-heroicons-arrow-right"
-                          trailing
-                        />
-                      </div>
-                    </template>
-
-                    <div class="flex-1 space-y-4">
-                      <div v-if="loadingUpcoming" class="space-y-3">
-                        <div v-for="i in 3" :key="i" class="flex items-center gap-3">
-                          <USkeleton class="w-10 h-10 rounded-lg" />
-                          <div class="flex-1 space-y-2">
-                            <USkeleton class="h-3 w-3/4" />
-                            <USkeleton class="h-2 w-1/2" />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div v-else-if="upcomingWorkoutsError" class="text-center py-8">
-                        <UIcon
-                          name="i-heroicons-exclamation-triangle"
-                          class="w-8 h-8 text-amber-500 mx-auto mb-2"
-                        />
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                          {{ upcomingWorkoutsError }}
-                        </p>
-                        <UButton
-                          variant="soft"
-                          color="neutral"
-                          size="xs"
-                          icon="i-heroicons-arrow-path"
-                          @click="
-                            () => {
-                              void fetchUpcomingWorkouts()
-                            }
-                          "
-                        >
-                          {{ t('upcoming_workouts_retry') }}
-                        </UButton>
-                      </div>
-
-                      <div v-else-if="upcomingWorkouts.length === 0" class="text-center py-8">
-                        <UIcon
-                          name="i-heroicons-calendar"
-                          class="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2"
-                        />
-                        <p class="text-sm text-gray-500">{{ t('upcoming_workouts_empty') }}</p>
-                        <UButton
-                          to="/plans"
-                          variant="link"
-                          color="primary"
-                          size="xs"
-                          class="mt-2"
-                          >{{ t('upcoming_workouts_view_plans') }}</UButton
-                        >
-                      </div>
-
-                      <div v-else class="divide-y divide-gray-100 dark:divide-gray-800 -mx-4 px-4">
-                        <div
-                          v-for="workout in upcomingWorkouts"
-                          :key="workout.id"
-                          class="py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer -mx-4 px-4 rounded-lg transition-colors group relative"
-                          @click="
-                            () => {
-                              void handleUpcomingWorkoutClick(workout.id)
-                            }
-                          "
-                        >
-                          <!-- Date Box (Standardized) -->
-                          <div
-                            class="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400 shrink-0 shadow-sm"
-                          >
-                            <span class="text-[10px] font-bold uppercase leading-none">{{
-                              formatDayShort(workout.date)
-                            }}</span>
-                            <span class="text-sm font-bold">{{ formatDateDay(workout.date) }}</span>
-                          </div>
-
-                          <!-- Workout Icon -->
-                          <UTooltip :text="workout.type" class="shrink-0">
-                            <div class="flex items-center justify-center w-8 h-8">
-                              <UIcon
-                                :name="getWorkoutIcon(workout.type)"
-                                class="w-5 h-5"
-                                :class="getWorkoutColorClass(workout.type)"
-                              />
-                            </div>
-                          </UTooltip>
-
-                          <!-- Workout Details -->
-                          <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2">
-                              <div class="text-sm font-bold text-gray-900 dark:text-white truncate">
-                                {{ workout.title }}
-                              </div>
-                              <UTooltip
-                                v-if="workout.planName"
-                                :text="
-                                  t('upcoming_workouts_plan_part_of', { name: workout.planName })
-                                "
-                              >
-                                <UIcon
-                                  name="i-heroicons-trophy"
-                                  class="w-3.5 h-3.5 text-primary shrink-0"
-                                />
-                              </UTooltip>
-                            </div>
-                            <div
-                              class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-3 mt-0.5"
-                            >
-                              <div v-if="workout.durationSec" class="flex items-center gap-1">
-                                <UIcon
-                                  name="i-tabler-clock"
-                                  class="w-3 h-3 opacity-80"
-                                  :class="getWorkoutColorClass(workout.type)"
-                                />
-                                <span class="font-medium"
-                                  >{{ Math.round(workout.durationSec / 60) }}m</span
-                                >
-                              </div>
-                              <div v-if="workout.tss" class="flex items-center gap-1">
-                                <UIcon
-                                  name="i-tabler-bolt"
-                                  class="w-3 h-3 opacity-80"
-                                  :class="getWorkoutColorClass(workout.type)"
-                                />
-                                <span class="font-medium">{{ Math.round(workout.tss) }} TSS</span>
-                              </div>
-                            </div>
-                          </div>
-                          <UIcon
-                            name="i-heroicons-chevron-right"
-                            class="w-4 h-4 text-gray-300 group-hover:text-primary transition-colors"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </UCard>
                 </div>
-
-                <!-- Connection Status Card - only shown if syncing is in progress or issues -->
-                <DashboardDataSyncStatusCard v-if="integrationStore.syncingData" />
+                <div v-else-if="upcomingWorkouts.length === 0">
+                  <p class="text-sm text-muted">{{ t('upcoming_workouts_empty') }}</p>
+                  <UButton to="/plans" color="neutral" variant="link" class="mt-3">{{
+                    t('journey_find_plan')
+                  }}</UButton>
+                </div>
+                <div v-else class="divide-y divide-default">
+                  <NuxtLink
+                    v-for="workout in upcomingWorkouts.slice(0, 4)"
+                    :key="workout.id"
+                    :to="`/workouts/planned/${workout.id}`"
+                    class="today-page__upcoming"
+                    @click="trackWidgetClick('upcoming_workouts', 'open_workout')"
+                  >
+                    <span class="w-12 shrink-0 text-sm text-muted"
+                      >{{ formatDayShort(workout.date) }} {{ formatDateDay(workout.date) }}</span
+                    >
+                    <UIcon
+                      :name="getWorkoutIcon(workout.type)"
+                      class="size-4 text-muted shrink-0"
+                    />
+                    <span class="flex-1 min-w-0">
+                      <span class="block font-medium text-sm">{{ workout.title }}</span>
+                      <span v-if="workout.durationSec" class="block mt-1 text-xs text-muted">{{
+                        t('journey_duration', { minutes: Math.round(workout.durationSec / 60) })
+                      }}</span>
+                    </span>
+                    <UIcon name="i-heroicons-chevron-right" class="size-4 text-muted" />
+                  </NuxtLink>
+                </div>
+                <UButton to="/plan" color="neutral" variant="link" class="mt-4">{{
+                  t('journey_view_week')
+                }}</UButton>
               </div>
+            </details>
 
-              <DashboardShareFooterCard />
-
-              <!-- App Info Footer -->
-              <div class="flex justify-center pt-8 pb-12 sm:pb-4">
-                <UButton
-                  to="/settings/changelog"
-                  variant="link"
-                  color="neutral"
-                  size="xs"
-                  :padded="false"
-                  class="text-gray-400 dark:text-gray-500 font-normal hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
-                >
-                  {{ buildVersionDisplay }}
-                </UButton>
+            <details v-if="showCompactSetupCard && onboardingStatus" class="today-page__disclosure">
+              <summary>{{ t('journey_continue_setup') }}</summary>
+              <div class="py-4 pb-7">
+                <DashboardSetupProgressCard
+                  :status="onboardingStatus"
+                  @sync="handleSync"
+                  @complete="handleCompleteSetup"
+                />
               </div>
+            </details>
+
+            <details v-if="missingFields.length" class="today-page__disclosure">
+              <summary>{{ t('journey_profile_details') }}</summary>
+              <div class="py-4 pb-7">
+                <DashboardMissingDataBanner :missing-fields="missingFields" />
+              </div>
+            </details>
+
+            <div v-if="integrationStore.syncingData" class="mt-6">
+              <DashboardDataSyncStatusCard />
             </div>
-          </template>
+
+            <footer class="today-page__footer">
+              <div v-if="isGarminConnected" class="flex items-center gap-2 text-xs text-muted">
+                <span>{{ t('attribution_garmin') }}</span>
+                <img
+                  src="/images/logos/Garmin-Tag-black-high-res.png"
+                  class="h-4 w-auto dark:hidden"
+                  alt="Garmin"
+                />
+                <img
+                  src="/images/logos/Garmin-Tag-white-high-res.png"
+                  class="h-4 w-auto hidden dark:block"
+                  alt="Garmin"
+                />
+              </div>
+              <UButton to="/settings/changelog" variant="link" color="neutral" size="xs">{{
+                buildVersionDisplay
+              }}</UButton>
+            </footer>
+          </section>
         </ClientOnly>
       </div>
     </template>
@@ -475,12 +230,8 @@
 
 <script setup lang="ts">
   import { useTranslate } from '@tolgee/vue'
-  import { useLocalStorage } from '@vueuse/core'
-  import {
-    getWorkoutIcon,
-    getWorkoutColorClass,
-    getWorkoutBorderColorClass
-  } from '~/utils/activity-types'
+  import { getWorkoutIcon } from '~/utils/activity-types'
+  import type { CalendarActivity } from '~/types/calendar'
   import { getCalendarActivities } from '~/utils/calendar'
   import { showDashboardProgressToast } from '~/utils/dashboard-progress-toast'
   import DashboardTrialEndedModal from '~/components/dashboard/TrialEndedModal.vue'
@@ -488,21 +239,10 @@
   const { t } = useTranslate('dashboard')
   const { trackWidgetClick } = useAnalytics()
 
-  const { formatDate, formatDateUTC, getUserLocalDate } = useFormat()
+  const { formatDateUTC, getUserLocalDate } = useFormat()
 
   definePageMeta({
     middleware: 'auth'
-  })
-
-  useHead({
-    title: 'Dashboard',
-    meta: [
-      {
-        name: 'description',
-        content:
-          "Your daily athlete dashboard. Monitor your recovery, check today's training recommendation, and review your performance trends."
-      }
-    ]
   })
 
   const config = useRuntimeConfig()
@@ -517,7 +257,6 @@
   const integrationStore = useIntegrationStore()
   const {
     status: onboardingStatus,
-    isLoading: onboardingStatusLoading,
     activationComplete,
     showFullSetupHub,
     showCompactSetupCard,
@@ -537,28 +276,14 @@
 
   const recommendationStore = useRecommendationStore()
 
-  const activityStore = useActivityStore()
   const checkinStore = useCheckinStore()
-  const trialAccessTitle = computed(() => {
-    const daysRemaining = userStore.trialDaysRemaining || 0
-    return typeof t.value === 'function'
-      ? t.value('trial_access_remaining', { count: daysRemaining })
-      : String(daysRemaining)
-  })
-  const isTrialEndingSoon = computed(() => {
-    const daysRemaining = userStore.trialDaysRemaining || 0
-    return daysRemaining > 0 && daysRemaining <= 2
-  })
-  const trialEndsAtLabel = computed(() => {
-    if (!userStore.user?.trialEndsAt) return ''
-    return formatDate(userStore.user.trialEndsAt)
-  })
   const nutritionEnabled = computed(
     () =>
       userStore.profile?.nutritionTrackingEnabled !== false &&
       userStore.user?.nutritionTrackingEnabled !== false
   )
-  const isOnboarded = computed(() => activationComplete.value)
+  const fuelingDepthOpen = ref(false)
+  const recoveryDepthOpen = ref(false)
   const performanceScoresCard = ref<{ refresh: () => Promise<unknown> } | null>(null)
 
   // Background Task Monitoring
@@ -577,10 +302,10 @@
     await Promise.all([
       userStore.fetchProfile(),
       recommendationStore.fetchTodayRecommendation(),
-      activityStore.fetchRecentActivity(),
       fetchUpcomingWorkouts(),
+      fetchTodaySessions(),
       checkinStore.fetchToday(),
-      nutritionEnabled.value ? fetchTodayNutrition() : Promise.resolve()
+      nutritionEnabled.value && fuelingDepthOpen.value ? fetchTodayNutrition() : Promise.resolve()
     ])
   }
 
@@ -633,11 +358,17 @@
   onTaskFailed('ingest-intervals', handleIngestTaskFailed)
   onTaskFailed('ingest-strava', handleIngestTaskFailed)
 
-  const showWelcome = useLocalStorage('dashboard-welcome-banner', true)
-
   const upcomingWorkouts = ref<any[]>([])
   const upcomingWorkoutsError = ref<string | null>(null)
-  const todayWorkouts = ref<any[]>([])
+  const todayWorkouts = ref<CalendarActivity[]>([])
+  const dayError = ref<string | null>(null)
+  const loadingDay = ref(false)
+  const completedToday = computed(() =>
+    todayWorkouts.value
+      .filter((workout) => workout.source === 'completed')
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  )
+  const todayLabel = computed(() => formatDateUTC(getUserLocalDate(), 'EEEE, d MMMM'))
   const loadingUpcoming = ref(false)
   const isLoading = ref(true)
   const canUseDashboardActions = computed(
@@ -653,7 +384,7 @@
   const hasLoadedDashboardWidgets = ref(false)
 
   async function loadDashboardWidgets() {
-    if (!canUseDashboardActions.value || hasLoadedDashboardWidgets.value) {
+    if (hasLoadedDashboardWidgets.value) {
       return
     }
 
@@ -662,11 +393,38 @@
       userStore.fetchProfile(),
       refreshOnboardingStatus(),
       recommendationStore.fetchTodayRecommendation(),
-      activityStore.fetchRecentActivity(),
       fetchUpcomingWorkouts(),
+      fetchTodaySessions(),
       checkinStore.fetchToday(),
-      nutritionEnabled.value ? fetchTodayNutrition() : Promise.resolve()
+      nutritionEnabled.value && fuelingDepthOpen.value ? fetchTodayNutrition() : Promise.resolve()
     ])
+  }
+
+  async function fetchTodaySessions() {
+    loadingDay.value = true
+    dayError.value = null
+    try {
+      const dateStr = formatDateUTC(getUserLocalDate(), 'yyyy-MM-dd')
+      const [calendar, planned] = await Promise.all([
+        ($fetch as any)('/api/calendar', { query: { startDate: dateStr, endDate: dateStr } }),
+        ($fetch as any)('/api/workouts/planned/today')
+      ])
+      todayWorkouts.value = getCalendarActivities(calendar).filter(
+        (workout) =>
+          (workout.source === 'completed' || workout.source === 'planned') &&
+          workout.type !== 'Note'
+      )
+      recommendationStore.todayWorkouts = Array.isArray(planned) ? planned : []
+    } catch (error: any) {
+      dayError.value = t.value('journey_day_load_error')
+      console.error('Failed to load today sessions:', error)
+    } finally {
+      loadingDay.value = false
+    }
+  }
+
+  async function retryToday() {
+    await Promise.all([fetchTodaySessions(), checkinStore.fetchToday()])
   }
 
   async function fetchTodayNutrition() {
@@ -679,22 +437,11 @@
     loadingNutrition.value = true
     try {
       const dateStr = formatDateUTC(getUserLocalDate(), 'yyyy-MM-dd')
-      const [nData, calendarData, sData] = await Promise.all([
+      const [nData, sData] = await Promise.all([
         ($fetch as any)(`/api/nutrition/${dateStr}`),
-        ($fetch as any)('/api/calendar', {
-          query: { startDate: dateStr, endDate: dateStr }
-        }),
         ($fetch as any)('/api/profile/nutrition')
       ])
       todayNutrition.value = nData
-
-      // Filter out non-training items like wellness/nutrition placeholders and notes
-      todayWorkouts.value = getCalendarActivities(calendarData).filter(
-        (a: any) =>
-          (a.source === 'completed' || a.source === 'planned') &&
-          a.type !== 'Rest' &&
-          a.type !== 'Note'
-      )
       nutritionSettings.value = sData.settings
     } catch (error: any) {
       if (error.statusCode !== 404) {
@@ -703,6 +450,15 @@
     } finally {
       loadingNutrition.value = false
     }
+  }
+
+  function handleFuelingToggle(event: Event) {
+    fuelingDepthOpen.value = (event.target as HTMLDetailsElement).open
+    if (fuelingDepthOpen.value) void fetchTodayNutrition()
+  }
+
+  function handleRecoveryToggle(event: Event) {
+    recoveryDepthOpen.value = (event.target as HTMLDetailsElement).open
   }
 
   function handleNutritionRefresh() {
@@ -737,11 +493,6 @@
     return formatDateUTC(d, 'd')
   }
 
-  function handleUpcomingWorkoutClick(workoutId: string) {
-    trackWidgetClick('upcoming_workouts', 'open_workout')
-    return navigateTo(`/workouts/planned/${workoutId}`)
-  }
-
   async function handleConnectLater() {
     await deferConnection()
   }
@@ -750,10 +501,10 @@
     await completeActivation('dashboard_insight')
     await Promise.all([
       recommendationStore.fetchTodayRecommendation(),
-      activityStore.fetchRecentActivity(),
       fetchUpcomingWorkouts(),
+      fetchTodaySessions(),
       checkinStore.fetchToday(),
-      nutritionEnabled.value ? fetchTodayNutrition() : Promise.resolve()
+      nutritionEnabled.value && fuelingDepthOpen.value ? fetchTodayNutrition() : Promise.resolve()
     ])
   }
 
@@ -782,6 +533,30 @@
     async (ready) => {
       if (ready && onboardingStatus.value?.hasUsableData && !activationComplete.value) {
         await refreshOnboardingStatus()
+      }
+    }
+  )
+
+  watch(
+    () =>
+      recommendationStore.todayWorkouts
+        .map((workout: any) => `${workout.id}:${workout.completed}`)
+        .join(','),
+    async (_current, previous) => {
+      if (previous) {
+        const dateStr = formatDateUTC(getUserLocalDate(), 'yyyy-MM-dd')
+        try {
+          const calendar = await ($fetch as any)('/api/calendar', {
+            query: { startDate: dateStr, endDate: dateStr }
+          })
+          todayWorkouts.value = getCalendarActivities(calendar).filter(
+            (workout) =>
+              (workout.source === 'completed' || workout.source === 'planned') &&
+              workout.type !== 'Note'
+          )
+        } catch {
+          dayError.value = t.value('journey_day_load_error')
+        }
       }
     }
   )
@@ -912,18 +687,26 @@
       }
     ]
 
+    if (canUseDashboardActions.value)
+      items.push({
+        label: integrationStore.syncingData ? t.value('header_sync') : t.value('header_sync_data'),
+        icon: 'i-heroicons-arrow-path',
+        onSelect: () => {
+          if (!integrationStore.syncingData) void handleSync()
+        }
+      })
     return [items]
   })
 
   useHead({
-    title: 'Dashboard',
+    title: 'Today',
     meta: [
       {
         name: 'description',
         content:
           'Your training overview, recovery status, and personalized AI coaching recommendations.'
       },
-      { property: 'og:title', content: 'Dashboard | Coach Watts' },
+      { property: 'og:title', content: 'Today | Coach Watts' },
       {
         property: 'og:description',
         content:
@@ -932,3 +715,63 @@
     ]
   })
 </script>
+
+<style scoped>
+  .today-page {
+    width: 100%;
+    max-width: 800px;
+    margin-inline: auto;
+    padding: 2rem 1.25rem 4rem;
+  }
+  .today-page__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--ui-border);
+  }
+  .today-page__disclosure {
+    border-top: 1px solid var(--ui-border);
+  }
+  .today-page__disclosure summary {
+    padding: 1.25rem 0;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+  .today-page__disclosure summary::marker {
+    color: var(--ui-text-muted);
+  }
+  .today-page__disclosure summary:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 4px;
+  }
+  .today-page__upcoming {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 1.125rem 0;
+  }
+  .today-page__upcoming:hover {
+    color: var(--ui-primary);
+  }
+  .today-page__upcoming:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 3px;
+  }
+  .today-page__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 3rem;
+    color: var(--ui-text-muted);
+  }
+  @media (min-width: 640px) {
+    .today-page {
+      padding: 2.5rem 2rem 4rem;
+    }
+  }
+</style>

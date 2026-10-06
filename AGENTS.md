@@ -6,60 +6,55 @@ Primary context for AI agents (Claude Code, Gemini CLI, Cursor) working in this 
 
 **Coach Watts** — AI endurance coaching platform. Nuxt 3 + Nuxt UI, Vercel AI SDK, Prisma, Trigger.dev.
 
-## Issue tracking
+## Personal fork workflow
 
-All work is tracked in **Linear**, team key **`CW`**. Issue IDs look like `CW-105`.
+This is a personal fork at `origin`, based on `master`. The owner has permanently retired the previous Linear workflow for this repository. **Do not connect to Linear, require CW tickets, claim issues, manage labels or states, or create external follow-ups.** A direct user request authorizes work within its scope; no ticket or ticket-defined `Owned Paths` is required.
 
-**Read [`docs/04-guides/issue-management.md`](docs/04-guides/issue-management.md) before picking up any ticket.** It defines the label taxonomy, workflow states, the AI-ready ticket template, and the concurrent-agent claim protocol.
+Use a focused branch, normally `codex/<description>`, from the relevant current state. Work in the existing checkout unless isolation is useful. Worktrees are optional; when creating one, use the scripts described below.
 
-Task state lives in Linear, never in git-tracked markdown. Files under `docs/issues/` are the **archive** of already-resolved issues plus specs — do not treat them as a live queue and do not update their status as a way of tracking work.
+Files under `docs/issues/` are historical archives and specs, not a live queue. The [issue-management guide](docs/04-guides/issue-management.md) preserves the former workflow for reference only; its ticket, claim, worktree, and PR requirements do not apply to this fork.
 
-## Non-negotiables for agents
+## Agent working rules
 
-1. **One git worktree per ticket, created by `bin/worktree-up.sh`.** Never work on two tickets in the same checkout, and **never hand-roll a worktree** — no bare `git worktree add`, no hand-edited `.env`, no improvised port, no `pnpm dev` on whatever port is free. See [Worktrees](#worktrees).
-   ```bash
-   bin/worktree-up.sh CW-105 feat slug     # worktree + branch + database + port + .env
-   ```
-2. **Claim before you code.** Set the ticket to `In Progress`, assign it to yourself, add `ai:in-progress` — then re-read it. If the assignee is not you, another agent won the race; take the next ticket.
-3. **Only touch the ticket's `Owned Paths`.** If the work requires files outside that set, stop and move the ticket to `Blocked`.
-4. **Never mark a ticket `Done` without clean verification output.** Run the ticket's Verification Command and post the output as a comment.
-5. **Blocked is a state, not a vibe.** Missing credentials, ambiguity, or an external dependency → move to `Blocked` and say what you need. Never leave a stalled ticket sitting in `In Progress`.
-6. **File follow-ups in Linear.** Bugs, risks, missing requirements, tech debt, or out-of-scope todos discovered while working → create a `CW` issue in `Triage` (see issue-management §8). Do not expand the current ticket's scope to absorb them.
+1. Keep changes focused on the user's request and preserve unrelated local work. Coordinate file ownership when agents work concurrently.
+2. Run verification appropriate to the change and report the actual results before claiming completion. Explain any checks that could not run.
+3. Report blockers and useful follow-ups in the conversation. Continue independent work when possible; do not create external tracking work.
+4. Never hand-roll a worktree, its database, `.env`, or port. See [Worktrees](#worktrees) for optional isolation.
 
 ## Execution loop
 
-**Plan → Act → Verify → Push & Open PR → Log & Transition.** Confirm file locations and restate the approach on the ticket; implement inside the worktree; run the verification command; push branch (`git push origin <branch>`) and open Pull Request (`gh pr create --base develop --body "Fixes CW-XYZ"`); post results, PR link, and diff summary to Linear.
+**Plan → Act → Verify → Report.** Inspect the current files, implement the requested outcome, run practical checks, and summarize changes and remaining limitations. Commit, push, or open a PR when the user requests publication or an agreed workflow calls for it. PRs for this fork target `master` unless the user specifies another base; ticket references are optional.
 
 ## Worktrees
 
-Every ticket gets its own worktree, port, database and `.env`, all derived from the ticket number. The scripts are the only supported way to create one — **hand-rolling a worktree is a protocol violation, not a shortcut**: a hand-picked port lands on another agent's dev server, and a hand-pointed `DATABASE_URL` puts your `prisma migrate` on top of someone else's schema.
+The existing scripts can optionally create an isolated worktree, port, database, and `.env`. They accept local identifiers such as `LOCAL-1`; no Linear issue is needed. Their legacy default base is `develop`, so set `CW_BASE_BRANCH=master` for this fork. Use these scripts whenever creating a worktree: manual ports and database URLs can collide with another running checkout.
 
 ```bash
-bin/worktree-up.sh   CW-105 [type] [slug]           # create or refresh — safe to re-run
+CW_BASE_BRANCH=master bin/worktree-up.sh LOCAL-1 [type] [slug] # create or refresh
 bin/worktree-dev.sh                                 # dev server, from inside the worktree
-bin/worktree-down.sh CW-105 [--force] [--delete-branch]
-bin/worktree-warm.sh [--rebuild]                    # refresh the shared template DB + cache
+bin/worktree-down.sh LOCAL-1 [--force] [--delete-branch]
+CW_BASE_BRANCH=master bin/worktree-warm.sh [--rebuild] # refresh the shared template DB + cache
 ```
 
-| What          | Where                                                    | Derivation                     |
-| :------------ | :------------------------------------------------------- | :----------------------------- |
-| Worktree      | `~/Develop/.worktrees/coach-wattz/CW-105`                | ticket ID                      |
-| Branch        | `feat/CW-105-slug`, off `origin/develop`                 | `type`/`slug` arguments        |
-| Dev server    | `http://localhost:3305`                                  | `3200 + (ticket number % 200)` |
-| Database      | `watts_wt_cw_105` on `watts-postgres` (`localhost:5439`) | ticket ID                      |
-| Redis         | `watts-dragonfly`, database index `1`                    | `ticket number % 15 + 1`       |
-| `.env`        | generated by `worktree-up.sh`                            | ports + database above         |
-| Main checkout | port `3099`, database `watts`, Redis index `0`           | never touched by these scripts |
+| What          | Where                                                     | Derivation                         |
+| :------------ | :-------------------------------------------------------- | :--------------------------------- |
+| Worktree      | `~/Develop/.worktrees/coach-wattz/LOCAL-1`                | local identifier                   |
+| Branch        | `feat/LOCAL-1-slug`, off `origin/master`                  | `type`/`slug`, base override       |
+| Dev server    | `http://localhost:3201`                                   | `3200 + (identifier number % 200)` |
+| Database      | `watts_wt_local_1` on `watts-postgres` (`localhost:5439`) | local identifier                   |
+| Redis         | `watts-dragonfly`, database index `2`                     | `identifier number % 15 + 1`       |
+| `.env`        | generated by `worktree-up.sh`                             | ports + database above             |
+| Main checkout | port `3099`, database `watts`, Redis index `0`            | never touched by these scripts     |
 
 Rules:
 
 - **Start the dev server with `bin/worktree-dev.sh`, never bare `pnpm dev`.** `nuxt.config.ts` pins `devServer.port: 3099` and Nuxt's CLI resolves the port before `.env` is read, so `pnpm dev` inside a worktree silently binds the _main checkout's_ port. `bin/worktree-dev.sh` exports the allocated `NUXT_PORT` and execs `pnpm dev` (extra arguments are passed through).
-- **Never hand-edit `.env`.** `worktree-up.sh` regenerates the database/port keys on every run and carries everything else over, so re-running is always safe. Keys you add yourself survive a refresh.
-- **Never run `prisma migrate dev --name …` in an agent shell.** It prompts (so it hangs) and invents a migration from any schema drift. `worktree-up.sh` applies committed migrations with `prisma migrate deploy`; to pick up migrations that landed on `develop`, just re-run it.
-- **Re-run `bin/worktree-up.sh <TICKET>` whenever you are unsure** — it is idempotent and never touches uncommitted work.
-- **Tear down with `bin/worktree-down.sh <TICKET>`** after the PR merges: it drops the database and removes the worktree, and refuses if there are uncommitted changes or unpushed commits (`--force` overrides, `--delete-branch` also deletes the branch).
+- **Do not hand-edit generated worktree database/port keys in `.env`.** `worktree-up.sh` regenerates those keys and carries everything else over. Other configuration keys survive a refresh.
+- **Never run interactive `prisma migrate dev` in an agent shell.** It can hang and invent a migration from schema drift. Apply committed migrations with `prisma migrate deploy`; the worktree script does this on refresh.
+- **Re-run `CW_BASE_BRANCH=master bin/worktree-up.sh <LOCAL-ID>` whenever you are unsure** — it is idempotent and never touches uncommitted work.
+- **Tear down with `bin/worktree-down.sh <LOCAL-ID>`** when the isolated work is finished: it drops the database and removes the worktree, and refuses if there are uncommitted changes or unpushed commits (`--force` overrides, `--delete-branch` also deletes the branch).
 - If `worktree-up.sh` reports a divergent database (history rows not in `prisma/migrations/`), do not patch it by hand — recreate it with the commands the error prints.
-- Two tickets whose numbers differ by exactly 200 share a port; run those sequentially.
+- Two identifiers whose numbers differ by exactly 200 share a port; run those sequentially.
 - **Realtime and chat pub/sub channels are namespaced per dev server.** Redis pub/sub ignores the per-ticket Redis database index, so `realtime-bus.ts` / `chat-realtime-bus.ts` used to leak events between concurrently running dev servers (every template-cloned database carries the _same_ seeded dev-user UUID, so the `userId` dispatch matched). They now suffix the channel with a namespace derived from the worktree's Redis index and dev port whenever `NODE_ENV=development` — so worktrees and the main checkout no longer see each other's events, and you can verify realtime/chat with other agents' dev servers running. Production is unaffected (`NODE_ENV=production` keeps the shared `app:realtime` / `chat:realtime` channels so multiple app containers still broadcast to each other). Set `REALTIME_CHANNEL_NAMESPACE` in `.env` to override the derived value.
 - **Every process that must share a dev realtime channel has to agree on `NODE_ENV` / `REALTIME_CHANNEL_NAMESPACE`.** The web server is not the only publisher: the worker (`pnpm dev:worker` → `cli/worker`) and the trigger tasks publish through `server/utils/ws-state.ts` → `realtime-bus`, and cross-process delivery to the web process's WebSocket peers is the whole reason the Redis bus exists. A process that resolves a different namespace publishes into a channel nobody subscribes to and its events are **dropped silently, with no log** — the feature just looks broken. Who sets `NODE_ENV`, exhaustively: `pnpm dev` (`nuxt dev`) sets `development` on its own; `pnpm dev:worker` sets it explicitly in the script; every other worker entrypoint (`pnpm cw:worker`, `cli/worker/run.sh`, the compose `worker-e2e` service, `e2e/scripts/run-app-host.ts`) goes through `cli/worker/cli.ts`, which defaults an unset `NODE_ENV` to `development` and warns on stderr when it does (an explicit value, including `production`, is never overridden — CW-611). The one publisher whose `NODE_ENV` nothing in this repo controls is `pnpm dev:trigger`, which runs tasks inside the Trigger.dev CLI's own child processes: for that, set `REALTIME_CHANNEL_NAMESPACE=<value>` in `.env` instead — it wins over the derived value in every environment, and every process that loads dotenv picks it up regardless of `NODE_ENV`. Any new publisher process you add either runs under a known `NODE_ENV` or needs the same treatment.
 - These scripts are for the local macOS environment (Docker + `watts-postgres`). On the Cursor Cloud VM there are no worktrees — work in the checkout you are given (see below).
@@ -91,7 +86,7 @@ The Cloud VM snapshot already has: Node 24 (via nvm), pnpm deps, a local `.env`,
   - Postgres: `sudo pg_ctlcluster 16 main start` (cluster `16 main`, listens on `localhost:5432`).
   - Redis: `sudo redis-server /etc/redis/redis.conf --daemonize yes` (password `dragonfly`, port 6379). Check with `redis-cli -a dragonfly ping`.
 - Local `.env` (gitignored) differs from `.env.example`: Postgres runs on the standard port `5432` (not 5439) with role/db `watts`/`watts` (password `password`), so `DATABASE_URL=postgresql://watts:password@localhost:5432/watts`. The dev server runs on `http://localhost:3099`.
-- Apply DB migrations with `npx prisma migrate deploy` (or `npx prisma migrate dev`). The DB already has migrations applied in the snapshot; re-running deploy is a no-op.
+- Apply committed DB migrations with `npx prisma migrate deploy`. The DB already has migrations applied in the snapshot; re-running deploy is a no-op. Never run interactive `prisma migrate dev` in an agent shell.
 - Login without Google OAuth: `.env` sets `AUTH_BYPASS_USER=dev@coachwatts.test`, so hitting any protected page auto-creates a session for that seeded admin user (see `server/plugins/auth-bypass.ts`). Recreate the user if the DB is reset with `npx tsx scripts/seed-dev-user.ts`.
 - Prisma 7 uses a driver adapter — construct `PrismaClient` with `new PrismaPg(new pg.Pool(...))` (see `server/utils/db.ts`); `new PrismaClient()` alone throws. Standalone scripts must do the same.
 - Commands (`pnpm dev`, `build`, `typecheck`, `test`, `lint`, etc.) are defined in `package.json`. Note: `pnpm lint` and `pnpm typecheck` need generated Nuxt types first — run `pnpm exec nuxt prepare` once (CI does this) or start `pnpm dev` before them.

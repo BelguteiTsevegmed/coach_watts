@@ -15,6 +15,7 @@
   import ChatSidebar from '~/components/chat/ChatSidebar.vue'
   import ChatMessageList from '~/components/chat/ChatMessageList.vue'
   import ChatInput from '~/components/chat/ChatInput.vue'
+  import ChatViewport from '~/components/chat/ChatViewport.vue'
   import { shouldHideAssistantBubble } from '~/utils/chat-message-state'
   import {
     CHAT_OUTGOING_QUEUE_STORAGE_KEY,
@@ -32,7 +33,7 @@
   })
 
   useHead({
-    title: 'AI Chat Coach',
+    title: 'Coach',
     meta: [
       {
         name: 'description',
@@ -58,8 +59,6 @@
   const editingMessage = ref<any | null>(null)
   const editingContent = ref('')
   const savingEditedMessage = ref(false)
-  const chatViewportHeight = ref('100dvh')
-  let visualViewportListener: (() => void) | null = null
   let previousDocumentOverflow = ''
   let previousBodyOverflow = ''
   let turnPollingTimer: ReturnType<typeof setInterval> | null = null
@@ -1096,17 +1095,6 @@
       previousBodyOverflow = document.body.style.overflow
       document.documentElement.style.overflow = 'hidden'
       document.body.style.overflow = 'hidden'
-
-      const updateViewportHeight = () => {
-        const viewportHeight = window.visualViewport?.height || window.innerHeight
-        chatViewportHeight.value = `${Math.round(viewportHeight)}px`
-      }
-
-      updateViewportHeight()
-      window.visualViewport?.addEventListener('resize', updateViewportHeight)
-      window.visualViewport?.addEventListener('scroll', updateViewportHeight)
-      window.addEventListener('resize', updateViewportHeight)
-      visualViewportListener = updateViewportHeight
     }
 
     await loadChat()
@@ -1123,13 +1111,6 @@
 
     document.documentElement.style.overflow = previousDocumentOverflow
     document.body.style.overflow = previousBodyOverflow
-
-    if (visualViewportListener) {
-      window.visualViewport?.removeEventListener('resize', visualViewportListener)
-      window.visualViewport?.removeEventListener('scroll', visualViewportListener)
-      window.removeEventListener('resize', visualViewportListener)
-      visualViewportListener = null
-    }
 
     stopTurnPolling()
     cleanupChatWebSocket()
@@ -1660,7 +1641,7 @@
         to: '/notifications'
       },
       {
-        label: 'Memory',
+        label: t.value('nav_memory'),
         icon: 'i-heroicons-bookmark',
         disabled: !currentRoomId.value,
         onSelect: () => {
@@ -2225,198 +2206,152 @@
 </script>
 
 <template>
-  <UDashboardPanel
-    id="chat"
-    class="overflow-hidden"
-    :style="{ height: chatViewportHeight }"
-    :ui="{ body: 'p-0 min-h-0 overflow-hidden' }"
-  >
-    <template #header>
-      <div class="sticky top-0 z-20">
-        <UDashboardNavbar :title="currentRoomName">
-          <template #leading>
-            <UDashboardSidebarCollapse />
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-heroicons-clock"
-              aria-label="Open chat history"
-              @click="
-                () => {
-                  void chatSidebarRef?.open()
-                }
-              "
-            />
-          </template>
-          <template #right>
-            <LayoutPageNavbarActions :overflow-items="chatOverflowItems">
-              <ClientOnly>
-                <DashboardTriggerMonitorButton />
-                <NotificationDropdown />
-              </ClientOnly>
-              <UButton
-                color="neutral"
-                variant="outline"
-                icon="i-heroicons-bookmark"
-                aria-label="Manage Memory"
-                size="sm"
-                class="font-bold"
-                :disabled="!currentRoomId"
-                @click="
-                  () => {
-                    void openMemoryPanel()
-                  }
-                "
-              >
-                <span class="hidden md:inline">Memory</span>
-              </UButton>
-              <UButton
-                color="neutral"
-                variant="outline"
-                icon="i-heroicons-share"
-                aria-label="Share Chat"
-                size="sm"
-                class="font-bold"
-                :disabled="!currentRoomId"
-                @click="
-                  () => {
-                    isShareModalOpen = true
-                  }
-                "
-              >
-                <span class="hidden md:inline">{{ t('nav_share') }}</span>
-              </UButton>
-              <UButton
-                to="/settings/ai"
-                icon="i-heroicons-cog-6-tooth"
-                color="neutral"
-                variant="outline"
-                size="sm"
-                class="font-bold"
-                aria-label="AI Settings"
-              >
-                <span class="hidden md:inline">{{ t('nav_settings') }}</span>
-              </UButton>
-              <UButton
-                color="primary"
-                variant="solid"
-                icon="i-heroicons-chat-bubble-left-right"
-                aria-label="New Chat"
-                size="sm"
-                class="font-bold"
-                @click="
-                  () => {
-                    void createNewChat()
-                  }
-                "
-              >
-                <span class="hidden md:inline">{{ t('nav_new_chat') }}</span>
-                <span class="md:hidden">{{ t('controls_chat') }}</span>
-              </UButton>
-
-              <template #mobile>
-                <LayoutNavbarIconButton
-                  icon="i-heroicons-chat-bubble-left-right"
-                  label="New Chat"
-                  color="primary"
-                  variant="solid"
-                  @click="
-                    () => {
-                      void createNewChat()
-                    }
-                  "
-                />
-              </template>
-            </LayoutPageNavbarActions>
-          </template>
-        </UDashboardNavbar>
-      </div>
-    </template>
-
-    <template #body>
-      <div class="flex h-full min-h-0 overscroll-none">
-        <!-- Sidebar and Mobile Drawer -->
-        <ChatSidebar
-          ref="chatSidebarRef"
-          :rooms="rooms"
-          :current-room-id="currentRoomId"
-          :loading="loadingRooms"
-          @select="selectRoom"
-          @delete="deleteRoom"
-          @rename="renameRoom"
-        />
-
-        <!-- Chat Area -->
-        <div class="flex-1 flex min-w-0 min-h-0 flex-col overflow-hidden">
-          <!-- Read-only Banner -->
-          <div
-            v-if="isCurrentRoomReadOnly"
-            class="p-2 sm:p-4 border-b border-warning-200 bg-warning-50 dark:border-warning-900/50 dark:bg-warning-950/20"
+  <ChatViewport>
+    <UDashboardPanel
+      id="chat"
+      class="h-full overflow-hidden"
+      :ui="{ body: 'p-0 min-h-0 overflow-hidden' }"
+    >
+      <template #header>
+        <div class="sticky top-0 z-20">
+          <UDashboardNavbar
+            :title="currentRoomName"
+            :ui="{ title: 'min-w-0 max-w-[26vw] truncate sm:max-w-md' }"
           >
-            <UAlert
-              color="warning"
-              variant="subtle"
-              icon="i-heroicons-information-circle"
-              :title="t('legacy_banner_title')"
-              :description="t('legacy_banner_desc')"
-            >
-              <template #actions>
+            <template #leading>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-heroicons-clock"
+                class="min-h-11"
+                :aria-label="t('nav_history')"
+                @click="
+                  () => {
+                    void chatSidebarRef?.open()
+                  }
+                "
+              >
+                {{ t('nav_history') }}
+              </UButton>
+            </template>
+            <template #right>
+              <div class="flex items-center gap-1 sm:gap-2">
                 <UButton
-                  color="warning"
-                  variant="outline"
-                  size="xs"
-                  :label="t('legacy_banner_action')"
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-heroicons-plus"
+                  class="min-h-11"
+                  :aria-label="t('nav_new_chat')"
                   @click="
                     () => {
                       void createNewChat()
                     }
                   "
-                />
-              </template>
-            </UAlert>
-          </div>
-
-          <!-- Messages -->
-          <ChatMessageList
-            :key="currentRoomId || 'no-room'"
-            :messages="chatMessages"
-            :status="uiChatStatus"
-            :loading="loadingMessages"
-            :load-error="messagesLoadError"
-            :can-edit-messages="
-              uiChatStatus === 'ready' && queuedMessageCount === 0 && !isCurrentRoomReadOnly
-            "
-            :editing-message-id="editingMessage?.id || null"
-            :editing-content="editingContent"
-            :saving-edited-message="savingEditedMessage"
-            @tool-approval="onToolApproval"
-            @edit-message="openEditMessageInline"
-            @update:editing-content="editingContent = $event"
-            @save-edit="saveEditedMessage"
-            @cancel-edit="cancelEditedMessage"
-            @resume-turn="resumeTurn"
-            @retry-turn="retryTurn"
-            @remember-message="onRememberMessage"
-            @forget-message="onForgetMessage"
-            @retry-load="retryChatLoad"
-          />
-
-          <!-- Input -->
-          <ChatInput
-            ref="chatInputRef"
-            v-model="input"
-            :status="composerStatus"
-            :error="chat.error"
-            :disabled="isCurrentRoomReadOnly"
-            :queued-count="queuedMessageCount"
-            :has-active-turn="uiChatStatus === 'streaming'"
-            mobile-enter-behavior="newline"
-            @submit="onSubmit"
-          />
+                >
+                  {{ t('nav_new_chat') }}
+                </UButton>
+                <UDropdownMenu :items="chatOverflowItems" :content="{ align: 'end' }">
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    icon="i-heroicons-ellipsis-horizontal"
+                    class="min-h-11 min-w-11"
+                    :aria-label="t('nav_tools')"
+                  >
+                    <span class="hidden sm:inline">{{ t('nav_tools') }}</span>
+                  </UButton>
+                </UDropdownMenu>
+              </div>
+            </template>
+          </UDashboardNavbar>
         </div>
-      </div>
-    </template>
-  </UDashboardPanel>
+      </template>
+
+      <template #body>
+        <div class="flex h-full min-h-0 overscroll-none">
+          <!-- Sidebar and Mobile Drawer -->
+          <ChatSidebar
+            ref="chatSidebarRef"
+            :rooms="rooms"
+            :current-room-id="currentRoomId"
+            :loading="loadingRooms"
+            @select="selectRoom"
+            @delete="deleteRoom"
+            @rename="renameRoom"
+          />
+
+          <!-- Chat Area -->
+          <div class="flex-1 flex min-w-0 min-h-0 flex-col overflow-hidden">
+            <!-- Read-only Banner -->
+            <div
+              v-if="isCurrentRoomReadOnly"
+              class="p-2 sm:p-4 border-b border-warning-200 bg-warning-50 dark:border-warning-900/50 dark:bg-warning-950/20"
+            >
+              <UAlert
+                color="warning"
+                variant="subtle"
+                icon="i-heroicons-information-circle"
+                :title="t('legacy_banner_title')"
+                :description="t('legacy_banner_desc')"
+              >
+                <template #actions>
+                  <UButton
+                    color="warning"
+                    variant="outline"
+                    size="xs"
+                    :label="t('legacy_banner_action')"
+                    @click="
+                      () => {
+                        void createNewChat()
+                      }
+                    "
+                  />
+                </template>
+              </UAlert>
+            </div>
+
+            <!-- Messages -->
+            <ChatMessageList
+              :key="currentRoomId || 'no-room'"
+              :messages="chatMessages"
+              :status="uiChatStatus"
+              :loading="loadingMessages"
+              :load-error="messagesLoadError"
+              :can-edit-messages="
+                uiChatStatus === 'ready' && queuedMessageCount === 0 && !isCurrentRoomReadOnly
+              "
+              :editing-message-id="editingMessage?.id || null"
+              :editing-content="editingContent"
+              :saving-edited-message="savingEditedMessage"
+              @tool-approval="onToolApproval"
+              @edit-message="openEditMessageInline"
+              @update:editing-content="editingContent = $event"
+              @save-edit="saveEditedMessage"
+              @cancel-edit="cancelEditedMessage"
+              @resume-turn="resumeTurn"
+              @retry-turn="retryTurn"
+              @remember-message="onRememberMessage"
+              @forget-message="onForgetMessage"
+              @retry-load="retryChatLoad"
+            />
+
+            <!-- Input -->
+            <ChatInput
+              ref="chatInputRef"
+              v-model="input"
+              :status="composerStatus"
+              :error="chat.error"
+              :disabled="isCurrentRoomReadOnly"
+              :queued-count="queuedMessageCount"
+              :has-active-turn="uiChatStatus === 'streaming'"
+              mobile-enter-behavior="newline"
+              @submit="onSubmit"
+            />
+          </div>
+        </div>
+      </template>
+    </UDashboardPanel>
+  </ChatViewport>
 
   <USlideover
     v-model:open="isMemoryPanelOpen"

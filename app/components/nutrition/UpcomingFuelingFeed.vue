@@ -2,7 +2,7 @@
   <div class="space-y-4">
     <div class="flex items-center justify-between px-4 sm:px-1 pt-4 sm:pt-0">
       <h3
-        class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-tight flex items-center gap-2"
+        class="text-sm font-bold text-gray-900 dark:text-white tracking-tight flex items-center gap-2"
       >
         <UIcon name="i-lucide-calendar-clock" class="size-4 text-primary-500" />
         Upcoming Plan
@@ -31,7 +31,7 @@
     <div v-for="day in groupedDays" :key="day.dateKey" class="space-y-2">
       <div class="px-4 sm:px-1">
         <span
-          class="inline-flex w-fit rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+          class="inline-flex w-fit rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300 px-2 py-0.5 text-xs font-bold"
         >
           {{ formatDay(day.dateKey) }}
         </span>
@@ -50,15 +50,12 @@
                 <span class="text-xs font-bold text-gray-700 dark:text-gray-300">
                   {{ formatTime(window.startTime) }}
                 </span>
-                <span class="text-[10px] text-gray-400">•</span>
-                <span
-                  class="text-xs font-black uppercase tracking-tight"
-                  :class="getTypeColor(window.type)"
-                >
+                <span class="text-xs text-gray-400">•</span>
+                <span class="text-xs font-medium tracking-tight" :class="getTypeColor(window.type)">
                   {{ window.label }}
                 </span>
               </div>
-              <div class="flex items-center gap-3 text-[10px] font-bold uppercase">
+              <div class="flex items-center gap-3 text-xs font-bold">
                 <span class="text-primary-600 dark:text-primary-400">
                   {{ window.isLocked ? window.lockedMeal.totals.carbs : window.targetCarbs }}g carbs
                 </span>
@@ -67,12 +64,12 @@
                   prot
                 </span>
               </div>
-              <p v-if="window.workoutTitle" class="text-[10px] font-medium text-gray-500 truncate">
+              <p v-if="window.workoutTitle" class="text-xs font-medium text-gray-500 truncate">
                 ⚓ {{ window.workoutTitle }}
               </p>
               <p
                 v-else-if="window.lockedMeal"
-                class="text-[10px] font-bold text-success-600 dark:text-success-400 truncate"
+                class="text-xs font-bold text-success-600 dark:text-success-400 truncate"
               >
                 🍴 {{ window.lockedMeal.title }}
               </p>
@@ -104,19 +101,17 @@
         <div
           class="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/40 p-3"
         >
-          <div class="text-[10px] font-black uppercase tracking-wide text-gray-600">
-            Daily Total
-          </div>
+          <div class="text-xs font-medium text-gray-600">Daily Total</div>
           <div class="mt-1 flex items-center gap-2">
-            <span class="text-xs font-black text-primary-700 dark:text-primary-300"
+            <span class="text-xs font-medium text-primary-700 dark:text-primary-300"
               >{{ day.totalCarbs }}g carbs</span
             >
-            <span class="text-[10px] text-gray-400">•</span>
+            <span class="text-xs text-gray-400">•</span>
             <span class="text-xs font-bold text-gray-700 dark:text-gray-300"
               >{{ day.totalProtein }}g protein</span
             >
           </div>
-          <div class="mt-1 text-[10px] text-gray-500">
+          <div class="mt-1 text-xs text-gray-500">
             {{ day.windows.length }} windows • {{ day.plannedCarbs }}g planned •
             {{ Math.max(0, day.totalCarbs - day.plannedCarbs) }}g remaining
           </div>
@@ -129,28 +124,19 @@
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
           <thead class="bg-gray-50 dark:bg-gray-800/50">
             <tr>
-              <th
-                scope="col"
-                class="px-4 py-3 text-left text-[10px] font-black uppercase text-gray-500 tracking-widest"
-              >
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500">
                 Time
               </th>
-              <th
-                scope="col"
-                class="px-4 py-3 text-left text-[10px] font-black uppercase text-gray-500 tracking-widest"
-              >
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500">
                 Window
               </th>
               <th
                 scope="col"
-                class="px-4 py-3 text-left text-[10px] font-black uppercase text-gray-500 tracking-widest text-center"
+                class="px-4 py-3 text-left text-xs font-medium text-gray-500 text-center"
               >
                 Target
               </th>
-              <th
-                scope="col"
-                class="px-4 py-3 text-left text-[10px] font-black uppercase text-gray-500 tracking-widest"
-              >
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500">
                 AI Coach Advice
               </th>
               <th scope="col" class="px-4 py-3 text-right"></th>
@@ -172,7 +158,7 @@
                 <div class="flex flex-col gap-1">
                   <div class="flex items-center gap-1.5">
                     <span
-                      class="text-xs font-black uppercase tracking-tight"
+                      class="text-xs font-medium tracking-tight"
                       :class="getTypeColor(window.type)"
                     >
                       {{ window.label }}
@@ -182,7 +168,7 @@
                       size="xs"
                       color="success"
                       variant="subtle"
-                      class="text-[8px] px-1 py-0 uppercase"
+                      class="text-[8px] px-1 py-0"
                       icon="i-lucide-lock"
                       >Locked</UBadge
                     >
@@ -191,19 +177,19 @@
                       size="xs"
                       color="neutral"
                       variant="subtle"
-                      class="text-[8px] px-1 py-0 uppercase"
+                      class="text-[8px] px-1 py-0"
                       >Target</UBadge
                     >
                   </div>
                   <span
                     v-if="window.workoutTitle"
-                    class="text-[10px] font-medium text-gray-500 truncate max-w-[120px]"
+                    class="text-xs font-medium text-gray-500 truncate max-w-[120px]"
                   >
                     ⚓ {{ window.workoutTitle }}
                   </span>
                   <span
                     v-else-if="window.lockedMeal"
-                    class="text-[10px] font-bold text-success-600 dark:text-success-400 truncate max-w-[120px]"
+                    class="text-xs font-bold text-success-600 dark:text-success-400 truncate max-w-[120px]"
                   >
                     🍴 {{ window.lockedMeal.title }}
                   </span>
@@ -213,7 +199,7 @@
                 <div class="mx-auto grid w-[168px] grid-cols-[72px_24px_72px] items-center">
                   <div class="flex flex-col items-end">
                     <span
-                      class="text-xs font-black"
+                      class="text-xs font-medium"
                       :class="
                         window.isLocked
                           ? 'text-success-600 dark:text-success-400'
@@ -223,7 +209,7 @@
                         window.isLocked ? window.lockedMeal.totals.carbs : window.targetCarbs
                       }}g</span
                     >
-                    <span class="text-[8px] text-gray-400 uppercase font-bold">Carbs</span>
+                    <span class="text-[8px] text-gray-400 font-bold">Carbs</span>
                   </div>
                   <div class="mx-auto h-4 w-px bg-gray-200 dark:bg-gray-700" />
                   <div class="flex flex-col items-start">
@@ -232,7 +218,7 @@
                         window.isLocked ? window.lockedMeal.totals.protein : window.targetProtein
                       }}g</span
                     >
-                    <span class="text-[8px] text-gray-400 uppercase font-bold">Prot</span>
+                    <span class="text-[8px] text-gray-400 font-bold">Prot</span>
                   </div>
                 </div>
               </td>
@@ -262,27 +248,23 @@
               </td>
             </tr>
             <tr class="bg-gray-50/80 dark:bg-gray-800/40">
-              <td
-                class="px-4 py-3 text-[10px] font-black uppercase tracking-wide text-gray-600"
-                colspan="2"
-              >
-                Daily Total
-              </td>
+              <td class="px-4 py-3 text-xs font-medium text-gray-600" colspan="2">Daily Total</td>
               <td class="px-4 py-3">
                 <div class="mx-auto grid w-[168px] grid-cols-[72px_24px_72px] items-center">
-                  <span class="text-right text-xs font-black text-primary-700 dark:text-primary-300"
+                  <span
+                    class="text-right text-xs font-medium text-primary-700 dark:text-primary-300"
                     >{{ day.totalCarbs }}g carbs</span
                   >
-                  <span class="text-center text-[10px] text-gray-400">•</span>
+                  <span class="text-center text-xs text-gray-400">•</span>
                   <span class="text-left text-xs font-bold text-gray-700 dark:text-gray-300"
                     >{{ day.totalProtein }}g protein</span
                   >
                 </div>
               </td>
-              <td class="px-4 py-3 text-[10px] text-gray-500">
+              <td class="px-4 py-3 text-xs text-gray-500">
                 <div class="flex flex-col gap-0.5">
                   <span>{{ day.windows.length }} windows</span>
-                  <span class="text-[9px] uppercase tracking-wider">
+                  <span class="text-xs">
                     {{ day.plannedCarbs }}g planned •
                     {{ Math.max(0, day.totalCarbs - day.plannedCarbs) }}g remaining
                   </span>

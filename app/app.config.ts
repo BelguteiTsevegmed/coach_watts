@@ -19,6 +19,9 @@ export default defineAppConfig({
       }
     },
     button: {
+      slots: {
+        base: 'min-h-11 min-w-11'
+      },
       defaultVariants: {
         size: 'md'
       }
@@ -26,7 +29,7 @@ export default defineAppConfig({
     modal: {
       slots: {
         overlay: 'backdrop-blur-sm',
-        content: 'rounded-xl shadow-xl ring-1 ring-gray-200 dark:ring-gray-800'
+        content: 'rounded-lg shadow-md ring-1 ring-gray-200 dark:ring-gray-800'
       }
     },
     dashboardNavbar: {
@@ -37,7 +40,15 @@ export default defineAppConfig({
       }
     },
     dashboardSidebarToggle: {
-      base: 'size-11 min-h-11 min-w-11'
+      base: 'journey-sidebar-toggle size-11 min-h-11 min-w-11'
+    },
+    dashboardSidebarCollapse: {
+      base: 'journey-sidebar-toggle'
+    },
+    dashboardPanel: {
+      slots: {
+        root: 'min-h-0'
+      }
     }
   },
   // Custom design tokens for consistent usage

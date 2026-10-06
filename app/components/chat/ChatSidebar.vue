@@ -67,9 +67,9 @@
     :title="t('sidebar_header')"
     side="left"
     :description="t('sidebar_description')"
-    :ui="{ content: 'max-w-sm' }"
+    :ui="{ content: 'max-w-sm', body: 'p-2 min-h-0 flex flex-col' }"
   >
-    <template #content>
+    <template #body>
       <ChatRoomList
         v-if="shouldRenderList"
         :rooms="rooms"

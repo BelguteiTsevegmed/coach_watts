@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="planned-workout-details">
     <template #header>
-      <UDashboardNavbar>
+      <UDashboardNavbar :ui="{ title: 'hidden' }">
         <template #title>
           <span class="hidden sm:inline">{{ workout?.title || 'Workout Details' }}</span>
         </template>
@@ -10,37 +10,19 @@
             color="neutral"
             variant="ghost"
             icon="i-heroicons-arrow-left"
-            class="hidden sm:flex"
+            aria-label="Back to training"
+            class="min-h-11 min-w-11"
             @click="
               () => {
                 void goBack()
               }
             "
           >
-            Back
+            <span class="hidden sm:inline">Back</span>
           </UButton>
         </template>
         <template #right>
           <TriggerMonitorButton />
-
-          <!-- Primary Actions -->
-          <UButton
-            v-if="workout"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            class="font-bold"
-            :icon="isLocalWorkout ? 'i-heroicons-cloud-arrow-up' : 'i-heroicons-arrow-path'"
-            :disabled="!canPublishWorkout"
-            :title="publishBlockedReason || undefined"
-            @click="
-              () => {
-                void openPublishModal()
-              }
-            "
-          >
-            <span class="hidden sm:inline">{{ isLocalWorkout ? 'Publish' : 'Update' }}</span>
-          </UButton>
 
           <!-- Secondary Actions Dropdown -->
           <UDropdownMenu
@@ -52,48 +34,35 @@
               icon="i-heroicons-ellipsis-vertical"
               color="neutral"
               variant="outline"
-              size="sm"
-            />
+              size="md"
+              aria-label="More workout actions"
+            >
+              More
+            </UButton>
           </UDropdownMenu>
 
           <UButton
             v-if="workout"
-            icon="i-heroicons-bookmark"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            class="font-bold"
-            :loading="savingToLibrary"
-            @click="
-              () => {
-                void saveToLibrary()
-              }
-            "
-          >
-            <span class="hidden sm:inline">Save to Library</span>
-          </UButton>
-
-          <UButton
-            v-if="workout"
             icon="i-heroicons-chat-bubble-left-right"
-            color="primary"
-            variant="solid"
-            size="sm"
-            class="font-bold"
+            color="neutral"
+            variant="ghost"
+            size="md"
             @click="
               () => {
                 void chatAboutWorkout()
               }
             "
           >
-            <span class="hidden sm:inline">Chat</span>
+            <span>Ask coach</span>
           </UButton>
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="max-w-5xl mx-auto w-full p-0 sm:p-6 space-y-4 sm:space-y-8 pb-24">
+      <div
+        class="planned-session max-w-4xl mx-auto w-full px-5 py-6 sm:px-8 sm:py-10 space-y-8 sm:space-y-10 pb-24"
+      >
         <!-- Loading State -->
         <div v-if="loading" class="p-4 sm:p-0 space-y-6">
           <UCard :ui="{ root: 'rounded-none sm:rounded-xl shadow-none sm:shadow' }">
@@ -114,7 +83,7 @@
         </div>
 
         <!-- Workout Content -->
-        <div v-else-if="workout" class="space-y-4 sm:space-y-8">
+        <div v-else-if="workout" class="space-y-8 sm:space-y-10">
           <UAlert
             v-if="settingsStalenessMessage"
             color="info"
@@ -186,7 +155,7 @@
                   <div
                     class="mt-2 overflow-x-auto rounded border border-black/10 dark:border-white/10"
                   >
-                    <table class="min-w-full text-left text-[11px]">
+                    <table class="min-w-full text-left text-xs">
                       <thead class="bg-black/5 dark:bg-white/5">
                         <tr>
                           <th class="px-2 py-1">#</th>
@@ -227,119 +196,57 @@
               </div>
             </template>
           </UAlert>
-          <!-- Header Card -->
-          <div
-            class="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-none sm:shadow p-4 sm:p-6 border-x-0 sm:border-x border-y border-gray-100 dark:border-gray-800 overflow-hidden relative"
-          >
-            <div
-              class="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 dark:border-gray-800"
-            >
-              <div class="flex items-center gap-4">
+          <section class="planned-intro" aria-labelledby="planned-session-title">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p class="text-sm text-muted">
+                {{ formatDateUTC(workout.date, 'EEEE, MMMM d, yyyy') }}
+              </p>
+              <div class="flex items-center gap-1">
                 <UButton
-                  color="neutral"
-                  variant="subtle"
-                  size="sm"
                   icon="i-heroicons-chevron-left"
-                  class="rounded-lg"
-                  :disabled="!previousWorkout"
-                  @click="
-                    () => {
-                      void navigateToNeighbor('previous')
-                    }
-                  "
-                />
-                <div class="flex flex-col">
-                  <div class="text-[10px] font-black uppercase tracking-[0.2em] text-primary-500">
-                    {{ formatDateUTC(workout.date, 'EEEE') }}
-                  </div>
-                  <div
-                    class="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight"
-                  >
-                    {{ formatDateUTC(workout.date, 'MMMM d, yyyy') }}
-                  </div>
-                </div>
-                <UButton
                   color="neutral"
-                  variant="subtle"
-                  size="sm"
+                  variant="ghost"
+                  class="min-h-11 min-w-11"
+                  aria-label="Previous planned session"
+                  :disabled="!previousWorkout"
+                  @click="navigateToNeighbor('previous')"
+                />
+                <UButton
                   icon="i-heroicons-chevron-right"
-                  class="rounded-lg"
+                  color="neutral"
+                  variant="ghost"
+                  class="min-h-11 min-w-11"
+                  aria-label="Next planned session"
                   :disabled="!nextWorkout"
-                  @click="
-                    () => {
-                      void navigateToNeighbor('next')
-                    }
-                  "
+                  @click="navigateToNeighbor('next')"
                 />
               </div>
             </div>
-
-            <div class="mb-6">
-              <div class="min-w-0">
-                <h1 class="text-2xl sm:text-3xl font-black tracking-tight break-words uppercase">
-                  {{ workout.title }}
-                </h1>
-                <div class="flex flex-wrap items-center gap-2 mt-2">
-                  <UBadge
-                    color="neutral"
-                    variant="soft"
-                    size="sm"
-                    class="font-black uppercase tracking-widest text-[10px]"
-                  >
-                    {{ workout.type }}
-                  </UBadge>
-                  <UBadge
-                    :color="workout.completed ? 'success' : 'warning'"
-                    variant="soft"
-                    size="sm"
-                    class="font-black uppercase tracking-widest text-[10px]"
-                  >
-                    {{ workout.completed ? 'Completed' : 'Planned' }}
-                  </UBadge>
-                  <UBadge
-                    color="neutral"
-                    variant="subtle"
-                    size="sm"
-                    class="font-bold uppercase tracking-widest text-[10px]"
-                  >
-                    {{ formatDateUTC(workout.date, 'EEEE, MMMM d, yyyy') }}
-                  </UBadge>
-                  <UBadge
-                    v-if="structureJobStatusLabel"
-                    color="primary"
-                    variant="soft"
-                    size="sm"
-                    class="font-black uppercase tracking-widest text-[10px]"
-                  >
-                    {{ structureJobStatusLabel }}
-                  </UBadge>
-                  <UButton
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    class="font-black uppercase tracking-widest text-[10px] py-0"
-                    @click="
-                      () => {
-                        void openTimeModal()
-                      }
-                    "
-                  >
-                    <span class="inline-flex items-center gap-1">
-                      <UIcon name="i-heroicons-clock" class="w-3.5 h-3.5" />
-                      {{ workout.startTime || 'Set Schedule' }}
-                      <UIcon name="i-heroicons-pencil-square" class="w-3 h-3 opacity-50" />
-                    </span>
-                  </UButton>
-                </div>
-              </div>
-            </div>
-
-            <div
-              v-if="workout.description"
-              class="mb-6 p-4 bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800"
+            <h1
+              id="planned-session-title"
+              class="mt-4 text-3xl sm:text-4xl font-semibold tracking-tight break-words"
             >
+              {{ workout.title }}
+            </h1>
+            <div class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted">
+              <span>{{ workout.type }}</span>
+              <span v-if="displayDuration">{{ formatDuration(displayDuration) }}</span>
+              <span>{{ workout.completed ? 'Completed' : 'Planned' }}</span>
+              <UBadge v-if="structureJobStatusLabel" color="primary" variant="soft">{{
+                structureJobStatusLabel
+              }}</UBadge>
+              <UButton
+                color="neutral"
+                variant="link"
+                class="min-h-11 px-0"
+                icon="i-heroicons-clock"
+                @click="openTimeModal"
+                >{{ workout.startTime || 'Set a time' }}</UButton
+              >
+            </div>
+            <div v-if="workout.description" class="mt-6 max-w-prose">
               <p
-                class="text-sm break-words whitespace-pre-wrap text-gray-700 dark:text-gray-300 leading-relaxed font-medium"
+                class="text-base leading-relaxed whitespace-pre-wrap text-default"
                 :class="{ 'line-clamp-3': !showFullDescription }"
               >
                 {{ workout.description }}
@@ -347,10 +254,9 @@
               <UButton
                 v-if="descriptionTooLong"
                 color="neutral"
-                variant="ghost"
-                size="xs"
-                class="mt-2 font-bold"
-                :label="showFullDescription ? 'Show less' : 'Show more'"
+                variant="link"
+                class="min-h-11 px-0"
+                :label="showFullDescription ? 'Show less' : 'Read the session purpose'"
                 @click="
                   () => {
                     showFullDescription = !showFullDescription
@@ -358,174 +264,85 @@
                 "
               />
             </div>
-
+            <UButton
+              v-if="workout.structuredWorkout"
+              to="#session-plan"
+              class="mt-6 min-h-11"
+              icon="i-heroicons-play"
+              >Review session</UButton
+            >
             <!-- Training Context -->
-            <div
-              v-if="workout.trainingWeek"
-              class="pt-4 border-t border-gray-100 dark:border-gray-800"
-            >
-              <div class="flex items-center justify-between gap-3 mb-4">
-                <div class="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                  Mission Context
-                </div>
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  class="font-bold"
-                  :label="showTrainingContextDetails ? 'Hide Details' : 'Show Details'"
-                  @click="
-                    () => {
-                      showTrainingContextDetails = !showTrainingContextDetails
-                    }
-                  "
-                />
-              </div>
-              <p class="text-sm text-gray-600 dark:text-gray-400 font-medium">
-                {{ trainingContextSummary }}
-              </p>
-              <div
-                v-if="showTrainingContextDetails"
-                class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4"
-              >
-                <div
-                  class="p-3 rounded-xl bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
-                >
-                  <div class="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">
-                    Strategy
-                  </div>
-                  <div class="text-xs font-black text-gray-900 dark:text-white uppercase truncate">
-                    {{
-                      workout.trainingWeek.block.plan.goal?.title ||
-                      workout.trainingWeek.block.plan.name ||
-                      'General Plan'
-                    }}
-                  </div>
-                </div>
-                <div
-                  class="p-3 rounded-xl bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
-                >
-                  <div class="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">
-                    Block
-                  </div>
-                  <div class="text-xs font-black text-gray-900 dark:text-white uppercase truncate">
-                    {{ workout.trainingWeek.block.name }}
-                  </div>
-                </div>
-                <div
-                  class="p-3 rounded-xl bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
-                >
-                  <div class="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">
-                    Week
-                  </div>
-                  <div class="text-xs font-black text-gray-900 dark:text-white uppercase truncate">
-                    W{{ workout.trainingWeek.weekNumber }}
-                  </div>
-                </div>
-                <div
-                  class="p-3 rounded-xl bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
-                >
-                  <div class="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">
-                    Focus
-                  </div>
-                  <div class="text-xs font-black text-gray-900 dark:text-white uppercase truncate">
-                    {{ workout.trainingWeek.focus || workout.trainingWeek.block.primaryFocus }}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Extended Stats Grid -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0 sm:gap-4">
-            <div
-              v-for="kpi in workoutKpis"
-              :key="kpi.label"
-              class="bg-white dark:bg-gray-900 p-5 rounded-none sm:rounded-xl border-x-0 sm:border-x border-y sm:border-y border-gray-100 dark:border-gray-800 shadow-none sm:shadow-sm overflow-hidden relative group hover:border-primary-300 dark:hover:border-primary-700 transition-all"
-            >
-              <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-2">
-                  <UIcon :name="kpi.icon" class="w-5 h-5" :class="kpi.iconColor" />
-                  <span class="text-[10px] font-black uppercase text-gray-500 tracking-widest">{{
-                    kpi.label
-                  }}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <UButton
-                    v-if="kpi.editable"
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    icon="i-heroicons-pencil-square"
-                    class="rounded-full"
-                    @click="
-                      () => {
-                        void kpi.onEdit?.()
-                      }
-                    "
-                  />
-                  <span
-                    class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
-                    :class="kpi.statusColor"
+            <div v-if="workout.trainingWeek" class="mt-6">
+              <details class="planned-disclosure">
+                <summary>How this fits your plan</summary>
+                <p class="mt-3 text-sm text-muted leading-relaxed">{{ trainingContextSummary }}</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+                  <div
+                    class="p-3 rounded-xl bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
                   >
-                    {{ kpi.status }}
-                  </span>
+                    <div class="text-xs font-semibold text-gray-400 mb-1">Strategy</div>
+                    <div class="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                      {{
+                        workout.trainingWeek.block.plan.goal?.title ||
+                        workout.trainingWeek.block.plan.name ||
+                        'General Plan'
+                      }}
+                    </div>
+                  </div>
+                  <div
+                    class="p-3 rounded-xl bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
+                  >
+                    <div class="text-xs font-semibold text-gray-400 mb-1">Block</div>
+                    <div class="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                      {{ workout.trainingWeek.block.name }}
+                    </div>
+                  </div>
+                  <div
+                    class="p-3 rounded-xl bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
+                  >
+                    <div class="text-xs font-semibold text-gray-400 mb-1">Week</div>
+                    <div class="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                      W{{ workout.trainingWeek.weekNumber }}
+                    </div>
+                  </div>
+                  <div
+                    class="p-3 rounded-xl bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
+                  >
+                    <div class="text-xs font-semibold text-gray-400 mb-1">Focus</div>
+                    <div class="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                      {{ workout.trainingWeek.focus || workout.trainingWeek.block.primaryFocus }}
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              <div class="flex items-baseline gap-1 mb-2">
-                <span class="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{{
-                  kpi.actual
-                }}</span>
-                <span v-if="kpi.unit" class="text-xs font-bold text-gray-400 uppercase">{{
-                  kpi.unit
-                }}</span>
-              </div>
-
-              <div class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                {{ kpi.detail }}
-              </div>
-
-              <div
-                class="absolute bottom-0 left-0 h-0.5 bg-primary-500 w-full transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"
-              />
+              </details>
             </div>
-          </div>
+          </section>
 
-          <div
-            v-if="coachAdviceText"
-            class="bg-blue-50 dark:bg-blue-900/20 rounded-none sm:rounded-xl p-6 border-y sm:border border-blue-100 dark:border-blue-800/50 shadow-none sm:shadow-sm"
-          >
+          <div v-if="coachAdviceText" class="planned-guidance">
             <div class="flex flex-col gap-4">
               <div class="flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
-                  <div class="p-2 bg-blue-100 dark:bg-blue-800 rounded-xl flex-shrink-0">
+                  <div class="flex-shrink-0">
                     <UIcon
                       name="i-heroicons-chat-bubble-bottom-center-text"
-                      class="w-6 h-6 text-blue-600 dark:text-blue-300"
+                      class="w-5 h-5 text-primary"
                     />
                   </div>
-                  <h3
-                    class="text-[10px] font-black uppercase tracking-widest text-blue-900 dark:text-blue-100"
-                  >
-                    Coach's Strategic Advice
-                  </h3>
+                  <h3 class="text-lg font-semibold text-default">How to approach this session</h3>
                 </div>
               </div>
 
               <p
-                class="text-base text-blue-800 dark:text-blue-200 italic break-words leading-relaxed font-medium whitespace-pre-wrap"
+                class="max-w-prose text-base text-default break-words leading-relaxed whitespace-pre-wrap"
               >
-                "{{ coachAdviceText }}"
+                {{ coachAdviceText }}
               </p>
             </div>
           </div>
 
           <!-- Workout Visualization -->
-          <div class="space-y-4">
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-4 sm:px-0">
-              Execution Plan
-            </h2>
+          <div id="session-plan" class="space-y-4 scroll-mt-24">
+            <h2 class="text-xl font-semibold">How to train</h2>
 
             <component
               :is="getWorkoutComponent(workout.type)"
@@ -555,17 +372,15 @@
                 >
                   <UIcon name="i-heroicons-chart-bar" class="w-8 h-8 text-gray-400" />
                 </div>
-                <h3 class="text-base font-black uppercase tracking-widest mb-2">
-                  Structure Pending
-                </h3>
+                <h3 class="text-base font-semibold mb-2">Build your session plan</h3>
                 <p class="text-sm text-gray-500 mb-8 max-w-xs mx-auto">
-                  Detailed interval structure hasn't been generated for this session yet.
+                  Create the intervals and targets for this session before you train.
                 </p>
                 <UButton
-                  size="sm"
+                  size="md"
                   color="primary"
                   variant="solid"
-                  class="font-black uppercase tracking-widest text-[10px]"
+                  class="font-semibold text-sm min-h-11"
                   :loading="generating"
                   :disabled="generating"
                   @click="
@@ -581,21 +396,17 @@
           </div>
 
           <!-- Coaching Messages Timeline -->
-          <div v-if="workout.structuredWorkout?.messages?.length" class="space-y-4">
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-4 sm:px-0">
-              Coaching Cues
-            </h2>
+          <details v-if="workout.structuredWorkout?.messages?.length" class="planned-disclosure">
+            <summary>Coaching cues during your session</summary>
             <WorkoutMessagesTimeline
               :workout="workout.structuredWorkout"
               class="rounded-none sm:rounded-xl shadow-none sm:shadow border-y sm:border border-gray-100 dark:border-gray-800"
             />
-          </div>
+          </details>
 
           <!-- Nutrition & Fueling Prep -->
-          <div v-if="nutritionEnabled" class="space-y-4">
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-4 sm:px-0">
-              Fueling Logistics
-            </h2>
+          <details v-if="nutritionEnabled && fuelingPlan" class="planned-disclosure">
+            <summary>Fuel for this session</summary>
             <NutritionPrepCard
               v-if="fuelingPlan"
               :fueling-plan="fuelingPlan"
@@ -610,23 +421,107 @@
               class="rounded-none sm:rounded-xl shadow-none sm:shadow border-y sm:border border-gray-100 dark:border-gray-800"
               @change-fueling-strategy="updateFuelingStrategy"
             />
-          </div>
+          </details>
 
-          <div v-if="generationExplanation" class="space-y-4">
-            <h2 class="text-base font-black uppercase tracking-widest text-gray-400 px-4 sm:px-0">
-              Why This Structure
-            </h2>
+          <!-- Extended Stats Grid -->
+          <details class="planned-disclosure">
+            <summary>Session targets</summary>
+            <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div
+                v-for="kpi in workoutKpis"
+                :key="kpi.label"
+                class="bg-white dark:bg-gray-900 p-5 rounded-none sm:rounded-xl border-x-0 sm:border-x border-y sm:border-y border-gray-100 dark:border-gray-800 shadow-none sm:shadow-none overflow-hidden relative group hover:border-primary-300 dark:hover:border-primary-700 transition-all"
+              >
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <UIcon :name="kpi.icon" class="w-5 h-5" :class="kpi.iconColor" />
+                    <span class="text-xs font-semibold text-gray-500">{{ kpi.label }}</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <UButton
+                      v-if="kpi.editable"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      icon="i-heroicons-pencil-square"
+                      class="rounded-full min-h-11 min-w-11"
+                      :aria-label="`Edit ${kpi.label.toLowerCase()}`"
+                      @click="
+                        () => {
+                          void kpi.onEdit?.()
+                        }
+                      "
+                    />
+                    <span
+                      class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
+                      :class="kpi.statusColor"
+                    >
+                      {{ kpi.status }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="flex items-baseline gap-1 mb-2">
+                  <span
+                    class="text-3xl font-semibold text-gray-900 dark:text-white tracking-tight"
+                    >{{ kpi.actual }}</span
+                  >
+                  <span v-if="kpi.unit" class="text-xs font-bold text-gray-400">{{
+                    kpi.unit
+                  }}</span>
+                </div>
+
+                <div class="text-xs text-gray-400 font-bold">
+                  {{ kpi.detail }}
+                </div>
+
+                <div
+                  class="absolute bottom-0 left-0 h-0.5 bg-primary-500 w-full transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"
+                />
+              </div>
+            </div>
+          </details>
+
+          <section v-if="workout.structuredWorkout" class="planned-ready">
+            <h2 class="text-xl font-semibold">Ready to train?</h2>
+            <p class="mt-2 text-sm text-muted">
+              Send this session to your connected training app, or download it for your device.
+            </p>
+            <div class="mt-5 flex flex-wrap items-center gap-3">
+              <UButton
+                :icon="isLocalWorkout ? 'i-heroicons-cloud-arrow-up' : 'i-heroicons-arrow-path'"
+                :disabled="!canPublishWorkout"
+                :title="publishBlockedReason || undefined"
+                class="min-h-11"
+                @click="openPublishModal"
+                >{{ isLocalWorkout ? 'Send to training app' : 'Update training app' }}</UButton
+              >
+              <UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-heroicons-arrow-down-tray"
+                class="min-h-11"
+                @click="
+                  () => {
+                    showDownloadModal = true
+                  }
+                "
+                >Download for device</UButton
+              >
+            </div>
+            <p v-if="publishBlockedReason" class="mt-3 text-sm text-muted">
+              {{ publishBlockedReason }}
+            </p>
+          </section>
+
+          <details v-if="generationExplanation" class="planned-disclosure">
+            <summary>Why this session was built this way</summary>
             <div
               class="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-none sm:shadow p-6 border-y sm:border border-gray-100 dark:border-gray-800"
             >
               <div class="flex flex-col gap-4">
                 <div class="flex flex-wrap items-center gap-2">
-                  <UBadge
-                    color="primary"
-                    variant="soft"
-                    size="sm"
-                    class="font-black uppercase tracking-widest text-[10px]"
-                  >
+                  <UBadge color="primary" variant="soft" size="sm" class="font-semibold text-xs">
                     {{ generationExplanation.operationLabel }}
                   </UBadge>
                   <UBadge
@@ -634,7 +529,7 @@
                     color="neutral"
                     variant="soft"
                     size="sm"
-                    class="font-black uppercase tracking-widest text-[10px]"
+                    class="font-semibold text-xs"
                   >
                     {{ generationExplanation.primaryMetricLabel }}
                   </UBadge>
@@ -643,7 +538,7 @@
                     color="neutral"
                     variant="subtle"
                     size="sm"
-                    class="font-black uppercase tracking-widest text-[10px]"
+                    class="font-semibold text-xs"
                   >
                     {{ generationExplanation.loadPreferenceLabel }}
                   </UBadge>
@@ -659,10 +554,10 @@
                     :key="item.label"
                     class="p-3 rounded-xl bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800"
                   >
-                    <div class="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">
+                    <div class="text-xs font-semibold text-gray-400 mb-1">
                       {{ item.label }}
                     </div>
-                    <div class="text-xs font-black text-gray-900 dark:text-white uppercase">
+                    <div class="text-xs font-semibold text-gray-900 dark:text-white">
                       {{ item.value }}
                     </div>
                   </div>
@@ -683,7 +578,7 @@
                   >
                     <div class="space-y-2">
                       <div
-                        class="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary-600 dark:text-primary-400"
+                        class="inline-flex items-center gap-2 text-xs font-semibold text-primary-600 dark:text-primary-400"
                       >
                         <UIcon name="i-heroicons-adjustments-horizontal" class="h-4 w-4" />
                         Target Policy
@@ -724,7 +619,7 @@
                 </div>
               </div>
             </div>
-          </div>
+          </details>
 
           <div
             v-if="llmUsageId"
@@ -1372,7 +1267,7 @@
         <div
           class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-xs text-blue-800 dark:text-blue-200"
         >
-          <p class="font-bold mb-1 uppercase tracking-wider">Format Tips:</p>
+          <p class="font-bold mb-1">Format Tips:</p>
           <ul class="list-disc list-inside space-y-0.5 opacity-80">
             <li>- 10m 50% (Duration and intensity)</li>
             <li>- Interval 5m 100% 90rpm (Name and cadence)</li>
@@ -1386,7 +1281,7 @@
           placeholder="- Warmup 10m 50%\n- 4x\n  - 1m 100%\n  - 1m 50%\n- Cooldown 5m 40%"
           :rows="12"
           autofocus
-          class="font-mono text-sm"
+          class="tabular-nums text-sm"
         />
 
         <div class="flex justify-end pt-2 gap-2">
@@ -1521,7 +1416,6 @@
   const showDownloadModal = ref(false)
   const showPublishModal = ref(false)
   const showFullDescription = ref(false)
-  const showTrainingContextDetails = ref(false)
   const activeStepsTab = ref<'view' | 'edit'>('view')
   const adjustForm = reactive({
     durationMinutes: 60,
@@ -1887,6 +1781,20 @@
 
   const secondaryMenuItems = computed(() => {
     const items = []
+
+    if (workout.value) {
+      items.push({
+        label: savingToLibrary.value ? 'Saving to library…' : 'Save to library',
+        disabled: savingToLibrary.value,
+        icon: 'i-heroicons-bookmark',
+        onSelect: () => saveToLibrary()
+      })
+      items.push({
+        label: 'Adjust session',
+        icon: 'i-heroicons-adjustments-horizontal',
+        onSelect: () => openAdjustModal()
+      })
+    }
 
     // Edit Structure action
     if (workout.value) {
@@ -2721,7 +2629,6 @@
       // Init form
       if (!options.silent && workout.value) {
         showFullDescription.value = false
-        showTrainingContextDetails.value = false
         adjustForm.durationMinutes = Math.round(workout.value.durationSec / 60)
         adjustForm.intensity =
           workout.value.workIntensity > 0.8
@@ -3264,3 +3171,38 @@
     }
   )
 </script>
+
+<style scoped>
+  .planned-intro {
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--ui-border);
+  }
+  .planned-guidance {
+    padding-block: 0.5rem;
+  }
+  .planned-disclosure {
+    border-top: 1px solid var(--ui-border);
+    padding-top: 1rem;
+  }
+  .planned-disclosure > summary {
+    cursor: pointer;
+    padding-block: 0.5rem;
+    font-weight: 600;
+    min-height: 2.75rem;
+  }
+  .planned-disclosure > summary:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 4px;
+    border-radius: 0.25rem;
+  }
+  .planned-disclosure > :not(summary) {
+    margin-top: 1.25rem;
+  }
+  .planned-ready {
+    padding-block: 1.5rem;
+    border-top: 1px solid var(--ui-border);
+  }
+  :deep(#session-plan) {
+    scroll-margin-top: 6rem;
+  }
+</style>

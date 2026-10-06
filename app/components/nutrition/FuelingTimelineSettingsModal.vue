@@ -35,7 +35,7 @@
                   Show the newest fueling window at the top of the timeline.
                 </div>
               </div>
-              <USwitch v-model="settings.sortLatestFirst" />
+              <USwitch v-model="settings.sortLatestFirst" aria-label="Show latest entries first" />
             </div>
 
             <div class="flex items-center justify-between">
@@ -45,7 +45,7 @@
                 </div>
                 <div class="text-xs text-muted">Hides Daily Base windows with no logged items.</div>
               </div>
-              <USwitch v-model="settings.hideEmptyWindows" />
+              <USwitch v-model="settings.hideEmptyWindows" aria-label="Hide empty windows" />
             </div>
 
             <div class="flex items-center justify-between">
@@ -57,7 +57,7 @@
                   Hide fluid and sodium targets in workout windows.
                 </div>
               </div>
-              <USwitch v-model="settings.hideHydration" />
+              <USwitch v-model="settings.hideHydration" aria-label="Hide hydration" />
             </div>
 
             <div class="flex items-center justify-between">
@@ -69,7 +69,7 @@
                   Hide "Coach Suggests" for windows older than 30 mins.
                 </div>
               </div>
-              <USwitch v-model="settings.hidePastSuggestions" />
+              <USwitch v-model="settings.hidePastSuggestions" aria-label="Hide past suggestions" />
             </div>
 
             <div class="flex items-center justify-between">
@@ -81,7 +81,7 @@
                   Merge overlapping or back-to-back workout windows.
                 </div>
               </div>
-              <USwitch v-model="settings.mergeWindows" />
+              <USwitch v-model="settings.mergeWindows" aria-label="Merge fueling windows" />
             </div>
 
             <div class="flex items-center justify-between">
@@ -93,7 +93,7 @@
                   Display supplement pips (Caffeine, Nitrates, etc).
                 </div>
               </div>
-              <USwitch v-model="settings.showSupplements" />
+              <USwitch v-model="settings.showSupplements" aria-label="Show supplements" />
             </div>
           </div>
         </div>

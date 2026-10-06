@@ -1,6 +1,6 @@
 <template>
   <div
-    class="min-h-screen flex flex-col font-sans bg-[oklch(12%_0.015_155)] text-gray-100 overflow-x-clip"
+    class="journey-public min-h-screen flex flex-col font-sans bg-[#152523] text-gray-100 overflow-x-clip"
   >
     <!-- N9 edge-aligned: brand flush left, utility cluster flush right — no sticky blur bar -->
     <header class="relative z-40 border-b border-white/8">
@@ -20,6 +20,7 @@
         </NuxtLink>
 
         <nav
+          v-if="!isAuthPage"
           class="hidden items-center gap-8 text-sm font-medium text-gray-400 lg:flex"
           aria-label="Primary"
         >
@@ -85,7 +86,7 @@
             </div>
           </template>
 
-          <UPopover class="lg:hidden">
+          <UPopover v-if="!isAuthPage" class="lg:hidden">
             <UButton
               icon="i-heroicons-bars-3"
               color="neutral"
@@ -156,15 +157,6 @@
   const isSignedIn = computed(
     () => authStatus.value === 'authenticated' || Boolean(authData.value?.user)
   )
-
-  useHead({
-    link: [
-      {
-        rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&display=swap'
-      }
-    ]
-  })
 
   // Landing page is always dark — no light mode support
   const colorMode = useColorMode()

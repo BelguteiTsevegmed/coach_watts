@@ -74,4 +74,22 @@ describe('EventGoalWizard', () => {
 
     expect(wrapper.text()).toContain('0 km')
   })
+
+  it('keeps a failed save open, shows the reason, and allows a successful retry', async () => {
+    const wrapper = mountWizard(42.2)
+    await flushPromises()
+    const update = wrapper.findAll('button').find((button) => button.text() === 'Update Goal')!
+    fetchMock.mockRejectedValueOnce({ data: { message: 'Please try again shortly.' } })
+    await update.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe('Please try again shortly.')
+    expect(wrapper.emitted('updated')).toBeUndefined()
+    expect(wrapper.emitted('close')).toBeUndefined()
+    fetchMock.mockResolvedValueOnce({ id: 'goal-1' })
+    await update.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.emitted('updated')).toHaveLength(1)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
 })

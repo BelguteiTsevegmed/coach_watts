@@ -1,87 +1,44 @@
 <template>
   <div
     :class="[
-      'p-4 sm:p-6 transition-colors',
+      'p-4 sm:p-6',
       isBlueprint
-        ? 'bg-default/95 border border-default/80 rounded-3xl shadow-sm'
-        : 'bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800'
+        ? 'bg-default/95 border border-default/80 rounded-3xl shadow-none'
+        : 'bg-default rounded-xl border border-default'
     ]"
   >
-    <div class="flex justify-between items-center mb-4">
-      <h3 class="text-lg font-semibold">Run Details</h3>
-      <div class="flex gap-2">
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-eye"
-          @click="
-            () => {
-              void $emit('view')
-            }
-          "
-        >
-          View
-        </UButton>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-adjustments-horizontal"
-          @click="
-            () => {
-              void $emit('adjust')
-            }
-          "
-        >
-          Adjust
-        </UButton>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-pencil-square"
-          :class="{ 'bg-primary-50 dark:bg-primary-900/20 text-primary': activeTab === 'edit' }"
-          @click="
-            () => {
-              activeTab = activeTab === 'edit' ? 'view' : 'edit'
-            }
-          "
-        >
-          Edit
-        </UButton>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-heroicons-arrow-path"
-          :loading="generating"
-          @click="
-            () => {
-              void $emit('regenerate')
-            }
-          "
-        >
-          Regenerate
-        </UButton>
-      </div>
+    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <h3 class="text-lg font-semibold">Run intervals</h3>
+      <WorkoutDetailToolsMenu
+        :editing="activeTab === 'edit'"
+        :generating="generating"
+        :allow-edit="allowEdit"
+        edit-label="Edit intervals"
+        @view="emit('view')"
+        @adjust="emit('adjust')"
+        @edit="activeTab = activeTab === 'edit' ? 'view' : 'edit'"
+        @regenerate="emit('regenerate')"
+      />
     </div>
 
-    <!-- Summary Stats -->
-    <div v-if="hasStructure" class="grid grid-cols-2 gap-4 mb-6">
-      <div class="p-3 bg-gray-50 dark:bg-gray-950 rounded-lg">
-        <div class="text-xs text-muted mb-1">Total Distance (Est.)</div>
-        <div class="text-xl font-bold">{{ (totalDistance / 1000).toFixed(1) }} km</div>
-      </div>
-      <div class="p-3 bg-gray-50 dark:bg-gray-950 rounded-lg">
-        <div class="text-xs text-muted mb-1">Avg Intensity</div>
-        <div class="text-xl font-bold">{{ Math.round(avgIntensity * 100) }}%</div>
-      </div>
+    <div v-if="hasStructure" class="mb-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted">
+      <span v-if="totalDistance > 0"
+        >Estimated distance:
+        <strong class="font-medium text-default"
+          >{{ (totalDistance / 1000).toFixed(1) }} km</strong
+        ></span
+      >
+      <span v-if="avgIntensity > 0"
+        >Average intensity:
+        <strong class="font-medium text-default"
+          >{{ Math.round(avgIntensity * 100) }}%</strong
+        ></span
+      >
     </div>
 
     <!-- Structure Chart & Editor -->
     <div v-if="hasStructure" class="mb-6">
-      <h4 class="text-sm font-semibold text-muted mb-3">Structure Profile</h4>
+      <h4 class="text-sm font-semibold text-muted mb-3">Session profile</h4>
       <WorkoutRunChart
         v-model:steps-tab="activeTab"
         :workout="workout"
@@ -104,6 +61,7 @@
 </template>
 
 <script setup lang="ts">
+  import WorkoutDetailToolsMenu from '~/components/workouts/WorkoutDetailToolsMenu.vue'
   import WorkoutRunChart from '~/components/workouts/WorkoutRunChart.vue'
   import {
     getWorkoutChartPreference,

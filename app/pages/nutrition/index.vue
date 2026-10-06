@@ -2,491 +2,223 @@
   <UDashboardPanel id="nutrition-strategy">
     <template #header>
       <UDashboardNavbar :title="t('page_title')">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
+        <template #leading><UDashboardSidebarCollapse /></template>
         <template #right>
           <LayoutPageNavbarActions :overflow-items="nutritionOverflowItems">
-            <ClientOnly>
-              <DashboardTriggerMonitorButton />
-            </ClientOnly>
-
-            <UButton
-              to="/nutrition/history"
-              icon="i-lucide-history"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="font-bold"
-              :aria-label="t('nav_history')"
-            >
-              <span class="hidden md:inline">{{ t('nav_history') }}</span>
-            </UButton>
-
-            <UButton
-              icon="i-lucide-refresh-cw"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="font-bold"
-              :loading="loading"
-              :aria-label="t('nav_refresh')"
-              @click="
-                () => {
-                  void refreshData()
-                }
-              "
-            >
-              <span class="hidden md:inline">{{ t('nav_refresh') }}</span>
-            </UButton>
-
-            <UButton
-              to="/chat"
-              icon="i-heroicons-chat-bubble-left-right"
-              color="primary"
-              variant="solid"
-              size="sm"
-              class="font-bold"
-            >
-              <span class="hidden md:inline">{{ t('nav_new_chat') }}</span>
-              <span class="md:hidden">{{ t('nav_chat') }}</span>
-            </UButton>
-
-            <template #mobile>
-              <LayoutNavbarIconButton
-                icon="i-lucide-refresh-cw"
-                :label="t('nav_refresh')"
-                :loading="loading"
-                @click="
-                  () => {
-                    void refreshData()
-                  }
-                "
-              />
-              <LayoutNavbarIconButton
-                to="/chat"
-                icon="i-heroicons-chat-bubble-left-right"
-                :label="t('nav_new_chat')"
-                color="primary"
-                variant="solid"
-              />
-            </template>
+            <UButton to="/nutrition/history" color="neutral" variant="link" size="sm">{{
+              t('nav_history')
+            }}</UButton>
+            <UDropdownMenu :items="nutritionOverflowItems"
+              ><UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                :aria-label="t('journey_more_actions')"
+            /></UDropdownMenu>
           </LayoutPageNavbarActions>
         </template>
       </UDashboardNavbar>
     </template>
-
     <template #body>
-      <div class="p-0 sm:p-6 space-y-4 sm:space-y-6 quick-capture-inset">
-        <!-- Dashboard Branding -->
-        <div class="px-4 sm:px-0">
-          <h1 class="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
-            {{ t('branding_title') }}
+      <main class="nutrition-journey quick-capture-inset">
+        <header class="mb-7">
+          <p class="text-sm text-muted">{{ todayLabel }}</p>
+          <h1 class="text-2xl font-semibold tracking-tight mt-2">
+            {{ t('journey_fueling_title') }}
           </h1>
-          <p
-            class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em] mt-1 italic"
-          >
-            {{ t('branding_subtitle') }}
+          <p class="mt-3 text-sm text-muted leading-relaxed">
+            {{ t('journey_fueling_description') }}
           </p>
-        </div>
-
+        </header>
         <UTabs v-model="activeNutritionTab" :items="tabs" class="w-full">
           <template #strategy>
-            <UAlert
-              v-if="loadErrors.length > 0"
-              class="mt-4"
-              color="warning"
-              variant="soft"
-              icon="i-heroicons-exclamation-triangle"
-              :title="t('load_partial_title')"
+            <ClientOnly
+              ><NutritionActiveFuelingFeed
+                :feed="activeFeed"
+                :loading="loadingActiveFeed"
+                :error="activeFeedError"
+                @open-ai-helper="openAiHelper"
+                @retry="refreshData"
+            /></ClientOnly>
+            <p
+              v-if="loadErrors.length > 0 && !activeFeedError"
+              class="text-sm text-muted mb-5"
+              role="status"
             >
-              <template #description>
-                <ul class="list-disc list-inside space-y-1">
-                  <li v-for="(message, index) in loadErrors" :key="index">{{ message }}</li>
-                </ul>
-              </template>
-              <template #actions>
-                <UButton
-                  color="warning"
-                  variant="soft"
-                  size="xs"
-                  icon="i-heroicons-arrow-path"
-                  @click="
-                    () => {
-                      void refreshData()
-                    }
-                  "
-                >
-                  {{ t('nav_refresh') }}
-                </UButton>
-              </template>
-            </UAlert>
-
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 pt-4">
-              <!-- Main Chart Section -->
-              <div id="top-section" class="lg:col-span-2 space-y-4 sm:space-y-6">
-                <UCard
-                  :ui="{
-                    root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
-                    body: 'p-4 sm:p-6'
-                  }"
-                >
-                  <template #header>
-                    <div
-                      class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-0"
-                    >
-                      <div>
-                        <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
-                          {{ t('horizon_header') }}
-                        </h3>
-                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          {{ t('horizon_desc') }}
-                        </p>
-                      </div>
-                      <div class="flex flex-wrap items-center gap-3">
-                        <div class="flex items-center gap-1">
-                          <div class="size-2 rounded-full bg-blue-500" />
-                          <span class="text-[10px] text-gray-500">{{
-                            t('horizon_legend_glycogen')
-                          }}</span>
-                        </div>
-                        <div class="flex items-center gap-1">
-                          <div class="size-2 rounded-full bg-blue-500 border border-dashed" />
-                          <span class="text-[10px] text-gray-500">{{
-                            t('horizon_legend_projected')
-                          }}</span>
-                        </div>
-                        <div class="flex items-center gap-1">
-                          <div class="size-2 rounded bg-error-500" />
-                          <span class="text-[10px] text-gray-500">{{
-                            t('horizon_legend_workout')
-                          }}</span>
-                        </div>
-                        <div class="flex items-center gap-1">
-                          <div class="size-2 rounded-full bg-primary-500" />
-                          <span class="text-[10px] text-gray-500">{{
-                            t('horizon_legend_meal')
-                          }}</span>
-                        </div>
-                        <div class="flex items-center gap-1">
-                          <div
-                            class="size-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-b-[6px] border-b-primary-400"
-                          />
-                          <span class="text-[10px] text-gray-500">{{
-                            t('horizon_legend_multiple')
-                          }}</span>
-                        </div>
-                        <UBadge
-                          v-if="intakeConfidenceNote"
-                          color="neutral"
-                          variant="subtle"
-                          size="xs"
-                          class="font-bold"
-                          data-testid="intake-confidence"
-                          :title="intakeConfidenceNote"
-                        >
-                          {{
-                            intakeConfidence?.level === 'inferred' ? 'Assumed' : 'Partly assumed'
-                          }}
-                        </UBadge>
-                        <UButton
-                          icon="i-heroicons-cog-6-tooth"
-                          color="neutral"
-                          variant="ghost"
-                          size="xs"
-                          @click="
-                            () => {
-                              void openChartSettings('horizon')
-                            }
-                          "
-                        />
-                      </div>
-                    </div>
-                  </template>
-
-                  <div v-if="loadingWave" class="h-[300px] flex items-center justify-center">
-                    <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-gray-400" />
-                  </div>
-                  <ClientOnly>
-                    <NutritionMultiDayEnergyChart
-                      v-if="!loadingWave && wavePoints.length"
-                      :key="`horizon-${JSON.stringify(chartSettings.horizon)}`"
-                      :points="wavePoints"
-                      :journey-events="journeyEvents"
-                      :workouts="waveWorkouts"
-                      :highlighted-date="highlightedDate"
-                      :settings="chartSettings.horizon"
-                    />
-                    <div
-                      v-else-if="!loadingWave"
-                      class="h-[300px] flex items-center justify-center text-gray-500"
-                    >
-                      {{ t('horizon_empty') }}
-                    </div>
-                  </ClientOnly>
-
-                  <UAlert
-                    v-if="missingPlannedStartActivities.length > 0"
-                    class="mt-4"
-                    color="warning"
-                    variant="soft"
-                    icon="i-heroicons-exclamation-triangle"
-                    :title="t('horizon_alert_missing_start_title')"
-                  >
-                    <template #description>
-                      <span v-if="missingPlannedStartActivities.length === 1">
-                        {{ t('horizon_alert_missing_start_single') }}
-                        <NuxtLink
-                          :to="`/workouts/planned/${missingPlannedStartActivities[0].id}`"
-                          class="font-bold underline hover:text-warning-600 transition-colors"
-                        >
-                          {{ missingPlannedStartActivities[0].title }}
-                        </NuxtLink>
-                      </span>
-                      <span v-else>
-                        {{
-                          t('horizon_alert_missing_start_multiple', {
-                            count: missingPlannedStartActivities.length
-                          })
-                        }}
-                        <template
-                          v-for="(activity, index) in missingPlannedStartActivities"
-                          :key="activity.id"
-                        >
-                          <NuxtLink
-                            :to="`/workouts/planned/${activity.id}`"
-                            class="font-bold underline hover:text-warning-600 transition-colors"
-                          >
-                            {{ activity.title }}
-                          </NuxtLink>
-                          <span v-if="index < missingPlannedStartActivities.length - 1">, </span>
-                        </template>
-                      </span>
-                      {{ t('horizon_alert_missing_start_footer') }}
-                    </template>
-                  </UAlert>
-                </UCard>
-
-                <UCard :ui="{ root: 'rounded-none sm:rounded-lg shadow-none sm:shadow' }">
-                  <template #header>
-                    <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
-                      {{ t('periodization_header') }}
-                    </h3>
-                  </template>
-                  <div v-if="loadingStrategy" class="h-24 flex items-center justify-center">
-                    <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-gray-400" />
-                  </div>
-                  <ClientOnly>
-                    <NutritionWeeklyFuelingGrid
-                      v-if="!loadingStrategy && strategy"
-                      :days="strategy.fuelingMatrix"
-                      @hover-day="highlightedDate = $event"
-                    />
-                  </ClientOnly>
-                </UCard>
+              {{ t('load_partial_title') }}
+              <UButton color="neutral" variant="link" size="xs" @click="refreshData">{{
+                t('nav_refresh')
+              }}</UButton>
+            </p>
+            <details class="nutrition-journey__disclosure">
+              <summary>{{ t('journey_coming_up') }}</summary>
+              <div class="py-4 pb-7">
+                <NutritionUpcomingFuelingFeed
+                  v-if="upcomingPlan?.windows?.length"
+                  :windows="upcomingPlan.windows"
+                  @suggest="openAiHelperForWindow"
+                  @export-grocery="showGroceryList = true"
+                />
+                <p v-else class="text-sm text-muted">{{ t('journey_no_upcoming') }}</p>
               </div>
-
-              <!-- Sidebar Section -->
-              <div class="space-y-4 sm:space-y-6 lg:row-span-2 lg:col-start-3">
-                <!-- Active Fueling Feed (The "On-Ramp") -->
-                <ClientOnly>
-                  <NutritionActiveFuelingFeed
-                    :feed="activeFeed"
-                    :loading="loadingActiveFeed"
-                    @open-ai-helper="openAiHelper"
+            </details>
+            <details class="nutrition-journey__disclosure">
+              <summary>{{ t('journey_energy_detail') }}</summary>
+              <div id="top-section" class="py-4 pb-7 space-y-5">
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 class="text-lg font-medium">{{ t('horizon_header') }}</h2>
+                    <p class="mt-2 text-sm text-muted">{{ t('horizon_desc') }}</p>
+                  </div>
+                  <UButton
+                    icon="i-heroicons-cog-6-tooth"
+                    color="neutral"
+                    variant="ghost"
+                    :aria-label="t('journey_chart_settings')"
+                    @click="openChartSettings('horizon')"
                   />
-                </ClientOnly>
-
-                <!-- Strategy Summary Card -->
-                <UCard
-                  color="primary"
-                  variant="subtle"
-                  :ui="{ root: 'rounded-none sm:rounded-lg shadow-none sm:shadow' }"
-                >
-                  <template #header>
-                    <div class="flex items-center gap-2">
-                      <UIcon name="i-lucide-sparkles" class="size-5 text-primary-500" />
-                      <h3 class="text-base font-semibold leading-6">{{ t('summary_header') }}</h3>
-                    </div>
-                  </template>
-                  <div v-if="loadingStrategy" class="space-y-2">
-                    <USkeleton class="h-4 w-full" />
-                    <USkeleton class="h-4 w-3/4" />
-                    <USkeleton class="h-4 w-5/6" />
-                  </div>
-                  <p
-                    v-else-if="strategy"
-                    class="text-sm leading-relaxed text-gray-700 dark:text-gray-300"
-                  >
-                    {{ strategy.summary }}
-                  </p>
-                </UCard>
-
-                <UCard :ui="{ root: 'rounded-none sm:rounded-lg shadow-none sm:shadow' }">
-                  <template #header>
-                    <div class="flex items-center justify-between gap-3">
-                      <div class="flex items-center gap-2">
-                        <UIcon name="i-lucide-heart-handshake" class="size-5 text-rose-500" />
-                        <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
-                          Recovery Context
-                        </h3>
-                      </div>
-                      <UButton
-                        color="neutral"
-                        variant="ghost"
-                        size="xs"
-                        icon="i-lucide-plus"
-                        @click="
-                          () => {
-                            void openCreateRecoveryEvent()
-                          }
-                        "
-                      >
-                        Log event
-                      </UButton>
-                    </div>
-                  </template>
-
-                  <div v-if="nutritionRecoveryItems.length" class="space-y-3">
-                    <button
-                      v-for="item in nutritionRecoveryItems"
-                      :key="item.id"
-                      type="button"
-                      class="w-full rounded-xl border border-gray-200 px-4 py-3 text-left transition hover:border-primary-300 dark:border-gray-800"
-                      @click="
-                        () => {
-                          void openRecoveryItem(item)
-                        }
-                      "
-                    >
-                      <div class="flex items-start justify-between gap-3">
-                        <div>
-                          <p class="text-sm font-semibold text-gray-900 dark:text-white">
-                            {{ item.label }}
-                          </p>
-                          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            {{ item.description || item.origin }}
-                          </p>
-                        </div>
-                        <span class="text-[10px] uppercase tracking-widest text-gray-400">
-                          {{ item.startAt.slice(11, 16) }}
-                        </span>
-                      </div>
-                    </button>
-                  </div>
-                  <div
-                    v-else
-                    class="rounded-xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400"
-                  >
-                    No manually logged recovery events in this metabolic horizon yet.
-                  </div>
-                </UCard>
-
-                <!-- Hydration Debt Card -->
-                <UCard :ui="{ root: 'rounded-none sm:rounded-lg shadow-none sm:shadow' }">
-                  <template #header>
-                    <div class="flex items-center gap-2">
-                      <UIcon name="i-lucide-droplets" class="size-5 text-blue-500" />
-                      <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
-                        {{ t('hydration_header') }}
-                      </h3>
-                    </div>
-                  </template>
-                  <div class="text-center py-4">
-                    <div
-                      class="mx-auto size-28 rounded-full border-8 flex items-center justify-center"
-                      :class="hydrationRingClass"
-                    >
-                      <div class="flex flex-col items-center">
-                        <span class="text-xl font-black text-gray-900 dark:text-white">
-                          {{ ((strategy?.hydrationDebt || 0) / 1000).toFixed(1) }}L
-                        </span>
-                        <span class="text-[10px] uppercase font-bold tracking-wider text-gray-500">
-                          {{ hydrationStatus.toUpperCase() }}
-                        </span>
-                      </div>
-                    </div>
-                    <p class="text-sm text-gray-500 mt-3">{{ t('hydration_status_debt') }}</p>
-
-                    <div
-                      class="mt-4 p-3 bg-info-50 dark:bg-info-900/20 rounded-lg text-xs text-info-700 dark:text-info-300"
-                    >
-                      {{ hydrationAdvice }}
-                    </div>
-
-                    <UAlert
-                      v-if="strategy?.showHydrationFlushPrompt"
-                      color="warning"
-                      variant="soft"
-                      class="mt-4 text-left"
-                      :title="strategy?.hydrationFlushPrompt"
-                    >
-                      <template #actions>
-                        <UButton
-                          size="xs"
-                          color="warning"
-                          variant="solid"
-                          @click="
-                            () => {
-                              void resetHydrationDebt()
-                            }
-                          "
-                        >
-                          {{ t('hydration_reset_button') }}
-                        </UButton>
-                      </template>
-                    </UAlert>
-                  </div>
-
-                  <template #footer>
-                    <UButton
-                      block
-                      color="neutral"
-                      variant="outline"
-                      icon="i-lucide-clipboard-list"
-                      @click="
-                        () => {
-                          showGroceryList = true
-                        }
-                      "
-                    >
-                      {{ t('grocery_button') }}
-                    </UButton>
-                  </template>
-                </UCard>
-              </div>
-
-              <!-- Upcoming Fueling Plan -->
-              <div class="lg:col-span-2">
-                <ClientOnly>
-                  <div v-if="upcomingPlan?.windows?.length" class="space-y-4">
-                    <NutritionUpcomingFuelingFeed
-                      :windows="upcomingPlan.windows"
-                      @suggest="openAiHelperForWindow"
-                      @export-grocery="showGroceryList = true"
-                    />
-                  </div>
-                </ClientOnly>
-              </div>
-            </div>
-          </template>
-
-          <template #plan>
-            <div class="pt-4 space-y-6">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h3 class="text-lg font-black uppercase tracking-tight">
-                    {{ t('active_plan_header') }}
-                  </h3>
-                  <p class="text-xs text-gray-500 font-bold uppercase tracking-widest">
-                    {{
-                      isCurrentWeek ? t('active_plan_desc_current') : t('active_plan_desc_history')
-                    }}
-                  </p>
                 </div>
+                <p
+                  v-if="intakeConfidenceNote"
+                  class="text-sm text-muted"
+                  data-testid="intake-confidence"
+                >
+                  {{ intakeConfidenceNote }}
+                </p>
+                <p v-if="loadingWave" class="text-sm text-muted" role="status">
+                  {{ t('journey_fueling_loading') }}
+                </p>
+                <ClientOnly
+                  ><NutritionMultiDayEnergyChart
+                    v-if="!loadingWave && wavePoints.length"
+                    :key="`horizon-${JSON.stringify(chartSettings.horizon)}`"
+                    :points="wavePoints"
+                    :journey-events="journeyEvents"
+                    :workouts="waveWorkouts"
+                    :highlighted-date="highlightedDate"
+                    :settings="chartSettings.horizon"
+                  />
+                  <p v-else-if="!loadingWave" class="text-sm text-muted">
+                    {{ t('horizon_empty') }}
+                  </p></ClientOnly
+                >
+                <div class="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted">
+                  <span class="inline-flex items-center gap-2"
+                    ><span aria-hidden="true" class="size-2 rounded-full bg-blue-500" />{{
+                      t('horizon_legend_glycogen')
+                    }}</span
+                  >
+                  <span class="inline-flex items-center gap-2"
+                    ><span
+                      aria-hidden="true"
+                      class="size-2 rounded-full border border-blue-500 border-dashed"
+                    />{{ t('horizon_legend_projected') }}</span
+                  >
+                  <span class="inline-flex items-center gap-2"
+                    ><span aria-hidden="true" class="size-2 rounded bg-error-500" />{{
+                      t('horizon_legend_workout')
+                    }}</span
+                  >
+                  <span class="inline-flex items-center gap-2"
+                    ><span aria-hidden="true" class="size-2 rounded-full bg-primary-500" />{{
+                      t('horizon_legend_meal')
+                    }}</span
+                  >
+                  <span class="inline-flex items-center gap-2"
+                    ><span
+                      aria-hidden="true"
+                      class="size-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-b-[6px] border-b-primary-400"
+                    />{{ t('horizon_legend_multiple') }}</span
+                  >
+                </div>
+                <div v-if="missingPlannedStartActivities.length" class="text-sm leading-relaxed">
+                  <p>{{ t('horizon_alert_missing_start_title') }}</p>
+                  <NuxtLink
+                    v-for="activity in missingPlannedStartActivities"
+                    :key="activity.id"
+                    :to="`/workouts/planned/${activity.id}`"
+                    class="block underline mt-2"
+                    >{{ activity.title }}</NuxtLink
+                  >
+                  <p class="mt-2 text-muted">{{ t('horizon_alert_missing_start_footer') }}</p>
+                </div>
+                <h2 class="text-lg font-medium">{{ t('periodization_header') }}</h2>
+                <NutritionWeeklyFuelingGrid
+                  v-if="strategy"
+                  :days="strategy.fuelingMatrix"
+                  @hover-day="highlightedDate = $event"
+                />
+                <ul v-if="loadErrors.length" class="text-sm text-muted space-y-2">
+                  <li v-for="message in loadErrors" :key="message">{{ message }}</li>
+                </ul>
               </div>
-              <ClientOnly>
-                <NutritionWeeklyPlanDashboard
+            </details>
+            <details class="nutrition-journey__disclosure">
+              <summary>{{ t('hydration_header') }}</summary>
+              <div class="py-4 pb-7 space-y-4">
+                <p
+                  v-if="strategy && Number.isFinite(strategy.hydrationDebt)"
+                  class="text-lg tabular-nums"
+                >
+                  {{ (strategy.hydrationDebt / 1000).toFixed(1) }}L
+                  <span class="text-sm text-muted">{{ t('hydration_status_debt') }}</span>
+                </p>
+                <p class="text-sm text-muted leading-relaxed">{{ hydrationAdvice }}</p>
+                <div v-if="strategy?.showHydrationFlushPrompt">
+                  <p class="text-sm">{{ strategy.hydrationFlushPrompt }}</p>
+                  <UButton
+                    color="neutral"
+                    variant="outline"
+                    class="mt-3"
+                    @click="resetHydrationDebt"
+                    >{{ t('hydration_reset_button') }}</UButton
+                  >
+                </div>
+                <UButton
+                  color="neutral"
+                  variant="link"
+                  :to="`/nutrition/${formatDateUTC(getUserLocalDate(), 'yyyy-MM-dd')}`"
+                  >{{ t('journey_open_journal') }}</UButton
+                >
+              </div>
+            </details>
+            <details class="nutrition-journey__disclosure">
+              <summary>{{ t('journey_coach_context') }}</summary>
+              <div class="py-4 pb-7 space-y-5">
+                <p v-if="strategy?.summary" class="text-sm leading-relaxed">
+                  {{ strategy.summary }}
+                </p>
+                <p v-else class="text-sm text-muted">{{ t('journey_no_summary') }}</p>
+                <h2 class="font-medium">{{ t('journey_recovery_context') }}</h2>
+                <button
+                  v-for="item in nutritionRecoveryItems"
+                  :key="item.id"
+                  type="button"
+                  class="block w-full text-left border-b border-default py-4"
+                  @click="openRecoveryItem(item)"
+                >
+                  <span class="block text-sm font-medium">{{ item.label }}</span
+                  ><span class="block text-xs text-muted mt-1">{{
+                    item.description || item.origin
+                  }}</span>
+                </button>
+                <UButton color="neutral" variant="outline" @click="openCreateRecoveryEvent">{{
+                  t('journey_log_recovery')
+                }}</UButton>
+                <UButton to="/chat" color="neutral" variant="link">{{
+                  t('journey_ask_coach')
+                }}</UButton>
+              </div>
+            </details>
+          </template>
+          <template #plan>
+            <div class="pt-7 space-y-5">
+              <h2 class="text-xl font-medium">{{ t('active_plan_header') }}</h2>
+              <p class="text-sm text-muted">
+                {{ isCurrentWeek ? t('active_plan_desc_current') : t('active_plan_desc_history') }}
+              </p>
+              <ClientOnly
+                ><NutritionWeeklyPlanDashboard
                   ref="planDashboard"
                   :start-date="weekStartDate"
                   :end-date="weekEndDate"
@@ -496,12 +228,10 @@
                   @suggest-window="openAiHelperForWindow"
                   @prev-week="prevWeek"
                   @next-week="nextWeek"
-                />
-              </ClientOnly>
+              /></ClientOnly>
             </div>
           </template>
         </UTabs>
-
         <UModal
           v-model:open="showGroceryList"
           :title="t('grocery_modal_title')"
@@ -531,7 +261,7 @@
                 class="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-xl border border-primary-100 dark:border-primary-800"
               >
                 <div class="flex flex-wrap items-baseline gap-3">
-                  <span class="text-3xl font-black text-primary-700 dark:text-primary-300">
+                  <span class="text-3xl font-medium text-primary-700 dark:text-primary-300">
                     {{ groceryData.totals.ingredients }}
                   </span>
                   <span class="text-sm text-primary-600/70">ingredients</span>
@@ -539,7 +269,7 @@
                     from {{ groceryData.totals.meals }} planned meals
                   </span>
                 </div>
-                <p class="text-[10px] text-primary-600/60 mt-1 italic">
+                <p class="text-xs text-primary-600/60 mt-1 italic">
                   Built from selected planned meals in the chosen range.
                 </p>
               </div>
@@ -572,7 +302,7 @@
                       }}{{ item.unit ? ` ${item.unit}` : '' }}
                     </span>
                   </div>
-                  <p class="mt-1 text-[10px] text-gray-500">
+                  <p class="mt-1 text-xs text-gray-500">
                     {{ formatGrocerySources(item.sourceMeals) }}
                   </p>
                 </li>
@@ -612,7 +342,7 @@
           :current-assigned-carbs="recommendationContext.currentAssignedCarbs"
           @updated="refreshData"
         />
-      </div>
+      </main>
     </template>
   </UDashboardPanel>
 
@@ -648,7 +378,7 @@
   })
 
   useHead({
-    title: 'Metabolic Strategy',
+    title: 'Fueling',
     meta: [
       {
         name: 'description',
@@ -674,6 +404,9 @@
   const loadingStrategy = ref(true)
   const loadingActiveFeed = ref(true)
   const loadErrors = ref<string[]>([])
+  const activeFeedError = ref<string | null>(null)
+  const { formatDateUTC, getUserLocalDate } = useFormat()
+  const todayLabel = computed(() => formatDateUTC(getUserLocalDate(), 'EEEE, MMM d'))
   const userStore = useUserStore()
   const generatingPlan = ref(false)
   const planDashboard = ref<any>(null)
@@ -798,9 +531,23 @@
         to: '/nutrition/history'
       },
       {
-        label: 'Tasks',
+        label: t.value('journey_tasks'),
         icon: 'i-heroicons-cpu-chip',
         onSelect: () => toggleTriggerMonitor()
+      },
+      {
+        label: t.value('nav_refresh'),
+        icon: 'i-lucide-refresh-cw',
+        onSelect: () => {
+          void refreshData()
+        }
+      },
+      {
+        label: t.value('grocery_button'),
+        icon: 'i-lucide-shopping-cart',
+        onSelect: () => {
+          showGroceryList.value = true
+        }
       }
     ]
   ])
@@ -882,6 +629,7 @@
     loadingStrategy.value = true
     loadingActiveFeed.value = true
     loadErrors.value = []
+    activeFeedError.value = null
 
     try {
       const [waveRes, strategyRes, feedRes, upcomingRes] = await Promise.allSettled([
@@ -919,6 +667,7 @@
       } else {
         console.error('Failed to load active feed:', feedRes.reason)
         activeFeed.value = null
+        activeFeedError.value = t.value('load_error_feed')
         loadErrors.value.push(t.value('load_error_feed'))
       }
 
@@ -1037,7 +786,9 @@
   }
 
   const hydrationAdvice = computed(() => {
-    if (!strategy.value) return t.value('hydration_advice_unavailable')
+    if (!strategy.value || !Number.isFinite(strategy.value.hydrationDebt)) {
+      return t.value('hydration_advice_unavailable')
+    }
     const debt = strategy.value.hydrationDebt
     if (debt > 2000) return t.value('hydration_advice_severe')
     if (debt > 1500) return t.value('hydration_advice_high')
@@ -1146,3 +897,30 @@
     }
   })
 </script>
+
+<style scoped>
+  .nutrition-journey {
+    width: 100%;
+    max-width: 850px;
+    margin-inline: auto;
+    padding: 2rem 1.25rem 4rem;
+  }
+  .nutrition-journey__disclosure {
+    border-top: 1px solid var(--ui-border);
+  }
+  .nutrition-journey__disclosure summary {
+    padding-block: 1.25rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+  summary:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: 3px;
+  }
+  @media (min-width: 640px) {
+    .nutrition-journey {
+      padding-inline: 2rem;
+    }
+  }
+</style>

@@ -1,92 +1,5 @@
 <template>
   <UDashboardPanel id="activities">
-    <template #header>
-      <UDashboardNavbar :title="t('activities_title')">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-        <template #right>
-          <LayoutPageNavbarActions :overflow-items="activitiesOverflowItems">
-            <ClientOnly>
-              <DashboardTriggerMonitorButton />
-            </ClientOnly>
-
-            <UButton
-              to="/workouts/upload"
-              icon="i-heroicons-cloud-arrow-up"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="font-black uppercase tracking-widest text-[10px]"
-              :aria-label="t('header_upload')"
-            >
-              <span class="hidden md:inline">{{ t('header_upload') }}</span>
-            </UButton>
-
-            <UDropdownMenu :items="activityMenuItems">
-              <UButton
-                icon="i-heroicons-ellipsis-vertical"
-                color="neutral"
-                variant="outline"
-                size="sm"
-                :aria-label="t('header_menu_manage')"
-              />
-            </UDropdownMenu>
-
-            <UButton
-              icon="i-heroicons-arrow-path"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              class="font-black uppercase tracking-widest text-[10px]"
-              :loading="status === 'pending' || integrationStore.syncingData"
-              :aria-label="t('header_refresh')"
-              @click="
-                () => {
-                  void handleRefresh()
-                }
-              "
-            >
-              <span class="hidden md:inline">{{ t('header_refresh') }}</span>
-            </UButton>
-
-            <UButton
-              to="/chat"
-              icon="i-heroicons-chat-bubble-left-right"
-              color="primary"
-              variant="solid"
-              size="sm"
-              class="font-black uppercase tracking-widest text-[10px]"
-              :aria-label="t('header_new_chat')"
-            >
-              <span class="hidden md:inline">{{ t('header_new_chat') }}</span>
-              <span class="md:hidden">{{ t('header_chat') }}</span>
-            </UButton>
-
-            <template #mobile>
-              <LayoutNavbarIconButton
-                icon="i-heroicons-arrow-path"
-                :label="t('header_refresh')"
-                :loading="status === 'pending' || integrationStore.syncingData"
-                @click="
-                  () => {
-                    void handleRefresh()
-                  }
-                "
-              />
-              <LayoutNavbarIconButton
-                to="/chat"
-                icon="i-heroicons-chat-bubble-left-right"
-                :label="t('header_new_chat')"
-                color="primary"
-                variant="solid"
-              />
-            </template>
-          </LayoutPageNavbarActions>
-        </template>
-      </UDashboardNavbar>
-    </template>
-
     <template #body>
       <div class="h-full flex flex-col quick-capture-inset">
         <Head>
@@ -94,214 +7,299 @@
           <Meta name="description" :content="t('meta_description')" />
         </Head>
 
-        <!-- Secondary Controls -->
         <div
-          class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border-b dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/30"
+          class="space-y-7 px-5 pt-8 sm:px-10 sm:pt-10"
+          :class="viewMode === 'calendar' ? '' : 'mx-auto w-full max-w-[52rem]'"
         >
-          <div class="flex items-center gap-4 flex-wrap">
-            <!-- Legend (Calendar Only) -->
-            <div
-              v-if="viewMode === 'calendar'"
-              class="hidden md:flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 shrink-0"
-            >
-              <div class="flex items-center gap-1.5">
-                <div class="w-2 h-2 rounded-full bg-green-500" />
-                <span>{{ tl('completed') }}</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <div class="w-2 h-2 rounded-full bg-blue-500" />
-                <span>{{ tl('plan') }}</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <div class="w-2 h-2 rounded-full bg-amber-500" />
-                <span>{{ tl('proposed') }}</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <div class="w-2 h-2 rounded-full bg-red-500" />
-                <span>{{ tl('missed') }}</span>
-              </div>
-              <div
-                class="flex items-center gap-1.5 border-l border-gray-300 dark:border-gray-700 pl-4 ml-1"
+          <div class="flex flex-wrap items-end justify-between gap-5">
+            <div class="max-w-xl">
+              <h1
+                class="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-4xl"
               >
-                <div class="w-2 h-2 rounded-full bg-yellow-500" />
-                <span>{{ tl('goal') }}</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <div class="w-2 h-2 rounded-full bg-purple-500" />
-                <span>{{ tl('threshold') }}</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <div class="w-2 h-2 rounded-full bg-teal-500" />
-                <span>{{ tl('personal_best') }}</span>
-              </div>
-              <div
-                v-if="nutritionEnabled"
-                class="flex items-center gap-3 border-l border-gray-300 dark:border-gray-700 pl-4 ml-1"
+                {{ t('activities_title') }}
+              </h1>
+              <p class="mt-3 leading-7 text-gray-600 dark:text-gray-400">
+                {{ t('training_intro') }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <ClientOnly><DashboardTriggerMonitorButton /></ClientOnly>
+              <UDropdownMenu :items="activitiesOverflowItems"
+                ><UButton
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-heroicons-ellipsis-horizontal"
+                  :aria-label="t('training_actions')"
+                  >{{ t('training_actions') }}</UButton
+                ></UDropdownMenu
               >
-                <div class="flex items-center gap-1">
-                  <div class="w-1.5 h-1.5 rounded-full bg-blue-500" title="State 1: Eco" />
-                  <div class="w-1.5 h-1.5 rounded-full bg-orange-500" title="State 2: Steady" />
-                  <div class="w-1.5 h-1.5 rounded-full bg-red-500" title="State 3: Performance" />
-                </div>
-                <span>{{ tl('fuel_states') }}</span>
-              </div>
+              <UButton
+                v-if="viewMode === 'week' && nextWeekSession"
+                color="primary"
+                :to="`/workouts/planned/${nextWeekSession.id}`"
+                >{{ t('review_next_session') }}</UButton
+              >
+              <UButton v-else-if="viewMode === 'week'" to="/plan" color="primary">{{
+                t('plan_week')
+              }}</UButton>
             </div>
           </div>
-
-          <!-- List View Controls -->
-          <div class="flex items-center gap-3 justify-between md:justify-end overflow-x-auto">
-            <UInput
-              v-if="viewMode === 'list'"
-              v-model="tableSearch"
-              icon="i-heroicons-magnifying-glass"
-              :placeholder="t('controls_filter_placeholder')"
-              size="sm"
-              class="w-48"
-              :ui="{ base: 'font-bold uppercase tracking-widest text-[10px]' }"
-            />
-
-            <UDropdownMenu
-              v-if="viewMode === 'list'"
-              :items="columnMenuItems"
-              :content="{ align: 'end' }"
-              :disabled="columnMenuItems.length === 0"
-            >
-              <UButton
-                :label="t('controls_columns')"
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex flex-wrap items-center gap-2">
+              <label for="training-view" class="sr-only">{{ t('training_view') }}</label>
+              <USelect
+                id="training-view"
+                v-model="viewMode"
+                :items="trainingViewOptions"
+                value-key="value"
+                class="w-32"
                 color="neutral"
                 variant="outline"
-                trailing-icon="i-heroicons-chevron-down"
-                size="sm"
-                class="font-black uppercase tracking-widest text-[10px]"
-                aria-label="Toggle columns"
-                :disabled="columnMenuItems.length === 0"
-              />
-            </UDropdownMenu>
-
-            <UButton
-              v-if="viewMode === 'calendar'"
-              icon="i-heroicons-rectangle-stack"
-              :color="isWorkoutDrawerVisible ? 'primary' : 'neutral'"
-              variant="ghost"
-              size="sm"
-              class="size-11 min-h-11 min-w-11"
-              :aria-label="t('controls_workout_library')"
-              @click="
-                () => {
-                  void toggleWorkoutDrawerFromHeader()
-                }
-              "
-            >
-              <span class="hidden sm:inline">Library</span>
-            </UButton>
-
-            <UButton
-              v-if="viewMode === 'calendar'"
-              icon="i-heroicons-cog-6-tooth"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              class="size-11 min-h-11 min-w-11"
-              :aria-label="t('controls_calendar_settings')"
-              @click="
-                () => {
-                  showCalendarSettingsModal = true
-                }
-              "
-            />
-
-            <!-- View Switcher -->
-            <div
-              class="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-1 shadow-inner border border-gray-200/50 dark:border-gray-700/50"
-            >
-              <UButton
-                icon="i-heroicons-calendar"
-                :color="viewMode === 'calendar' ? 'primary' : 'neutral'"
-                variant="ghost"
-                size="sm"
-                class="size-11 min-h-11 min-w-11 rounded-lg"
-                :aria-label="t('controls_view_calendar')"
-                @click="
-                  () => {
-                    viewMode = 'calendar'
-                  }
-                "
-              />
-              <UButton
-                icon="i-heroicons-list-bullet"
-                :color="viewMode === 'list' ? 'primary' : 'neutral'"
-                variant="ghost"
-                size="sm"
-                class="size-11 min-h-11 min-w-11 rounded-lg"
-                :aria-label="t('controls_view_list')"
-                @click="
-                  () => {
-                    viewMode = 'list'
-                  }
-                "
-              />
-            </div>
-
-            <!-- Month Navigation -->
-            <div
-              class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 shadow-inner border border-gray-200/50 dark:border-gray-700/50"
-            >
-              <UButton
-                v-if="!isCurrentMonth"
-                :label="t('controls_today')"
-                size="sm"
-                variant="ghost"
-                color="neutral"
-                class="font-black uppercase tracking-widest text-[10px] hidden sm:flex"
-                @click="
-                  () => {
-                    void goToToday()
-                  }
-                "
               />
               <UButton
                 icon="i-heroicons-chevron-left"
+                color="neutral"
                 variant="ghost"
-                size="sm"
-                class="size-11 min-h-11 min-w-11 rounded-lg"
-                :aria-label="t('controls_previous_month')"
+                :aria-label="
+                  viewMode === 'week' ? t('previous_week') : t('controls_previous_month')
+                "
                 @click="
                   () => {
-                    void prevMonth()
+                    viewMode === 'week' ? navigateWeek(-1) : prevMonth()
                   }
                 "
               />
-              <span
-                class="px-3 text-[10px] font-black uppercase tracking-widest min-w-[80px] sm:min-w-[120px] text-center"
-              >
-                {{ currentMonthLabel }}
-              </span>
+              <span class="min-w-40 text-center text-sm font-medium">{{
+                viewMode === 'week' ? currentWeekLabel : currentMonthLabel
+              }}</span>
               <UButton
                 icon="i-heroicons-chevron-right"
+                color="neutral"
                 variant="ghost"
-                size="sm"
-                class="size-11 min-h-11 min-w-11 rounded-lg"
-                :aria-label="t('controls_next_month')"
+                :aria-label="viewMode === 'week' ? t('next_week') : t('controls_next_month')"
                 @click="
                   () => {
-                    void nextMonth()
+                    viewMode === 'week' ? navigateWeek(1) : nextMonth()
+                  }
+                "
+              />
+              <UButton
+                v-if="!isCurrentMonth || (viewMode === 'week' && !isSelectedCurrentWeek)"
+                color="neutral"
+                variant="ghost"
+                @click="goToToday()"
+                >{{ t('controls_today') }}</UButton
+              >
+            </div>
+            <div v-if="viewMode === 'list'" class="flex flex-wrap items-center gap-3">
+              <UInput
+                v-model="tableSearch"
+                icon="i-heroicons-magnifying-glass"
+                :placeholder="t('controls_filter_placeholder')"
+                :aria-label="t('controls_filter_placeholder')"
+                class="w-52"
+              />
+              <UDropdownMenu
+                :items="columnMenuItems"
+                :content="{ align: 'end' }"
+                :disabled="columnMenuItems.length === 0"
+                ><UButton
+                  color="neutral"
+                  variant="ghost"
+                  trailing-icon="i-heroicons-chevron-down"
+                  :disabled="columnMenuItems.length === 0"
+                  >{{ t('controls_columns') }}</UButton
+                ></UDropdownMenu
+              >
+            </div>
+            <div v-else class="flex flex-wrap gap-1">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-heroicons-rectangle-stack"
+                @click="toggleWorkoutDrawerFromHeader()"
+                >{{ t('controls_workout_library') }}</UButton
+              >
+              <UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-heroicons-cog-6-tooth"
+                :aria-label="t('controls_calendar_settings')"
+                @click="
+                  () => {
+                    showCalendarSettingsModal = true
                   }
                 "
               />
             </div>
           </div>
+          <details v-if="viewMode === 'calendar'" class="text-sm">
+            <summary
+              class="cursor-pointer text-gray-500 focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {{ t('calendar_key') }}
+            </summary>
+            <div class="flex flex-wrap gap-x-6 gap-y-3 py-4 text-gray-600 dark:text-gray-400">
+              <span v-for="item in calendarLegend" :key="item.label" class="flex items-center gap-2"
+                ><span class="size-2 rounded-full" :class="item.color" />{{ tl(item.label) }}</span
+              >
+              <span v-if="nutritionEnabled">{{ tl('fuel_states') }}</span>
+            </div>
+          </details>
         </div>
 
         <!-- Content Area -->
         <div
-          class="flex-1 overflow-hidden p-4"
-          :class="viewMode === 'calendar' && isWorkoutDrawerVisible ? 'pb-28 lg:pb-36' : ''"
+          class="flex-1 overflow-hidden px-5 py-6 sm:px-10"
+          :class="[
+            viewMode !== 'list' && isWorkoutDrawerVisible ? 'pb-28 lg:pb-36' : '',
+            viewMode === 'list' ? 'mx-auto w-full max-w-[52rem]' : ''
+          ]"
         >
-          <div v-if="status === 'error'" class="p-4 text-red-500 bg-red-50 rounded-lg">
-            {{ t('errors_load_failed') }}
+          <div v-if="status === 'error'" role="alert" class="space-y-3 py-6">
+            <p>{{ t('errors_load_failed') }}</p>
+            <UButton color="neutral" variant="outline" @click="handleRefresh()">{{
+              t('header_refresh')
+            }}</UButton>
           </div>
 
           <ClientOnly>
+            <section
+              v-if="viewMode === 'week'"
+              class="mx-auto max-w-[52rem] space-y-6 overflow-y-auto h-full"
+              :aria-label="t('view_week')"
+              data-testid="training-week"
+            >
+              <p
+                v-if="status === 'pending'"
+                role="status"
+                aria-live="polite"
+                class="py-6 text-gray-500"
+              >
+                {{ t('week_loading') }}
+              </p>
+              <template v-else-if="status !== 'error'">
+                <p class="text-sm leading-6 text-gray-500 dark:text-gray-400">
+                  {{
+                    t('week_summary', {
+                      count: selectedWeekSessionCount,
+                      duration: formatDuration(
+                        selectedWeekSummary.duration + selectedWeekSummary.plannedDuration
+                      )
+                    })
+                  }}
+                </p>
+                <div
+                  class="divide-y divide-gray-200 border-y border-gray-200 dark:divide-gray-800 dark:border-gray-800"
+                >
+                  <div
+                    v-for="day in selectedWeekDays"
+                    :key="getDateKey(day.date)"
+                    class="grid grid-cols-1 gap-3 py-5 sm:grid-cols-[140px_1fr] sm:gap-6"
+                    :class="isTodayDate(day.date) ? 'text-primary' : ''"
+                  >
+                    <div>
+                      <h2 class="text-sm font-medium">{{ formatDateUTC(day.date, 'EEEE') }}</h2>
+                      <p class="mt-1 text-xs text-gray-500">
+                        {{ formatDateUTC(day.date, 'MMM d')
+                        }}<span v-if="isTodayDate(day.date)">, {{ t('controls_today') }}</span>
+                      </p>
+                    </div>
+                    <div class="space-y-3">
+                      <button
+                        v-for="activity in day.activities.filter(
+                          (a) => a.id && a.type !== 'wellness'
+                        )"
+                        :key="activity.id"
+                        type="button"
+                        class="flex w-full items-center justify-between gap-4 py-1 text-left text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary dark:text-white"
+                        @click="openWeekActivity(activity)"
+                      >
+                        <span class="min-w-0"
+                          ><span class="block text-sm font-medium">{{ activity.title }}</span
+                          ><span class="mt-1 block text-xs text-gray-500"
+                            >{{
+                              activity.source === 'completed'
+                                ? tl('completed')
+                                : activity.source === 'planned'
+                                  ? tl('plan')
+                                  : activity.type
+                            }}<span v-if="activity.duration || activity.plannedDuration"
+                              >,
+                              {{
+                                formatDurationCompact(
+                                  activity.duration || activity.plannedDuration || 0
+                                )
+                              }}</span
+                            ></span
+                          ></span
+                        >
+                        <UIcon
+                          name="i-heroicons-chevron-right"
+                          class="size-4 shrink-0 text-gray-400"
+                          aria-hidden="true"
+                        />
+                      </button>
+                      <p
+                        v-if="
+                          day.activities.filter((a) => a.id && a.type !== 'wellness').length === 0
+                        "
+                        class="text-sm text-gray-500"
+                      >
+                        {{ t('week_open_day') }}
+                      </p>
+                      <div
+                        v-if="day.activities.some((a) => a.wellness || a.nutrition)"
+                        class="flex flex-wrap gap-2"
+                      >
+                        <UButton
+                          v-if="
+                            calendarSettings.showWellness && day.activities.some((a) => a.wellness)
+                          "
+                          color="neutral"
+                          variant="link"
+                          size="xs"
+                          @click="openWellnessModal(day.date)"
+                          >{{ t('week_recovery') }}</UButton
+                        >
+                        <UButton
+                          v-if="
+                            nutritionEnabled &&
+                            calendarSettings.showNutrition &&
+                            day.activities.some((a) => a.nutrition)
+                          "
+                          color="neutral"
+                          variant="link"
+                          size="xs"
+                          @click="openNutrition(day.date)"
+                          >{{ t('week_fueling') }}</UButton
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <details>
+                  <summary
+                    class="cursor-pointer text-sm text-gray-600 focus-visible:outline-2 focus-visible:outline-primary dark:text-gray-400"
+                  >
+                    {{ t('week_detail') }}
+                  </summary>
+                  <div class="flex flex-wrap items-center gap-5 py-4 text-sm text-gray-500">
+                    <span>{{
+                      t('week_load', {
+                        load: Math.round(selectedWeekSummary.tss + selectedWeekSummary.plannedTss)
+                      })
+                    }}</span
+                    ><UButton
+                      color="neutral"
+                      variant="ghost"
+                      @click="openWeekZoneDetail(selectedWeekDays)"
+                      >{{ t('week_zones') }}</UButton
+                    >
+                  </div>
+                </details>
+              </template>
+            </section>
             <!-- Calendar View -->
             <div
               v-if="viewMode === 'calendar'"
@@ -716,7 +714,7 @@
 
             <!-- List View -->
             <div
-              v-else
+              v-else-if="viewMode === 'list'"
               class="bg-[oklch(14%_0.018_155)] rounded-xl border border-white/8 shadow overflow-x-auto h-full flex flex-col"
             >
               <UTable
@@ -1115,7 +1113,7 @@
 
   <ClientOnly>
     <PlanArchitectWorkoutDrawer
-      v-if="viewMode === 'calendar' && isWorkoutDrawerVisible"
+      v-if="viewMode !== 'list' && isWorkoutDrawerVisible"
       :open="isWorkoutDrawerOpen"
       :templates="workoutTemplates || []"
       :loading="workoutTemplateStatus === 'pending'"
@@ -1377,6 +1375,18 @@
         icon: 'i-heroicons-cloud-arrow-up',
         to: '/workouts/upload'
       },
+      {
+        label: isTReady ? t.value('header_refresh') : 'Refresh',
+        icon: 'i-heroicons-arrow-path',
+        onSelect: () => {
+          void handleRefresh()
+        }
+      },
+      {
+        label: isTReady ? t.value('header_new_chat') : 'Ask coach',
+        icon: 'i-heroicons-chat-bubble-left-right',
+        to: '/chat'
+      },
       ...(activityMenuItems.value[0] || [])
     ]
     return [items]
@@ -1394,7 +1404,24 @@
   }
 
   const currentDate = ref(parseCalendarDate(route.query.date) || getUserLocalDate())
-  const viewMode = ref<'calendar' | 'list'>('calendar')
+  const viewMode = ref<'week' | 'calendar' | 'list'>('week')
+  const trainingViews = [
+    { value: 'week' as const, label: 'view_week' },
+    { value: 'calendar' as const, label: 'view_calendar' },
+    { value: 'list' as const, label: 'view_sessions' }
+  ]
+  const trainingViewOptions = computed(() =>
+    trainingViews.map((view) => ({ label: t.value(view.label), value: view.value }))
+  )
+  const calendarLegend = [
+    { label: 'completed', color: 'bg-green-500' },
+    { label: 'plan', color: 'bg-blue-500' },
+    { label: 'proposed', color: 'bg-amber-500' },
+    { label: 'missed', color: 'bg-red-500' },
+    { label: 'goal', color: 'bg-yellow-500' },
+    { label: 'threshold', color: 'bg-purple-500' },
+    { label: 'personal_best', color: 'bg-teal-500' }
+  ]
   const mobileDraggingActivity = ref<{ id: string; source: string; date: string | Date } | null>(
     null
   )
@@ -1741,6 +1768,52 @@
     return weeks
   })
 
+  const selectedWeekDays = computed(() => {
+    const selected = formatDateUTC(currentDate.value, 'yyyy-MM-dd')
+    return (
+      calendarWeeks.value.find((week) =>
+        week.some((day) => formatDateUTC(day.date, 'yyyy-MM-dd') === selected)
+      ) || []
+    )
+  })
+  const selectedWeekSummary = computed(() => getWeekSummary(selectedWeekDays.value))
+  const selectedWeekSessions = computed(() =>
+    selectedWeekDays.value
+      .flatMap((day) => day.activities)
+      .filter(
+        (activity) =>
+          activity.source === 'completed' ||
+          (activity.source === 'planned' && activity.status !== 'completed_plan')
+      )
+  )
+  const selectedWeekSessionCount = computed(() => selectedWeekSessions.value.length)
+  const nextWeekSession = computed(() => {
+    const today = formatDateUTC(getUserLocalDate(), 'yyyy-MM-dd')
+    return (
+      selectedWeekSessions.value
+        .filter(
+          (activity) =>
+            activity.source === 'planned' &&
+            getCalendarActivityDateKey(activity, timezone.value) >= today
+        )
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] || null
+    )
+  })
+  const currentWeekLabel = computed(() => {
+    const week = selectedWeekDays.value
+    return week.length
+      ? `${formatDateUTC(week[0]!.date, 'MMM d')} – ${formatDateUTC(week[6]!.date, 'MMM d, yyyy')}`
+      : ''
+  })
+  const isSelectedCurrentWeek = computed(() =>
+    selectedWeekDays.value.some((day) => isTodayDate(day.date))
+  )
+  function navigateWeek(direction: number) {
+    const date = new Date(currentDate.value)
+    date.setUTCDate(date.getUTCDate() + direction * 7)
+    currentDate.value = date
+  }
+
   const calendarWeeksWithSummary = computed(() => {
     return calendarWeeks.value.map((week) => ({
       week,
@@ -1970,6 +2043,16 @@
   function onMobileActivityDragCancel() {
     mobileDraggingActivity.value = null
     mobileDragTargetDateKey.value = null
+  }
+
+  async function openWeekActivity(activity: CalendarActivity) {
+    if (activity.source === 'planned') {
+      await navigateTo(`/workouts/planned/${activity.id}`)
+    } else if (activity.source === 'completed') {
+      await navigateTo(`/workouts/${activity.id}`)
+    } else {
+      await openActivity(activity)
+    }
   }
 
   async function openActivity(activity: CalendarActivity) {

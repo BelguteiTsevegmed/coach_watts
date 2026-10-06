@@ -5,7 +5,7 @@
   >
     <!-- Timeline Icon -->
     <div
-      class="absolute left-[-11px] top-0 w-5 h-5 rounded-full border-2 bg-white dark:bg-gray-900 z-10 flex items-center justify-center shadow-sm"
+      class="absolute left-[-11px] top-0 w-5 h-5 rounded-full border-2 bg-white dark:bg-gray-900 z-10 flex items-center justify-center shadow-none"
       :class="statusBorderClass"
     >
       <UIcon :name="windowIcon" class="w-3 h-3" :class="statusTextClass" />
@@ -17,12 +17,13 @@
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <div class="flex items-center gap-2">
-            <h3 class="text-xs font-black uppercase tracking-widest text-gray-900 dark:text-white">
+            <h3 class="text-xs font-medium text-gray-900 dark:text-white">
               {{ title }}
             </h3>
             <div v-if="!isLocked" class="flex items-center gap-1 ml-1">
               <UButton
                 icon="i-heroicons-plus-circle"
+                :aria-label="t('journey_log_food')"
                 variant="ghost"
                 color="neutral"
                 size="xs"
@@ -35,6 +36,7 @@
               />
               <UButton
                 icon="i-heroicons-sparkles"
+                :aria-label="t('journey_log_with_coach')"
                 variant="ghost"
                 color="primary"
                 size="xs"
@@ -47,7 +49,7 @@
               />
             </div>
           </div>
-          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+          <p class="text-xs font-bold text-gray-400 tracking-tighter">
             {{ formatWindowDateTimeRange(startTime, endTime) }}
           </p>
         </div>
@@ -67,7 +69,7 @@
             "
           >
             <UIcon name="i-tabler-bread" class="w-3.5 h-3.5" :class="carbChipTextClass" />
-            <span class="text-xs font-black" :class="carbChipTextClass">
+            <span class="text-xs font-medium" :class="carbChipTextClass">
               {{ Math.round(actualCarbs) }}/{{ Math.round(targetCarbs) }}g
             </span>
             <UIcon
@@ -86,7 +88,7 @@
             class="flex items-center gap-1.5 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-900/50"
           >
             <UIcon name="i-tabler-egg" class="w-3.5 h-3.5 text-blue-500" />
-            <span class="text-xs font-black text-blue-700 dark:text-blue-400"
+            <span class="text-xs font-medium text-blue-700 dark:text-blue-400"
               >{{ formatMacro(targetProtein) }}g</span
             >
           </div>
@@ -135,8 +137,7 @@
                 class="w-4 h-4 text-amber-600 dark:text-amber-400"
               />
 
-              <span
-                class="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 tracking-widest"
+              <span class="text-xs font-medium text-amber-600 dark:text-amber-400"
                 >Intra-Workout Script</span
               >
             </div>
@@ -146,7 +147,7 @@
               variant="soft"
               color="warning"
               size="xs"
-              class="font-black text-[8px] uppercase"
+              class="font-medium text-[8px]"
               :class="{ 'animate-pulse': fuelState === 3 }"
             >
               {{ strategyLabel }}
@@ -169,19 +170,18 @@
             <div
               v-for="item in intraScriptItems"
               :key="item.time"
-              class="flex items-center gap-3 p-2 rounded-lg bg-white/50 dark:bg-black/20 border border-amber-200/30 dark:border-amber-800/30 shadow-sm"
+              class="flex items-center gap-3 p-2 rounded-lg bg-white/50 dark:bg-black/20 border border-amber-200/30 dark:border-amber-800/30 shadow-none"
             >
               <UCheckbox
                 :label="item.label"
                 color="primary"
                 :ui="{
-                  label:
-                    'text-[11px] font-black text-amber-900 dark:text-amber-100 uppercase tracking-tight',
+                  label: 'text-xs font-medium text-amber-900 dark:text-amber-100  tracking-tight',
                   container: 'flex items-center gap-2'
                 }"
               />
               <div
-                class="ml-auto text-[10px] font-black px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400"
+                class="ml-auto text-xs font-medium px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400"
               >
                 {{ item.time }}
               </div>
@@ -195,9 +195,7 @@
           <div class="flex items-center gap-2 mb-3">
             <UIcon name="i-heroicons-beaker" class="w-4 h-4 text-blue-500" />
 
-            <span class="text-[10px] font-black uppercase text-blue-600 tracking-widest"
-              >Hydration & Electrolytes</span
-            >
+            <span class="text-xs font-medium text-blue-600">Hydration & Electrolytes</span>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
@@ -209,9 +207,9 @@
               </div>
 
               <div>
-                <div class="text-[10px] font-bold text-gray-400 uppercase">Fluid Target</div>
+                <div class="text-xs font-bold text-gray-400">Fluid Target</div>
 
-                <div class="text-sm font-black text-gray-900 dark:text-white">
+                <div class="text-sm font-medium text-gray-900 dark:text-white">
                   {{ (targetFluid || 0) / 1000 }}L
                 </div>
               </div>
@@ -225,9 +223,9 @@
               </div>
 
               <div>
-                <div class="text-[10px] font-bold text-gray-400 uppercase">Sodium Target</div>
+                <div class="text-xs font-bold text-gray-400">Sodium Target</div>
 
-                <div class="text-sm font-black text-gray-900 dark:text-white">
+                <div class="text-sm font-medium text-gray-900 dark:text-white">
                   {{ targetSodium }}mg
                 </div>
               </div>
@@ -249,9 +247,7 @@
       >
         <div class="flex items-center gap-2 mb-2">
           <UIcon name="i-heroicons-sparkles" class="w-4 h-4 text-primary-500" />
-          <span class="text-[10px] font-bold uppercase text-gray-500 tracking-wider"
-            >Coach Suggests</span
-          >
+          <span class="text-xs font-bold text-gray-500">Coach Suggests</span>
         </div>
         <p class="text-xs text-gray-600 dark:text-gray-400 italic leading-relaxed">
           {{ recommendationText }}
@@ -267,7 +263,7 @@
             class="flex items-center gap-2 mb-3"
           >
             <div class="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
-            <span class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 italic">
+            <span class="text-xs font-medium tracking-[0.2em] text-gray-400 italic">
               {{ group.label }}
             </span>
             <div class="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
@@ -277,7 +273,7 @@
             <div
               v-for="(item, idx) in group.items"
               :key="item.id || `${group.meal}-item-${idx}`"
-              class="group flex flex-col gap-1 p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm"
+              class="group flex flex-col gap-1 p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-none"
               :class="{
                 'cursor-pointer hover:border-primary-200 dark:hover:border-primary-900/50':
                   !isLocked
@@ -303,7 +299,7 @@
                     :color="getAbsorptionColor(item.absorptionType)"
                     variant="subtle"
                     size="xs"
-                    class="text-[8px] font-black uppercase px-1 py-0 leading-none"
+                    class="text-[8px] font-medium px-1 py-0 leading-none"
                   >
                     {{ item.absorptionType }}
                   </UBadge>
@@ -321,9 +317,7 @@
 
               <!-- Row 2: Secondary Info and Macros -->
               <div class="flex items-center justify-between gap-2">
-                <div
-                  class="text-[10px] text-gray-500 font-medium uppercase flex items-center gap-1.5 min-w-0"
-                >
+                <div class="text-xs text-gray-500 font-medium flex items-center gap-1.5 min-w-0">
                   <span v-if="getItemTime(item)" class="text-primary-500 font-bold shrink-0">{{
                     getItemTime(item)
                   }}</span>
@@ -336,13 +330,13 @@
 
                 <div class="flex items-center gap-3 shrink-0">
                   <span
-                    class="text-[10px] font-black text-yellow-600 dark:text-yellow-400 whitespace-nowrap"
+                    class="text-xs font-medium text-yellow-600 dark:text-yellow-400 whitespace-nowrap"
                   >
                     {{ formatMacro(item.carbs)
                     }}<span class="text-[8px] ml-0.5 opacity-80 font-bold">g C</span>
                   </span>
                   <span
-                    class="text-[10px] font-black text-blue-600 dark:text-blue-400 whitespace-nowrap"
+                    class="text-xs font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap"
                   >
                     {{ formatMacro(item.protein)
                     }}<span class="text-[8px] ml-0.5 opacity-80 font-bold">g P</span>
@@ -370,11 +364,11 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <UIcon name="i-tabler-bread" class="w-5 h-5 text-yellow-500" />
-            <h3 class="text-base font-black uppercase tracking-tight text-gray-900 dark:text-white">
+            <h3 class="text-base font-medium tracking-tight text-gray-900 dark:text-white">
               Carb Target Breakdown
             </h3>
           </div>
-          <span class="text-lg font-black text-yellow-600 dark:text-yellow-400">
+          <span class="text-lg font-medium text-yellow-600 dark:text-yellow-400">
             {{ Math.round(targetCarbs) }}g
           </span>
         </div>
@@ -384,26 +378,26 @@
         >
           <div class="flex items-center justify-between text-sm">
             <span class="text-gray-500">Window target</span>
-            <span class="font-black text-gray-900 dark:text-white"
+            <span class="font-medium text-gray-900 dark:text-white"
               >{{ Math.round(targetCarbs) }}g</span
             >
           </div>
           <div class="flex items-center justify-between text-sm">
             <span class="text-gray-500">Logged in this window</span>
-            <span class="font-black text-gray-900 dark:text-white"
+            <span class="font-medium text-gray-900 dark:text-white"
               >{{ Math.round(actualCarbs) }}g</span
             >
           </div>
           <div class="flex items-center justify-between text-sm">
             <span class="text-gray-500">Remaining for this window</span>
-            <span class="font-black text-gray-900 dark:text-white"
+            <span class="font-medium text-gray-900 dark:text-white"
               >{{ Math.round(windowRemainingCarbs) }}g</span
             >
           </div>
           <div class="flex items-center justify-between text-sm">
             <span class="text-gray-500">Status</span>
             <span
-              class="font-black uppercase text-xs"
+              class="font-medium text-xs"
               :class="
                 compliance === 'HIT'
                   ? 'text-green-600 dark:text-green-400'
@@ -421,9 +415,7 @@
           v-if="type === 'INTRA_WORKOUT'"
           class="bg-primary-50 dark:bg-primary-950/20 p-4 rounded-xl border border-primary-100 dark:border-primary-900"
         >
-          <p
-            class="text-xs font-bold uppercase tracking-widest text-primary-700 dark:text-primary-300 mb-1"
-          >
+          <p class="text-xs font-bold text-primary-700 dark:text-primary-300 mb-1">
             Why this number
           </p>
           <p class="text-sm text-primary-700 dark:text-primary-300 leading-relaxed">
@@ -435,7 +427,7 @@
         <div
           class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800"
         >
-          <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Important</p>
+          <p class="text-xs font-bold text-gray-400 mb-1">Important</p>
           <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
             Window targets are timing goals. Daily macro totals are tracked separately on the day
             summary.
@@ -461,8 +453,10 @@
 
 <script setup lang="ts">
   import { computed, ref, useAttrs } from 'vue'
+  import { useTranslate } from '@tolgee/vue'
   import { fuelingSuggestionText } from '~/utils/nutrition-suggestions'
   import { groupWindowItemsByMeal } from '~/utils/nutrition-meal-groups'
+  const { t } = useTranslate('nutrition')
 
   defineOptions({
     inheritAttrs: false
