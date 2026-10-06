@@ -1,78 +1,39 @@
 <template>
-  <UCard
-    :ui="{
-      root: 'rounded-none sm:rounded-lg shadow-none sm:shadow',
-      body: 'p-4 sm:p-6'
-    }"
-  >
+  <UCard :ui="mobileListCardUi">
     <template #header>
-      <div class="flex items-center justify-between">
-        <button
-          type="button"
-          class="group text-left"
-          aria-label="Explain Power Duration Curve"
-          @click="
-            () => {
-              showExplanation = true
-            }
-          "
-        >
-          <h2
-            class="text-base font-black uppercase tracking-widest text-gray-400 group-hover:text-gray-500 transition-colors"
-          >
-            Power Duration Curve
-          </h2>
-          <div class="mt-1 flex items-center gap-1.5">
-            <span
-              class="h-1 w-1 rounded-full bg-gray-400/80 group-hover:bg-gray-500 transition-colors"
+      <PerformanceCardHeader :description="t('power_curve_card_description')">
+        <template #title>
+          <span class="inline-flex items-center gap-1">
+            {{ t('power_curve_card_title') }}
+            <UButton
+              icon="i-heroicons-information-circle"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :aria-label="t('power_curve_explain_label')"
+              @click="
+                () => {
+                  showExplanation = true
+                }
+              "
             />
-            <span
-              class="h-1 w-1 rounded-full bg-gray-400/80 group-hover:bg-gray-500 transition-colors"
-            />
-            <span
-              class="h-1 w-1 rounded-full bg-gray-400/80 group-hover:bg-gray-500 transition-colors"
-            />
-          </div>
-        </button>
-        <div class="flex gap-2">
-          <USelectMenu
-            v-model="scope"
-            :items="scopeOptions"
-            value-key="value"
-            label-key="label"
-            class="w-40 sm:w-52"
-            size="xs"
-            color="neutral"
-            variant="outline"
-          />
-          <USelect
-            v-model="period"
-            :items="periodOptions"
-            class="w-32 sm:w-36"
-            size="xs"
-            color="neutral"
-            variant="outline"
-          />
-          <UButton
-            icon="i-heroicons-cog-6-tooth"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            @click="
-              () => {
-                void $emit('settings')
-              }
-            "
-          />
-        </div>
-      </div>
+          </span>
+        </template>
+        <PerformanceChartControls
+          v-model:scope="scope"
+          v-model:period="period"
+          :scope-options="scopeOptions"
+          :period-options="periodOptions"
+          @settings="$emit('settings')"
+        />
+      </PerformanceCardHeader>
     </template>
     <PowerCurveChart :days="period" :sport="sport" :tags="tags" :settings="settings" />
 
     <UModal
       v-model:open="showExplanation"
       :ui="{ content: 'sm:max-w-lg' }"
-      title="Dialog"
+      title="Power Duration Curve"
       description="Learn how the power duration curve tracks your best sustainable efforts and identifies stale data points."
     >
       <template #content>
@@ -144,7 +105,11 @@
 </template>
 
 <script setup lang="ts">
+  import { useTranslate } from '@tolgee/vue'
   import PowerCurveChart from '~/components/PowerCurveChart.vue'
+  import { mobileListCardUi } from '~/utils/mobile-surface-ui'
+  import PerformanceCardHeader from './PerformanceCardHeader.vue'
+  import PerformanceChartControls from './PerformanceChartControls.vue'
 
   defineProps<{
     settings: any
@@ -159,4 +124,6 @@
   const showExplanation = ref(false)
 
   defineEmits(['settings'])
+
+  const { t } = useTranslate('performance')
 </script>

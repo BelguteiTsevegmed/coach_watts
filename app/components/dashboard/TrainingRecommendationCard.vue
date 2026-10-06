@@ -112,6 +112,24 @@
         <div class="today-flow__depth">
           <p v-if="analysisBusy" class="text-sm text-muted" role="status">{{ getLoadingText() }}</p>
           <template v-else-if="hasRecommendation">
+            <div
+              v-if="planChanged"
+              class="mb-4 rounded-lg bg-warning/10 p-4 ring ring-warning/25"
+              role="status"
+              data-testid="today-plan-changed"
+            >
+              <p class="text-sm">{{ t('today_session_plan_changed') }}</p>
+              <UButton
+                class="mt-3"
+                color="warning"
+                variant="outline"
+                :loading="analysisBusy"
+                :disabled="analysisBusy"
+                @click="handleAnalyzeClick"
+              >
+                {{ t('today_session_plan_changed_refresh') }}
+              </UButton>
+            </div>
             <p class="font-medium">
               {{ getRecommendationLabel(recommendationStore.todayRecommendation.recommendation) }}
             </p>
@@ -119,21 +137,29 @@
               {{ recommendationStore.todayRecommendation.reasoning }}
             </p>
             <div
-              v-if="recommendationStore.todayRecommendation.analysisJson?.suggested_modifications"
+              v-if="suggestion"
               class="today-flow__proposal"
+              data-testid="today-suggested-change"
             >
               <h4 class="font-medium">{{ t('training_recommendation_suggested_modification') }}</h4>
+              <p
+                v-if="suggestionSummary"
+                class="mt-2 text-sm font-medium"
+                data-testid="today-suggested-change-summary"
+              >
+                {{ suggestionSummary }}
+              </p>
               <p class="mt-2 text-sm leading-relaxed">
-                {{
-                  recommendationStore.todayRecommendation.analysisJson.suggested_modifications
-                    .description
-                }}
+                {{ suggestion.description }}
               </p>
               <p class="mt-2 text-sm text-muted">{{ t('journey_proposal_explanation') }}</p>
               <UButton v-if="canAccept" class="mt-4" :loading="accepting" @click="handleAccept">
                 {{ t('training_recommendation_accept_button') }}
               </UButton>
-              <p v-else class="mt-3 text-sm text-primary">
+              <p
+                v-else-if="recommendationStore.todayRecommendation.userAccepted"
+                class="mt-3 text-sm text-primary"
+              >
                 {{ t('training_recommendation_accepted') }}
               </p>
             </div>
@@ -151,6 +177,7 @@
               {{ t('journey_recommendation_detail') }}
             </UButton>
             <UButton
+              v-if="!planChanged"
               color="neutral"
               variant="outline"
               :loading="analysisBusy"
@@ -200,6 +227,9 @@
             </button>
           </div>
           <div class="mt-5 flex flex-wrap gap-3">
+            <UButton to="/injuries" color="neutral" variant="link">{{
+              t('today_body_report')
+            }}</UButton>
             <UButton color="neutral" variant="link" @click="openCreateRecoveryEvent">{{
               t('journey_log_recovery')
             }}</UButton>
@@ -241,7 +271,7 @@
   import { resolveTodayJourney } from '#shared/athlete-journey'
   import type { CalendarActivity } from '~/types/calendar'
   import { showDashboardProgressToast } from '~/utils/dashboard-progress-toast'
-  import { getDefaultSportSettings, getSportSettingsForActivity } from '~/utils/sportSettings'
+  import { getMiniChartPreference, getMiniChartSportSettings } from '~/utils/mini-workout-chart'
   import type { RecoveryContextItem, RecoveryContextSourceType } from '~/types/recovery-context'
 
   const { t } = useTranslate('dashboard')
@@ -283,6 +313,44 @@
   const phaseTitle = computed(() => t.value(`journey_${journey.value.phase}_title`))
   const phaseDescription = computed(() => t.value(`journey_${journey.value.phase}_description`))
   const hasRecommendation = computed(() => !!recommendationStore.todayRecommendation)
+  const planChanged = computed(() => !!recommendationStore.todayRecommendation?.planChanged)
+  const suggestion = computed(() => {
+    const mods = recommendationStore.todayRecommendation?.analysisJson?.suggested_modifications
+    if (!mods?.description) return null
+    return mods as {
+      description: string
+      new_title?: string
+      new_type?: string
+      new_duration_min?: number
+      new_tss?: number
+    }
+  })
+  const suggestionSummary = computed(() => {
+    const mods = suggestion.value
+    if (!mods) return null
+    const parts: string[] = []
+    if (mods.new_title) parts.push(mods.new_title)
+    if (mods.new_type && mods.new_type !== 'Rest' && !mods.new_title?.includes(mods.new_type)) {
+      parts.push(mods.new_type)
+    }
+    if (
+      mods.new_type !== 'Rest' &&
+      typeof mods.new_duration_min === 'number' &&
+      Number.isFinite(mods.new_duration_min) &&
+      mods.new_duration_min > 0
+    ) {
+      parts.push(`${Math.round(mods.new_duration_min)} min`)
+    }
+    if (
+      mods.new_type !== 'Rest' &&
+      typeof mods.new_tss === 'number' &&
+      Number.isFinite(mods.new_tss) &&
+      mods.new_tss > 0
+    ) {
+      parts.push(t.value('today_session_suggestion_load', { load: Math.round(mods.new_tss) }))
+    }
+    return parts.length ? parts.join(' · ') : null
+  })
   const analysisBusy = computed(
     () =>
       recommendationStore.generating ||
@@ -321,82 +389,22 @@
 
   const canAccept = computed(() => {
     return (
-      recommendationStore.todayRecommendation?.analysisJson?.suggested_modifications &&
-      !recommendationStore.todayRecommendation?.userAccepted
+      suggestion.value &&
+      !recommendationStore.todayRecommendation?.userAccepted &&
+      !planChanged.value
     )
   })
 
-  function getChartPreference(workout: any): 'power' | 'hr' | 'pace' {
-    const primaryMetric = String(
-      workout?.lastGenerationSettingsSnapshot?.targetPolicy?.primaryMetric ||
-        workout?.createdFromSettingsSnapshot?.targetPolicy?.primaryMetric ||
-        ''
-    ).toLowerCase()
-
-    if (primaryMetric === 'heartrate') return 'hr'
-    if (primaryMetric === 'pace') return 'pace'
-    if (primaryMetric === 'power') return 'power'
-
-    const flattenedSteps = flattenWorkoutSteps(workout?.structuredWorkout?.steps || [])
-    const primaryTargets = flattenedSteps
-      .map((step: any) => String(step?.primaryTarget || '').toLowerCase())
-      .filter(Boolean)
-
-    if (primaryTargets.length > 0) {
-      const counts = primaryTargets.reduce((acc: Record<string, number>, metric: string) => {
-        acc[metric] = (acc[metric] || 0) + 1
-        return acc
-      }, {})
-      if ((counts.power || 0) >= Math.max(counts.heartrate || 0, counts.pace || 0)) return 'power'
-      if ((counts.heartrate || 0) >= Math.max(counts.power || 0, counts.pace || 0)) return 'hr'
-      if ((counts.pace || 0) > 0) return 'pace'
-    }
-
-    if (flattenedSteps.some((step: any) => step?.power)) return 'power'
-    if (flattenedSteps.some((step: any) => step?.heartRate)) return 'hr'
-    if (flattenedSteps.some((step: any) => step?.pace)) return 'pace'
-
-    return 'power'
+  function getChartPreference(workout: any) {
+    return getMiniChartPreference(workout)
   }
 
   function getChartSportSettings(workout: any) {
-    const allSportSettings = userStore.profile?.profile?.sportSettings || []
-    const specific = getSportSettingsForActivity(allSportSettings, workout?.type || '')
-    const fallback = getDefaultSportSettings(allSportSettings)
-
-    return (
-      specific || {
-        ftp: userStore.currentFtp,
-        lthr: fallback?.lthr,
-        maxHr: fallback?.maxHr,
-        thresholdPace: fallback?.thresholdPace,
-        hrZones: fallback?.hrZones || [],
-        powerZones: fallback?.powerZones || [],
-        paceZones: fallback?.paceZones || [],
-        targetPolicy: fallback?.targetPolicy,
-        loadPreference: fallback?.loadPreference
-      }
+    return getMiniChartSportSettings(
+      workout,
+      userStore.profile?.sportSettings,
+      userStore.currentFtp
     )
-  }
-
-  function flattenWorkoutSteps(steps: any[]): any[] {
-    if (!Array.isArray(steps)) return []
-
-    const flattened: any[] = []
-    for (const step of steps) {
-      const children = Array.isArray(step?.steps) ? step.steps : []
-      if (children.length > 0) {
-        const repsRaw = Number(step?.reps ?? step?.repeat ?? step?.intervals)
-        const reps = repsRaw > 1 ? repsRaw : 1
-        for (let i = 0; i < reps; i++) {
-          flattened.push(...flattenWorkoutSteps(children))
-        }
-      } else {
-        flattened.push(step)
-      }
-    }
-
-    return flattened
   }
 
   function openCreateAdHoc() {
@@ -426,7 +434,7 @@
   }
 
   async function handleAccept() {
-    if (!recommendationStore.todayRecommendation?.id) return
+    if (!canAccept.value || !recommendationStore.todayRecommendation?.id) return
 
     accepting.value = true
     try {
@@ -486,6 +494,14 @@
   }
 
   async function handleAnalyzeClick() {
+    if (planChanged.value) {
+      await handleLockedAction({
+        operation: 'activity_recommendation',
+        featureTitle: 'Activity Recommendation',
+        onAllowed: () => checkProfileAndGenerate()
+      })
+      return
+    }
     if (recommendationStore.todayRecommendation) {
       await handleLockedAction({
         operation: 'activity_recommendation',

@@ -124,6 +124,13 @@ describe('Coach conversation journey', () => {
     expect(wrapper.get('details').attributes('open')).toBeUndefined()
   })
 
+  it('forwards a starter prompt from the welcome screen to the conversation', async () => {
+    const wrapper = await mountMessages()
+    await wrapper.get('[data-testid="chat-starter-niggle"]').trigger('click')
+    expect(wrapper.emitted('starter-prompt')?.[0]).toEqual(['welcome_starter_niggle_message'])
+    expect(wrapper.get('details').attributes('open')).toBeUndefined()
+  })
+
   it('provides a working send button for a follow-up while a reply is streaming', async () => {
     const wrapper = await mountSuspended(ChatInput, {
       props: { modelValue: 'Make it an easy ride.', status: 'streaming', hasActiveTurn: true },

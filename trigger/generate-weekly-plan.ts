@@ -39,6 +39,10 @@ import {
 } from '../server/utils/plans/block-volume'
 
 import { registerTaskHandler } from '../server/utils/task-registry'
+import { getAthletePrimarySport, getSportLabel } from '../server/utils/coaching/sport'
+import { buildCoachingPrinciples } from '../server/utils/coaching/principles'
+import { buildCoachRoleIntro } from '../server/utils/coaching/persona'
+import { fetchOpenInjuries, formatInjuriesForPrompt } from '../server/utils/coaching/injury-context'
 
 const weeklyPlanSchema = {
   type: 'object',
@@ -262,7 +266,9 @@ export async function runGenerateWeeklyPlan(payload: {
     athleteProfile,
     rawActiveGoals,
     existingPlannedWorkouts,
-    sportSettings
+    sportSettings,
+    primarySport,
+    openInjuries
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -363,7 +369,11 @@ export async function runGenerateWeeklyPlan(payload: {
     }),
 
     // Sport Specific Settings
-    sportSettingsRepository.getByUserId(userId)
+    sportSettingsRepository.getByUserId(userId),
+
+    // Coach brain: primary sport (voice + principles) and logged injuries
+    getAthletePrimarySport(userId),
+    fetchOpenInjuries(userId)
   ])
 
   if (!user) {
@@ -605,7 +615,15 @@ No active goals set. Plan for general fitness maintenance and improvement.
   }
 
   // Build prompt
-  const prompt = `You are a **${aiSettings.aiPersona}** expert endurance coach creating a personalized ${effectiveDaysToPlan}-day training plan.
+  const injuryContext = formatInjuriesForPrompt(openInjuries, {
+    today: getUserLocalDate(timezone)
+  })
+
+  const prompt = `${buildCoachRoleIntro({
+    persona: aiSettings.aiPersona,
+    sport: primarySport,
+    task: `creating a personalized ${effectiveDaysToPlan}-day training plan.`
+  })}
 Adapt your planning strategy and reasoning to match your **${aiSettings.aiPersona}** persona.
 Preferred Language: ${user?.language || 'English'} (CRITICAL: ALL summaries, reasoning, and workout descriptions MUST be written in this language)
 
@@ -657,6 +675,8 @@ ${
     .join(', ') || 'No recent workouts'
 }
 
+${injuryContext}
+
 RECENT RECOVERY (Last 7 days):
 - Average recovery score: ${avgRecovery.toFixed(0)}%
 - Latest HRV (rMSSD): ${recentWellness[0]?.hrv || 'N/A'} ms
@@ -677,7 +697,7 @@ INSTRUCTIONS:
    - "Gym" means strength training.
 5. **PROGRESSION**:
    - If User Instructions are absent/minimal, aim for progressive overload based on the current phase.
-   - Weekly TSS target: ${targetMinTSS} - ${targetMaxTSS} (unless overridden by instructions).
+   - Weekly TSS target: ${targetMinTSS} - ${targetMaxTSS} (unless overridden by instructions). Go lower for a recovery week (every 3-4 weeks), an active injury, or clear accumulated fatigue.
 6. **INTENSITY DISTRIBUTION**:
    - Keep the week polarized or pyramidal unless user constraints dictate otherwise.
    - Avoid stacking hard days back-to-back unless explicitly requested.
@@ -689,10 +709,13 @@ INSTRUCTIONS:
    - Each workout should have a clear objective (recovery, endurance, threshold, VO2, strength, race-specific).
    - Avoid generic filler workouts with no clear purpose.
 9. **CONTEXT**: Consider the "Current Planned Workouts" to understand what the user is replacing or modifying.
-10. **MULTI-SPORT THRESHOLDS**: When planning a specific sport (e.g. Run), refer to the sport-specific FTP/LTHR if provided in the context.${
+10. **MULTI-SPORT THRESHOLDS**: When planning a specific sport (e.g. Run), refer to the sport-specific FTP/LTHR if provided in the context.
+11. **SPORT**: The athlete's primary sport is ${getSportLabel(primarySport)}. Build the week around it unless the user instructions, goals or locked workouts say otherwise; use other sports deliberately (cross-training, strength), not by default.
+12. **INJURIES**: Respect the "ACTIVE INJURIES & NIGGLES" above. For an ACTIVE injury with pain >= 4/10, do not schedule sessions that load the affected area in the affected sport: use cross-training that doesn't load it, reduce volume/intensity, or rest, and say so in reasoningText. RECOVERING injuries: progress the affected sport gradually (e.g. short easy sessions, no big jumps). Mention the injury in weekSummary when it shapes the week.
+13. **STRENGTH**: Include ~2 short strength sessions ("Gym", 20-40 min) per week when availability allows, unless an injury, the athlete's existing routine or the user instructions say otherwise.${
     activeGoals.some((g) => g.eventType === 'Social Ride') ||
     existingPlannedWorkouts.some((w) => w.title?.toLowerCase().includes('social ride'))
-      ? '\n11. **Social Ride**: Prioritize "Mental Freshness" and "Aerobic Base" over "Intensity". These should be low-intensity, community-focused rides.'
+      ? '\n14. **Social Ride**: Prioritize "Mental Freshness" and "Aerobic Base" over "Intensity". These should be low-intensity, community-focused rides.'
       : ''
   }${
     activeGoals.some((g) => g.eventType === 'Cyclotour') ||
@@ -700,29 +723,32 @@ INSTRUCTIONS:
       (w) =>
         w.title?.toLowerCase().includes('cyclotour') || w.title?.toLowerCase().includes('toertocht')
     )
-      ? '\n12. **Cyclotour (Toertocht)**: Treat these as "Priority B or C" events. They require a mini-taper (2-3 days of reduced volume/intensity leading up to the event) and a focused fueling plan due to their long duration, even if they aren\'t competitive races.'
+      ? '\n15. **Cyclotour (Toertocht)**: Treat these as "Priority B or C" events. They require a mini-taper (2-3 days of reduced volume/intensity leading up to the event) and a focused fueling plan due to their long duration, even if they aren\'t competitive races.'
       : ''
   }${
     activeGoals.some((g) => g.eventType === 'Criterium') ||
     existingPlannedWorkouts.some((w) => w.title?.toLowerCase().includes('criterium'))
-      ? '\n13. **Criterium**: Prioritize anaerobic capacity, high-intensity intervals (VO2 Max), and repeated sprint efforts. Focus on repeatability.'
+      ? '\n16. **Criterium**: Prioritize anaerobic capacity, high-intensity intervals (VO2 Max), and repeated sprint efforts. Focus on repeatability.'
       : ''
   }${
     activeGoals.some((g) => g.eventType === 'Time Trial') ||
     existingPlannedWorkouts.some((w) => w.title?.toLowerCase().includes('time trial'))
-      ? '\n14. **Time Trial**: Focus on sustained threshold power (FTP), steady-state intervals, and pacing discipline.'
+      ? '\n17. **Time Trial**: Focus on sustained threshold power (FTP), steady-state intervals, and pacing discipline.'
       : ''
   }${
     activeGoals.some((g) => g.eventType === 'Road Race') ||
     existingPlannedWorkouts.some((w) => w.title?.toLowerCase().includes('road race'))
-      ? '\n15. **Road Race**: Emphasize aerobic volume, sweet spot endurance, and the ability to handle repeatable surges.'
+      ? '\n18. **Road Race**: Emphasize aerobic volume, sweet spot endurance, and the ability to handle repeatable surges.'
       : ''
   }${
     activeGoals.some((g) => g.eventType === 'Gran Fondo') ||
     existingPlannedWorkouts.some((w) => w.title?.toLowerCase().includes('gran fondo'))
-      ? '\n16. **Gran Fondo**: Prioritize muscular endurance (low cadence work), long climbs, and overall aerobic durability.'
+      ? '\n19. **Gran Fondo**: Prioritize muscular endurance (low cadence work), long climbs, and overall aerobic durability.'
       : ''
   }
+
+
+${buildCoachingPrinciples(primarySport)}
 
 Create a structured, progressive plan for the next ${effectiveDaysToPlan} days.
 Maintain your **${aiSettings.aiPersona}** persona throughout the plan's reasoning and descriptions.`

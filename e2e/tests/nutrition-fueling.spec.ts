@@ -457,16 +457,38 @@ test.describe('Nutrition fueling plan', () => {
     const plan = await buildPlan(authedPage, STACKED_DAY())
     expect(ofType(plan, 'INTRA_WORKOUT')).toHaveLength(0)
 
-    await authedPage.goto('/activities', { waitUntil: 'domcontentloaded' })
+    // The fuel-state dot is an opt-in calendar layer (off by default); switch it on for this
+    // athlete and put their previous calendar preferences back afterwards.
+    const athlete = await prisma.user.findUnique({
+      where: { id: athleteId },
+      select: { dashboardSettings: true }
+    })
+    const previousCalendarSettings = (athlete?.dashboardSettings as any)?.activityCalendar ?? {}
+    const enable = await authedPage.request.patch('/api/user/settings', {
+      data: {
+        dashboardSettings: {
+          activityCalendar: { ...previousCalendarSettings, showFuelState: true }
+        }
+      }
+    })
+    expect(enable.ok(), await enable.text()).toBeTruthy()
 
-    const cell = authedPage.locator(
-      `[data-testid="calendar-day-cell"][data-date="${dateKey(STACKED_DAY())}"]`
-    )
-    await expect(cell).toBeVisible({ timeout: 20000 })
+    try {
+      await authedPage.goto('/activities', { waitUntil: 'domcontentloaded' })
 
-    // The dot used to be parsed out of the intra window's description, so a gym day showed none.
-    await expect(cell).not.toHaveAttribute('data-fuel-state', '', { timeout: 20000 })
-    await expect(cell.locator('[title^="Fuel State"]')).toBeVisible()
+      const cell = authedPage.locator(
+        `[data-testid="calendar-day-cell"][data-date="${dateKey(STACKED_DAY())}"]`
+      )
+      await expect(cell).toBeVisible({ timeout: 20000 })
+
+      // The dot used to be parsed out of the intra window's description, so a gym day showed none.
+      await expect(cell).not.toHaveAttribute('data-fuel-state', '', { timeout: 20000 })
+      await expect(cell.locator('[title^="Fuel State"]')).toBeVisible()
+    } finally {
+      await authedPage.request.patch('/api/user/settings', {
+        data: { dashboardSettings: { activityCalendar: previousCalendarSettings } }
+      })
+    }
   })
 
   test('never reports absorbing more carbohydrate than was logged', async ({ authedPage }) => {

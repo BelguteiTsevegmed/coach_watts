@@ -5,6 +5,7 @@ import { getUserTimezone, getUserLocalDate } from '../../utils/date'
 import { generateStructuredAnalysis } from '../../utils/gemini'
 
 import { trainingPlanRepository } from '../../utils/repositories/trainingPlanRepository'
+import { getAthletePrimarySport, getDefaultActivityTypes } from '../../utils/coaching/sport'
 import {
   baseWeeklyVolumeMinutes,
   calculateWeekTargets,
@@ -21,7 +22,8 @@ const initializePlanSchema = z.object({
   strategy: z
     .enum(['LINEAR', 'UNDULATING', 'BLOCK', 'POLARIZED', 'REVERSE', 'MAINTENANCE'])
     .default('LINEAR'),
-  preferredActivityTypes: z.array(z.string()).default(['Ride']),
+  // When omitted, defaults to the athlete's own sport (was always ['Ride']).
+  preferredActivityTypes: z.array(z.string()).optional(),
   customInstructions: z.string().optional(),
   recoveryRhythm: z.number().int().min(2).max(5).default(4), // 4 = 3:1 ratio, 3 = 2:1 ratio
   startingPhase: z.enum(['BASE', 'BUILD', 'PEAK']).default('BASE')
@@ -44,12 +46,14 @@ export default defineEventHandler(async (event) => {
     volumePreference,
     volumeHours,
     strategy,
-    preferredActivityTypes,
     customInstructions,
     recoveryRhythm,
     startingPhase
   } = validation.data
   const userId = authUser.id
+  const preferredActivityTypes = validation.data.preferredActivityTypes?.length
+    ? validation.data.preferredActivityTypes
+    : getDefaultActivityTypes(await getAthletePrimarySport(userId))
 
   // 1. Fetch Goal to get target date
   const goal = await prisma.goal.findUnique({

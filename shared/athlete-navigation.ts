@@ -17,7 +17,7 @@ export function getAthleteArea(path: string): AthleteArea | null {
   const pathname = path.split(/[?#]/)[0] || '/'
   const isWithin = (root: string) => pathname === root || pathname.startsWith(`${root}/`)
 
-  if (['/dashboard', '/nutrition', '/recommendations'].some(isWithin)) return 'today'
+  if (['/dashboard', '/nutrition', '/recommendations', '/injuries'].some(isWithin)) return 'today'
   if (['/performance', '/fitness', '/reports', '/analytics'].some(isWithin)) return 'progress'
   if (
     ['/activities', '/plan', '/plans', '/workouts', '/library', '/events', '/profile/goals'].some(

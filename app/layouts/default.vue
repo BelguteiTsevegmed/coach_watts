@@ -60,7 +60,7 @@
   // CW-103: role-aware Coaching nav — pure athletes (connected to a coach but
   // never coaching anyone themselves) see a simplified "My Coaches" entry
   // instead of the full coach roster/teams suite.
-  const { showFullCoachingSuite } = useCoachingRole()
+  const { isCoachForAnyone: showFullCoachingSuite } = useCoachingRole()
 
   function wrapNavItems(items: NavigationMenuItem[]): NavigationMenuItem[] {
     return items.map((item) => {
@@ -236,6 +236,22 @@
         label: navLabel('navigation_fitness', 'Fitness'),
         icon: 'i-lucide-heart-pulse',
         to: '/fitness',
+        onSelect: () => {
+          open.value = false
+        }
+      },
+      {
+        label: navLabel('navigation_injuries', 'Injuries & pain'),
+        icon: 'i-lucide-bandage',
+        to: '/injuries',
+        onSelect: () => {
+          open.value = false
+        }
+      },
+      {
+        label: navLabel('navigation_personal_bests', 'Personal bests'),
+        icon: 'i-lucide-medal',
+        to: '/performance/bests',
         onSelect: () => {
           open.value = false
         }

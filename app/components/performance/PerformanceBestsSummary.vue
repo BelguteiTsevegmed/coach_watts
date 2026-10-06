@@ -1,174 +1,143 @@
 <template>
-  <div
-    v-if="summaryItems.length > 0"
-    class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start"
-  >
-    <UCard
-      v-for="cat in summaryItems"
-      :key="cat.id"
-      class="floating-card-base grain-overlay rounded-[24px] cursor-pointer group relative min-h-[132px] !bg-white dark:!bg-[#111111] !border-gray-200 dark:!border-white/5"
-      :ui="{
-        root: 'overflow-visible',
-        body: 'p-4 flex flex-col gap-2'
-      }"
-      @click="
-        () => {
-          void navigateTo('/performance/bests')
-        }
-      "
-    >
-      <div
-        class="absolute top-4 right-4 flex flex-col items-end gap-1 opacity-0 translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300"
-      >
-        <span class="text-[10px] font-black text-primary-500 uppercase tracking-widest text-right"
-          >Hall of Fame</span
-        >
-        <div
-          class="w-7 h-7 rounded-full bg-primary-500 flex items-center justify-center text-white shadow-lg shadow-primary-500/20"
-        >
-          <UIcon name="i-heroicons-arrow-right" class="w-3.5 h-3.5" />
+  <UCard :ui="mobileListCardUi">
+    <template #header>
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="text-base font-semibold text-highlighted">{{ t('bests_card_title') }}</h2>
+          <p class="mt-1 text-sm text-muted">{{ t('bests_card_subtitle') }}</p>
         </div>
+        <UButton
+          to="/performance/bests"
+          color="neutral"
+          variant="link"
+          size="sm"
+          trailing-icon="i-heroicons-arrow-right"
+          class="shrink-0 px-0"
+        >
+          {{ t('bests_view_all') }}
+        </UButton>
       </div>
+    </template>
 
-      <div v-if="cat.pb" class="space-y-1">
-        <div class="flex items-center gap-2">
-          <div
-            class="text-[10px] font-black text-gray-500 dark:text-gray-600 uppercase tracking-[0.28em]"
-          >
-            {{ formatType(cat.pb.type) }}
+    <ul v-if="items.length > 0" class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <li
+        v-for="item in items"
+        :key="item.id"
+        class="flex items-baseline justify-between gap-3 rounded-lg border border-default px-3 py-2.5"
+      >
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 text-sm font-medium text-highlighted">
+            <UIcon :name="item.icon" class="size-4 shrink-0 text-muted" />
+            <span class="truncate">{{ item.label }}</span>
+            <UBadge v-if="item.isRecent" color="primary" variant="soft" size="xs">
+              {{ t('bests_new_badge') }}
+            </UBadge>
           </div>
-          <div
-            v-if="isRecent(cat.pb.date)"
-            class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_15px_rgba(251,191,36,0.8)]"
-          />
+          <div class="mt-0.5 text-xs text-muted" :title="formatDate(item.date)">
+            {{ formatRelativeTime(item.date) }}
+          </div>
         </div>
-        <div class="flex items-baseline gap-2 min-w-0 pr-14">
-          <span
-            class="text-4xl font-black text-gray-900 dark:text-white tabular-nums italic tracking-tighter leading-none"
-          >
-            {{ formatValue(cat.pb) }}
-          </span>
-          <span
-            v-if="cat.pb.unit !== 's'"
-            class="text-sm font-black text-gray-500 dark:text-gray-600 uppercase italic"
-            >{{ cat.pb.unit }}</span
-          >
-          <span
-            v-else
-            class="text-[10px] font-black text-gray-500 dark:text-gray-600 uppercase tracking-widest italic"
-            >pace</span
-          >
+        <div class="shrink-0 text-right">
+          <span class="text-lg font-semibold tabular-nums text-highlighted">{{ item.value }}</span>
+          <span v-if="item.unit" class="ml-1 text-xs text-muted">{{ item.unit }}</span>
         </div>
-      </div>
-    </UCard>
+      </li>
+    </ul>
 
-    <!-- Link Card to Full Trophy Case -->
-    <UCard
-      class="floating-card-base grain-overlay rounded-[24px] border-dashed group hover:border-primary-500/50 transition-all duration-500 cursor-pointer text-center shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] min-h-[132px] !bg-white dark:!bg-[#111111] !border-gray-200 dark:!border-white/10"
-      :ui="{ root: 'overflow-visible', body: 'p-4 h-full flex items-center gap-3' }"
-      @click="
-        () => {
-          void navigateTo('/performance/bests')
-        }
-      "
-    >
-      <div
-        class="w-10 h-10 rounded-[14px] bg-gray-100 dark:bg-gray-950 border border-gray-200 dark:border-white/10 flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:border-primary-500/30 transition-all duration-500"
-      >
-        <UIcon
-          name="i-heroicons-trophy"
-          class="w-5 h-5 text-gray-500 dark:text-gray-600 group-hover:text-primary-500 transition-colors"
-        />
-      </div>
-      <div class="min-w-0 text-left">
-        <div
-          class="text-[10px] font-black text-gray-500 dark:text-gray-600 uppercase tracking-[0.28em]"
-        >
-          Explore
-        </div>
-        <span
-          class="block text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.2em]"
-          >Full Trophy Case</span
-        >
-      </div>
-      <UIcon
-        name="i-heroicons-arrow-right"
-        class="w-4 h-4 text-primary-500 ml-auto shrink-0 group-hover:translate-x-0.5 transition-transform duration-300"
-      />
-    </UCard>
-  </div>
+    <div v-else class="flex items-start gap-3 py-2">
+      <UIcon name="i-heroicons-trophy" class="mt-0.5 size-5 shrink-0 text-dimmed" />
+      <p class="text-sm text-muted">{{ t('bests_empty') }}</p>
+    </div>
+  </UCard>
 </template>
 
 <script setup lang="ts">
+  import { useTranslate } from '@tolgee/vue'
+  import { mobileListCardUi } from '~/utils/mobile-surface-ui'
+
+  interface PersonalBest {
+    id?: string
+    type: string
+    category: string
+    value: number
+    unit: string
+    date: string
+  }
+
   const props = defineProps<{
-    personalBests: any[]
+    personalBests: PersonalBest[]
+    /** Power bests are only shown to athletes who train with power. */
+    showPower: boolean
   }>()
 
-  const categories = [
-    {
-      id: 'RUN',
-      label: 'Running'
-    },
-    {
-      id: 'CYCLE',
-      label: 'Cycling'
-    },
-    {
-      id: 'SWIM',
-      label: 'Swimming'
-    }
-  ]
+  const { t } = useTranslate('performance')
+  const { formatDate, formatRelativeTime } = useFormat()
 
-  const summaryItems = computed(() => {
-    if (!props.personalBests?.length) return []
+  const RUN_ORDER = ['RUN_5K', 'RUN_10K', 'RUN_HM', 'RUN_MARATHON', 'RUN_1MI', 'RUN_1K', 'RUN_400M']
+  const POWER_ORDER = ['POWER_20M', 'POWER_5M', 'POWER_1M', 'POWER_60M', 'POWER_5S']
 
-    return categories
-      .map((cat) => {
-        const pbs = props.personalBests.filter((pb) => pb.category === cat.id)
-        if (!pbs.length) return null
-
-        let bestPb = null
-        if (cat.id === 'RUN') {
-          bestPb =
-            pbs.find((p) => p.type === 'RUN_5K') || pbs.find((p) => p.type === 'RUN_1K') || pbs[0]
-        } else if (cat.id === 'CYCLE') {
-          bestPb =
-            pbs.find((p) => p.type === 'POWER_20M') ||
-            pbs.find((p) => p.type === 'POWER_60M') ||
-            pbs[0]
-        } else {
-          bestPb = pbs[0]
-        }
-
-        return {
-          ...cat,
-          pb: bestPb
-        }
+  function pick(pbs: PersonalBest[], order: string[], limit: number) {
+    return [...pbs]
+      .sort((a, b) => {
+        const ai = order.indexOf(a.type)
+        const bi = order.indexOf(b.type)
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
       })
-      .filter(Boolean) as any[]
+      .slice(0, limit)
+  }
+
+  const items = computed(() => {
+    const all = props.personalBests || []
+    const runTimes = all.filter((pb) => pb.category === 'RUN' && pb.unit === 's')
+    const power = props.showPower ? all.filter((pb) => pb.unit === 'W') : []
+    const swims = all.filter((pb) => pb.category === 'SWIM')
+
+    return [
+      ...pick(runTimes, RUN_ORDER, 3).map((pb) => ({ pb, icon: 'i-tabler-run' })),
+      ...pick(power, POWER_ORDER, 2).map((pb) => ({ pb, icon: 'i-heroicons-bolt' })),
+      ...pick(swims, [], 1).map((pb) => ({ pb, icon: 'i-tabler-swimming' }))
+    ].map(({ pb, icon }) => ({
+      id: pb.id || pb.type,
+      icon,
+      label: labelFor(pb),
+      value: pb.unit === 's' ? formatTime(pb.value) : `${Math.round(pb.value)}`,
+      unit: pb.unit === 's' ? '' : pb.unit,
+      date: pb.date,
+      isRecent: isRecent(pb.date)
+    }))
   })
 
-  function isRecent(date: string | Date) {
-    const d = new Date(date)
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    return d > thirtyDaysAgo
-  }
-
-  function formatValue(pb: any) {
-    if (pb.unit === 's') {
-      const mins = Math.floor(pb.value / 60)
-      const secs = Math.floor(pb.value % 60)
-      return `${mins}:${secs.toString().padStart(2, '0')}`
+  function labelFor(pb: PersonalBest) {
+    const runLabels: Record<string, string> = {
+      RUN_400M: t.value('bests_run_400m'),
+      RUN_1K: t.value('bests_run_1k'),
+      RUN_1MI: t.value('bests_run_1mi'),
+      RUN_5K: t.value('bests_run_5k'),
+      RUN_10K: t.value('bests_run_10k'),
+      RUN_HM: t.value('bests_run_hm'),
+      RUN_MARATHON: t.value('bests_run_marathon')
     }
-    return `${Math.round(pb.value)}`
+    if (runLabels[pb.type]) return runLabels[pb.type]!
+    if (pb.type.startsWith('POWER_')) {
+      return t.value('bests_power_duration', { duration: pb.type.slice(6).toLowerCase() })
+    }
+    return pb.type
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/^\w/, (c) => c.toUpperCase())
   }
 
-  function formatType(type: string) {
-    return type
-      .replace(/_/g, ' ')
-      .replace('RUN ', '')
-      .replace('POWER ', 'Peak ')
-      .replace('ELEVATION GAIN', 'Max Climb')
+  function formatTime(totalSeconds: number) {
+    const seconds = Math.round(totalSeconds)
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = seconds % 60
+    const ss = s.toString().padStart(2, '0')
+    return h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${ss}` : `${m}:${ss}`
+  }
+
+  function isRecent(date: string) {
+    const time = new Date(date).getTime()
+    return Number.isFinite(time) && Date.now() - time < 30 * 24 * 60 * 60 * 1000
   }
 </script>

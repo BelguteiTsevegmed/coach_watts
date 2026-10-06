@@ -8,11 +8,11 @@ import { generateTrainingContext, formatTrainingContextForPrompt } from '../trai
 import { getInjuryLabel } from '../../utils/wellness'
 import { filterGoalsForContext } from '../goal-context'
 import { getUserAiSettings } from '../ai-user-settings'
-import {
-  formatPromptDistance,
-  formatPromptHeight,
-  formatPromptWeight
-} from '../ai-prompt-format'
+import { formatPromptDistance, formatPromptHeight, formatPromptWeight } from '../ai-prompt-format'
+import { getAthletePrimarySport, getSportLabel } from '../coaching/sport'
+import { buildCoachingPrinciples } from '../coaching/principles'
+import { fetchOpenInjuries, formatInjuriesForPrompt } from '../coaching/injury-context'
+import { buildChatCoachClosing, buildChatCoachPersona } from '../coaching/persona'
 
 type BuildAthleteContextOptions = {
   includeDomainToolInstructions?: boolean
@@ -29,77 +29,80 @@ export async function buildAthleteContext(
 }> {
   const includeDomainToolInstructions = options.includeDomainToolInstructions !== false
   // 1. Fetch User Profile, Goals and Sport Settings for Context
-  const [userProfile, activeGoals, sportSettings, aiSettings] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        name: true,
-        nickname: true,
-        ftp: true,
-        maxHr: true,
-        weight: true,
-        dob: true,
-        restingHr: true,
-        sex: true,
-        city: true,
-        state: true,
-        country: true,
-        timezone: true,
-        language: true,
-        weightUnits: true,
-        height: true,
-        heightUnits: true,
-        distanceUnits: true,
-        temperatureUnits: true,
-        form: true,
-        visibility: true,
-        aiPersona: true,
-        aiModelPreference: true,
-        aiAutoAnalyzeWorkouts: true,
-        aiAutoAnalyzeNutrition: true,
-        aiContext: true,
-        nutritionTrackingEnabled: true,
-        currentFitnessScore: true,
-        recoveryCapacityScore: true,
-        nutritionComplianceScore: true,
-        trainingConsistencyScore: true,
-        currentFitnessExplanation: true,
-        recoveryCapacityExplanation: true,
-        nutritionComplianceExplanation: true,
-        trainingConsistencyExplanation: true,
-        currentFitnessExplanationJson: true,
-        recoveryCapacityExplanationJson: true,
-        nutritionComplianceExplanationJson: true,
-        trainingConsistencyExplanationJson: true,
-        profileLastUpdated: true
-      }
-    }),
-    prisma.goal.findMany({
-      where: {
-        userId,
-        status: 'ACTIVE'
-      },
-      orderBy: { priority: 'desc' },
-      select: {
-        id: true,
-        type: true,
-        title: true,
-        description: true,
-        metric: true,
-        currentValue: true,
-        targetValue: true,
-        startValue: true,
-        targetDate: true,
-        eventDate: true,
-        eventType: true,
-        priority: true,
-        aiContext: true,
-        createdAt: true
-      }
-    }),
-    sportSettingsRepository.getByUserId(userId),
-    getUserAiSettings(userId)
-  ])
+  const [userProfile, activeGoals, sportSettings, aiSettings, primarySport, openInjuries] =
+    await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          name: true,
+          nickname: true,
+          ftp: true,
+          maxHr: true,
+          weight: true,
+          dob: true,
+          restingHr: true,
+          sex: true,
+          city: true,
+          state: true,
+          country: true,
+          timezone: true,
+          language: true,
+          weightUnits: true,
+          height: true,
+          heightUnits: true,
+          distanceUnits: true,
+          temperatureUnits: true,
+          form: true,
+          visibility: true,
+          aiPersona: true,
+          aiModelPreference: true,
+          aiAutoAnalyzeWorkouts: true,
+          aiAutoAnalyzeNutrition: true,
+          aiContext: true,
+          nutritionTrackingEnabled: true,
+          currentFitnessScore: true,
+          recoveryCapacityScore: true,
+          nutritionComplianceScore: true,
+          trainingConsistencyScore: true,
+          currentFitnessExplanation: true,
+          recoveryCapacityExplanation: true,
+          nutritionComplianceExplanation: true,
+          trainingConsistencyExplanation: true,
+          currentFitnessExplanationJson: true,
+          recoveryCapacityExplanationJson: true,
+          nutritionComplianceExplanationJson: true,
+          trainingConsistencyExplanationJson: true,
+          profileLastUpdated: true
+        }
+      }),
+      prisma.goal.findMany({
+        where: {
+          userId,
+          status: 'ACTIVE'
+        },
+        orderBy: { priority: 'desc' },
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          description: true,
+          metric: true,
+          currentValue: true,
+          targetValue: true,
+          startValue: true,
+          targetDate: true,
+          eventDate: true,
+          eventType: true,
+          priority: true,
+          aiContext: true,
+          createdAt: true
+        }
+      }),
+      sportSettingsRepository.getByUserId(userId),
+      getUserAiSettings(userId),
+      getAthletePrimarySport(userId),
+      fetchOpenInjuries(userId)
+    ])
 
   // Fetch Intervals Integration settings for scale preferences
   const intervalsIntegration = await prisma.integration.findUnique({
@@ -352,6 +355,7 @@ export async function buildAthleteContext(
     if (settings.length > 0) {
       athleteContext += `- **Preferences**: ${settings.join(' | ')}\n`
     }
+    athleteContext += `- **Primary Sport** (from recent training): ${getSportLabel(primarySport)}\n`
 
     if (hrv4tBaseline) {
       athleteContext += `- **HRV4Training Baseline (Last 30 days)**: Min=${hrv4tBaseline.min}, Max=${hrv4tBaseline.max} (based on ${hrv4tBaseline.count} entries). *Note: Readiness scores below are normalized to 1-100% based on this individual range.*\n`
@@ -475,6 +479,18 @@ export async function buildAthleteContext(
   } else {
     athleteContext +=
       '\n\n## Current Goals\nNo active goals set. Consider creating goals to help focus training efforts.\n'
+  }
+
+  // Athlete-logged injuries and niggles (first-class body status)
+  athleteContext += `\n\n## Injuries & Niggles\n${formatInjuriesForPrompt(openInjuries, {
+    today: todayDate,
+    heading: 'Active injuries & niggles (logged by the athlete; IDs for update_injury)'
+  })}\n`
+  if (openInjuries.length > 0) {
+    athleteContext += openInjuries
+      .map((injury) => `- Injury ID for tools: ${injury.id} (${injury.bodyArea})`)
+      .join('\n')
+    athleteContext += '\n'
   }
 
   // Generate comprehensive training context for last 14 days
@@ -840,49 +856,18 @@ Do not publish when \`sync_conflict\` is true or \`structure_generation_in_fligh
 For date/time moves, **do not** delete + recreate unless the user explicitly asks for replacement.`
     : ''
 
-  const systemInstruction = `You are Coach Watts. Your coaching style and personality is **${persona}**.
-Address the athlete as **${preferredName}**.
-Adopt this persona fully in your interactions.
+  const coachPersonaInstruction = buildChatCoachPersona({
+    persona,
+    sport: primarySport,
+    preferredName,
+    language: userProfile?.language || 'English',
+    telemetryInstruction
+  })
+  const coachingPrinciplesInstruction = buildCoachingPrinciples(primarySport)
 
-## Your Personality & Vibe
+  const systemInstruction = `${coachPersonaInstruction}
 
-**Who You Are:**
-- A cycling fanatic who lives for the ride—whether it's gravel, tarmac, or the pain cave.
-- You are **data-obsessed but street-smart**. You use numbers (Watts, HR, HRV) to justify the swagger.
-- You are that friend who pushes the user to dig deeper ("Shut up legs!") but is the first to high-five them at the coffee stop.
-- You possess a "tough love" encouragement style. You celebrate the suffering because you know it makes the athlete stronger.
-
-**Your Communication Style ("The Cyclist's Voice"):**
-- **Initial Language Preference:** The athlete's preferred language is **${userProfile?.language || 'English'}**. Start the conversation and provide your initial analysis in this language unless the user starts speaking a different language first.
-- **Language Matching:** ALWAYS respond in the same language the user is speaking. If they write in Hungarian, respond in Hungarian. If English, respond in English. If they switch languages, you switch too. This is NON-NEGOTIABLE.
-- **Speak the Language:** Use cycling slang naturally. Terms like "bonking," "dropping the hammer," "chamois time," "spinning out," "full gas," and "KOM hunting" are part of your vocabulary.
-- **High Energy Openers:** Start with energy. Instead of "Hello," try "Yo! Ready to crush it?" or "Legs feeling fresh?"
-- **Actionable Swagger:** When giving advice, keep it punchy.
-    - *Boring:* "Your heart rate was high."
-    - *You:* "You were revving the engine in the red zone today! 🔥"
-- **Emojis:** Use them to emphasize speed and power (⚡, 🚴, 🧱, 🤘, ☕).
-- **Direct & Witty:** If the user skips a workout, roast them gently: "Bike looking a bit lonely today, isn't it?" Then, help them get back on track.
-
-## Your Coaching Philosophy (The "Rules")
-
-1.  **Respect the Rest Day:** You can't fire a cannon from a canoe. If the user is tired (low HRV, bad sleep), force them to chill. "Park the bike, eat a pizza. That's an order."
-2.  **No Junk Miles:** Every ride has a purpose. We don't just pedal; we train.
-3.  **Suffer with a Smile:** Acknowledge when a workout is brutal. Validate the pain, then praise the effort. "That looked absolutely disgusting. Good job."
-4.  **Consistency is King:** You prefer a rider who shows up every day over a weekend warrior who burns out.
-
-## How You Interact (The Workflow)
-
-**Step 1: Check the Telemetry**
-${telemetryInstruction}
-- Look for the story in the numbers. Did they hit a new Peak Power? Did they bonk?
-
-**Step 2: The Assessment**
-- Lead with the vibe. If they crushed it, hype them up. "Absolute boss move on that climb."
-- If the data is bad, be real. "Numbers don't lie, you're running on fumes."
-
-**3. The Call to Action**
-- Never leave them hanging. Give a specific next step.
-- End with a fist bump or a challenge. "Rest up. Tomorrow we ride at dawn. 👊"
+${coachingPrinciplesInstruction}
 
 ## Tool Usage & Agency (CRITICAL)
 
@@ -970,7 +955,7 @@ Your goal is to be helpful and engaging, but also to recognize when a topic is c
 
 ---
 
-Remember: You're not just analyzing data—you're hyping up an athlete to become a stronger rider. Make every interaction count. 🚴⚡`
+${buildChatCoachClosing(primarySport)}`
 
   return {
     context: athleteContext,

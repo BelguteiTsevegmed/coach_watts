@@ -405,4 +405,60 @@ describe('POST /api/recommendations/[id]/accept', () => {
       message: 'Workout updated successfully'
     })
   })
+  it('keeps the planned sport when the modification omits new_type (no silent switch to Ride)', async () => {
+    const handler = await getHandler()
+
+    vi.mocked(prisma.activityRecommendation.findUnique).mockResolvedValue({
+      id: 'rec-2',
+      userId: 'user-1',
+      date: new Date('2026-03-12T00:00:00Z'),
+      userAccepted: false,
+      plannedWorkoutId: 'planned-2',
+      analysisJson: {
+        guardrails: {
+          targetPlannedWorkout: { id: 'planned-2', updatedAt: '2026-03-12T06:00:00.000Z' }
+        },
+        suggested_modifications: {
+          description: 'Shorter and easier.',
+          new_duration_min: 45,
+          new_tss: 37
+        }
+      },
+      plannedWorkout: {
+        id: 'planned-2',
+        title: 'Easy Run',
+        type: 'Run',
+        completed: false,
+        completionStatus: 'PENDING',
+        completedWorkouts: [],
+        updatedAt: new Date('2026-03-12T06:00:00.000Z'),
+        syncStatus: 'LOCAL_ONLY'
+      }
+    } as any)
+    vi.mocked(prisma.plannedWorkout.update).mockResolvedValue({
+      id: 'planned-2',
+      type: 'Run',
+      syncStatus: 'LOCAL_ONLY',
+      externalId: 'local-planned-2',
+      date: new Date('2026-03-12T00:00:00Z'),
+      title: 'Easy Run',
+      durationSec: 2700,
+      tss: 37,
+      managedBy: 'COACH_WATTS'
+    } as any)
+
+    const { enqueuePlannedWorkoutStructureGeneration } =
+      await import('../../../../../server/utils/planned-workout-structure-trigger')
+    vi.mocked(enqueuePlannedWorkoutStructureGeneration).mockResolvedValue({
+      status: 'queued',
+      runId: 'run-1'
+    } as any)
+
+    await handler({ context: { params: { id: 'rec-2' } } } as any)
+
+    expect(prisma.plannedWorkout.update).toHaveBeenCalledWith({
+      where: { id: 'planned-2' },
+      data: expect.objectContaining({ type: 'Run', durationSec: 2700, tss: 37 })
+    })
+  })
 })

@@ -80,11 +80,15 @@
                     icon: 'i-heroicons-map',
                     onSelect: () => navigateTo(`/workouts/${route.params.id}/map`)
                   },
-                  {
-                    label: 'Debug Intervals',
-                    icon: 'i-heroicons-cpu-chip',
-                    onSelect: () => navigateTo(`/workouts/${route.params.id}/intervals`)
-                  },
+                  ...(isAdmin
+                    ? [
+                        {
+                          label: 'Debug Intervals',
+                          icon: 'i-heroicons-cpu-chip',
+                          onSelect: () => navigateTo(`/workouts/${route.params.id}/intervals`)
+                        }
+                      ]
+                    : []),
                   {
                     label: t('controls_share'),
                     icon: 'i-heroicons-share',
@@ -367,9 +371,7 @@
           </div>
 
           <details
-            v-if="
-              workoutJourneyView === 'summary' && (workout.overallScore || workout.technicalScore)
-            "
+            v-if="workoutJourneyView === 'summary' && hasSessionScores"
             class="session-disclosure"
             :style="{ order: 20 }"
           >
@@ -1080,6 +1082,7 @@
             >
               <span>{{ t('sections_intervals') }}</span>
               <UButton
+                v-if="isAdmin"
                 icon="i-heroicons-cpu-chip"
                 size="xs"
                 variant="ghost"
@@ -1284,7 +1287,7 @@
             </div>
 
             <div
-              v-if="hasAnalysisFactsPanel"
+              v-if="isAdmin && hasAnalysisFactsPanel"
               class="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-none sm:shadow p-6 border-x-0 sm:border-x border-y border-gray-100 dark:border-gray-800"
             >
               <div class="flex flex-col gap-5">
@@ -1448,7 +1451,7 @@
                 {{ stream.label }}
               </UButton>
               <UButton
-                v-if="hasExtrasMeta"
+                v-if="isAdmin && hasExtrasMeta"
                 icon="i-heroicons-code-bracket-square"
                 color="neutral"
                 variant="soft"
@@ -1780,6 +1783,7 @@
               :llm-usage-id="workout.llmUsageId"
               :initial-feedback="workout.feedback"
               :initial-feedback-text="workout.feedbackText"
+              :hide-usage-link="!isAdmin"
             />
           </div>
         </div>
@@ -2081,6 +2085,7 @@
   import PlanAdherence from '~/components/workouts/PlanAdherence.vue'
   import StreamChartModal from '~/components/charts/streams/StreamChartModal.vue'
   import { getWorkoutSourceLabel } from '~/utils/workout-source'
+  import { ADMIN_ONLY_WORKOUT_SECTIONS, workoutHasPowerData } from '~/utils/workout-detail'
   import { metricTooltips } from '~/utils/tooltips'
   import { getAnalysisStatusColor } from '~/utils/analysis-status'
   import {
@@ -2179,6 +2184,9 @@
   const workoutAnalysisQuota = ref<any>(null)
   const comparisonStore = useWorkoutComparisonStore()
   const userStore = useUserStore()
+  const { data: authData } = useAuth()
+  // Fact payloads, raw data and debug tools are engineering views for admins.
+  const isAdmin = computed(() => Boolean((authData.value?.user as any)?.isAdmin))
   const nutritionEnabled = computed(
     () =>
       userStore.profile?.nutritionTrackingEnabled !== false &&
@@ -3612,7 +3620,9 @@
         nutritionEnabled.value && (currentWorkout?.kilojoules || currentWorkout?.plannedWorkout)
       ),
       analysis: Boolean(currentWorkout),
-      'power-curve': shouldShowDetailedPacing(currentWorkout),
+      'power-curve': Boolean(
+        shouldShowDetailedPacing(currentWorkout) && workoutHasPowerData(currentWorkout)
+      ),
       intervals: shouldShowIntervals(currentWorkout),
       advanced: shouldShowDetailedPacing(currentWorkout),
       map: shouldShowMap(currentWorkout),
@@ -3622,7 +3632,7 @@
       efficiency: hasEfficiencyMetrics(currentWorkout),
       notes: Boolean(currentWorkout),
       metrics: availableMetrics.value.length > 0,
-      streams: availableStreams.value.length > 0 || hasExtrasMeta.value,
+      streams: availableStreams.value.length > 0 || (isAdmin.value && hasExtrasMeta.value),
       duplicates: Boolean(
         currentWorkout?.isDuplicate ||
         currentWorkout?.duplicates?.length ||
@@ -3630,6 +3640,13 @@
       ),
       'raw-data': Boolean(currentWorkout?.rawJson)
     }
+  })
+
+  const hasSessionScores = computed(() => {
+    const w = workout.value
+    return Boolean(
+      w?.overallScore || w?.technicalScore || w?.effortScore || w?.pacingScore || w?.executionScore
+    )
   })
 
   const journeyTrainingImpact = computed(() => [
@@ -3674,8 +3691,14 @@
     }, {} as WorkoutSectionSettings)
   })
 
+  const visibleSectionCatalog = computed(() =>
+    workoutSectionCatalog.value.filter(
+      (section) => isAdmin.value || !ADMIN_ONLY_WORKOUT_SECTIONS.has(section.key)
+    )
+  )
+
   const workoutSectionsModalOptions = computed(() =>
-    workoutSectionCatalog.value.map((section) => ({
+    visibleSectionCatalog.value.map((section) => ({
       key: section.key,
       label: section.label,
       icon: section.icon,
@@ -3730,6 +3753,7 @@
   }
 
   function isSectionEnabled(sectionKey: WorkoutSectionKey) {
+    if (ADMIN_ONLY_WORKOUT_SECTIONS.has(sectionKey) && !isAdmin.value) return false
     return (
       (workoutSectionSettings.value[sectionKey]?.visible ?? true) &&
       workoutSectionAvailability.value[sectionKey]
@@ -4341,12 +4365,12 @@
   function hasEfficiencyMetrics(workout: any) {
     if (!workout) return false
     return (
-      workout.variabilityIndex !== null ||
-      workout.efficiencyFactor !== null ||
-      workout.decoupling !== null ||
-      workout.powerHrRatio !== null ||
-      workout.polarizationIndex !== null ||
-      workout.lrBalance !== null
+      workout.variabilityIndex != null ||
+      workout.efficiencyFactor != null ||
+      workout.decoupling != null ||
+      workout.powerHrRatio != null ||
+      workout.polarizationIndex != null ||
+      workout.lrBalance != null
     )
   }
 

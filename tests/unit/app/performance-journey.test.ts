@@ -2,7 +2,7 @@
 
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import { flushPromises } from '@vue/test-utils'
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PerformancePage from '../../../app/pages/performance/index.vue'
 
@@ -16,6 +16,8 @@ vi.mock('@tolgee/vue', () => ({
 }))
 
 const profileData = ref<any>(null)
+const recentWorkoutsData = ref<any[]>([])
+const asyncDataKeys: string[] = []
 const workoutData = ref<any>(null)
 const nutritionData = ref<any>(null)
 const workoutError = ref<Error | null>(null)
@@ -37,7 +39,11 @@ mockNuxtImport('useUserStore', () => () => ({
   }
 }))
 mockNuxtImport('useIntegrationStore', () => () => ({ integrationStatus: { integrations: [] } }))
-mockNuxtImport('useFormat', () => () => ({ formatDate: () => 'Oct 5, 2026' }))
+mockNuxtImport('useFormat', () => () => ({
+  formatDate: () => 'Oct 5, 2026',
+  getUserLocalDate: () => new Date('2026-10-05T00:00:00Z'),
+  timezone: ref('UTC')
+}))
 mockNuxtImport('useToast', () => () => ({ add: vi.fn() }))
 mockNuxtImport('useUserRuns', () => () => ({ refresh: vi.fn() }))
 mockNuxtImport('useUserRunsState', () => () => ({
@@ -50,22 +56,34 @@ mockNuxtImport(
     (...args: any[]) =>
       refreshNuxtData(...args)
 )
-mockNuxtImport('useAsyncData', () => (key: string) => {
-  const data =
-    key === 'athlete-profile'
-      ? profileData
-      : key === 'workout-trends'
-        ? workoutData
-        : key === 'nutrition-trends'
-          ? nutritionData
-          : ref([])
-  return Promise.resolve({
-    data,
-    pending: ref(false),
-    error: key === 'workout-trends' ? workoutError : ref(null),
-    refresh: key === 'workout-trends' ? refreshWorkouts : vi.fn()
-  })
-})
+mockNuxtImport(
+  'useAsyncData',
+  () => (key: string, handler: () => Promise<unknown>, options?: any) => {
+    asyncDataKeys.push(key)
+    const data =
+      key === 'athlete-profile'
+        ? profileData
+        : key === 'progress-recent-workouts'
+          ? recentWorkoutsData
+          : key === 'performance-workout-trends'
+            ? workoutData
+            : key === 'performance-nutrition-trends'
+              ? nutritionData
+              : ref(null)
+    const refresh = key === 'progress-recent-workouts' ? refreshWorkouts : vi.fn(handler)
+    if (options?.watch)
+      watch(options.watch, () => {
+        void refresh()
+      })
+    const result = {
+      data,
+      pending: ref(false),
+      error: key === 'progress-recent-workouts' ? workoutError : ref(null),
+      refresh
+    }
+    return Object.assign(Promise.resolve(result), result)
+  }
+)
 
 async function mountPage() {
   return mountSuspended(PerformancePage, {
@@ -73,6 +91,7 @@ async function mountPage() {
     global: {
       renderStubDefaultSlot: true,
       stubs: {
+        PerformanceCoachScores: false,
         UDashboardPanel: {
           template: '<div><slot name="header" /><slot name="body" /></div>'
         },
@@ -99,10 +118,17 @@ async function openTopic(wrapper: Awaited<ReturnType<typeof mountPage>>, topic: 
 describe('Progress journey', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    asyncDataKeys.length = 0
     profileData.value = {
       scores: { currentFitness: 7, trainingConsistency: 8 },
       personalBests: []
     }
+    recentWorkoutsData.value = Array.from({ length: 3 }, (_, index) => ({
+      date: `2026-10-0${index + 1}T12:00:00Z`,
+      type: 'Ride',
+      durationSec: 3600,
+      averageWatts: 150
+    }))
     workoutData.value = {
       summary: { total: 3, avgOverall: 7.5, avgTechnical: 0 },
       workouts: Array.from({ length: 30 }, (_, index) => ({
@@ -125,8 +151,11 @@ describe('Progress journey', () => {
 
   it('counts real sessions and keeps charts behind topic disclosures', async () => {
     const wrapper = await mountPage()
-    expect(wrapper.get('[data-testid="progress-overview"]').text()).toContain('"count":3')
-    expect(wrapper.get('[data-testid="progress-overview"]').text()).toContain('"score":"7.5"')
+    expect(
+      wrapper.findComponent({ name: 'PerformanceProgressHeadline' }).props('sessions').sessions
+    ).toBe(3)
+    expect(asyncDataKeys).not.toContain('performance-workout-trends')
+    expect(wrapper.findComponent({ name: 'PerformanceGoalProgress' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'PerformancePowerCurveCard' }).exists()).toBe(false)
     expect(wrapper.findComponent({ name: 'PerformanceScoreTrajectoryCard' }).exists()).toBe(false)
 
@@ -138,7 +167,8 @@ describe('Progress journey', () => {
 
   it('makes score explanations keyboard-accessible, including a valid zero score', async () => {
     const wrapper = await mountPage()
-    await openTopic(wrapper, 'training')
+    await openTopic(wrapper, 'coach-scores')
+    expect(asyncDataKeys).toContain('performance-workout-trends')
     const technical = wrapper
       .findAll('button')
       .find((button) => button.text().includes('workout_technical_title'))
@@ -157,7 +187,7 @@ describe('Progress journey', () => {
   it('preserves display settings and keeps fitness available when fueling is disabled', async () => {
     nutritionEnabled.value = false
     displaySettings.value = {
-      highlights: { visible: false },
+      volume: { visible: false },
       distribution: { visible: false },
       workoutScores: { visible: false },
       powerCurve: { visible: false }
@@ -168,11 +198,16 @@ describe('Progress journey', () => {
     await openTopic(wrapper, 'fitness')
     expect(wrapper.findComponent({ name: 'PerformancePmcCard' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'PerformancePowerCurveCard' }).exists()).toBe(false)
+    await openTopic(wrapper, 'coach-scores')
+    expect(
+      wrapper.findComponent({ name: 'PerformanceCoachScores' }).props('nutritionEnabled')
+    ).toBe(false)
     expect(wrapper.text()).not.toContain('profile_nutrition_title')
     wrapper.unmount()
   })
 
   it('shows an actionable empty state and retries a failed overview', async () => {
+    recentWorkoutsData.value = []
     workoutData.value = { summary: { total: 0 }, workouts: [] }
     const wrapper = await mountPage()
     expect(wrapper.get('[data-testid="progress-empty"]').text()).toContain('overview_empty_help')
@@ -187,13 +222,16 @@ describe('Progress journey', () => {
     wrapper.unmount()
   })
 
-  it('keeps filters, display settings and insight generation reachable from the overview', async () => {
+  it('keeps display settings reachable and loads filters and insights when requested', async () => {
     const wrapper = await mountPage()
+    await openTopic(wrapper, 'coach-scores')
     wrapper.findAllComponents({ name: 'USelect' })[0]!.vm.$emit('update:modelValue', 90)
     await nextTick()
     await flushPromises()
-    expect(refreshNuxtData).toHaveBeenCalledWith('workout-trends')
-    expect(refreshNuxtData).toHaveBeenCalledWith('nutrition-trends')
+    expect(fetchMock).toHaveBeenCalledWith('/api/scores/workout-trends', {
+      query: { days: 90, sport: 'all', tags: '' }
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/scores/nutrition-trends', { query: { days: 90 } })
 
     const settings = wrapper.findAll('button').find((button) => button.text() === 'nav_customize')!
     await settings.trigger('click')
@@ -201,7 +239,7 @@ describe('Progress journey', () => {
 
     const generate = wrapper
       .findAll('button')
-      .find((button) => button.text() === 'nav_generate_insights')!
+      .find((button) => button.text() === 'coach_scores_refresh')!
     await generate.trigger('click')
     await flushPromises()
     expect(fetchMock).toHaveBeenCalledWith('/api/scores/generate-explanations', { method: 'POST' })

@@ -2333,6 +2333,7 @@
               @remember-message="onRememberMessage"
               @forget-message="onForgetMessage"
               @retry-load="retryChatLoad"
+              @starter-prompt="(text: string) => !isCurrentRoomReadOnly && void onSubmit(text)"
             />
 
             <!-- Input -->

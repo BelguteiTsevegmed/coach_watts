@@ -187,6 +187,21 @@ afterEach(() => {
 })
 
 describe('Training week', () => {
+  it('adds a session from the weekly view and keeps calendar preferences accessible', async () => {
+    const wrapper = await mountPage(ActivitiesPage)
+    await wrapper.get('[data-testid="calendar-add-session"]').trigger('click')
+    const addSession = wrapper.findComponent({ name: 'AddSessionModal' })
+    expect(addSession.props('open')).toBe(true)
+    expect(addSession.props('initialDate')).toBe('2026-10-05')
+    expect(addSession.props('initialType')).toBe('Ride')
+    expect(wrapper.find('[data-testid="training-week"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="calendar-settings-button"]').trigger('click')
+    const settings = wrapper.findComponent({ name: 'CalendarSettingsModal' })
+    expect(settings.props('open')).toBe(true)
+    expect(settings.props('nutritionEnabled')).toBe(false)
+    wrapper.unmount()
+  })
   it('opens on seven days without rendering the month-long Sessions table', async () => {
     const wrapper = await mountPage(ActivitiesPage)
     const week = wrapper.get('[data-testid="training-week"]')

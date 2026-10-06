@@ -18,7 +18,7 @@
             />
           </div>
 
-          <section v-else class="today-page" aria-label="Today">
+          <section v-else class="today-page" aria-label="Today" data-testid="today-page">
             <header class="today-page__header">
               <div>
                 <h1 class="text-xl font-semibold">{{ t('dashboard_title') }}</h1>
@@ -82,10 +82,14 @@
               <summary>{{ t('journey_recovery_trends') }}</summary>
               <div v-if="recoveryDepthOpen" class="space-y-5 py-4 pb-7">
                 <p class="text-sm text-muted">{{ t('journey_trends_description') }}</p>
-                <DashboardAthleteProfileCard
+                <DashboardReadinessStrip
+                  :form-summary="formSummary"
+                  :loading="loadingForm"
+                  :today-key="todayKey"
                   @open-wellness="openWellnessModal"
                   @open-training-load="openTrainingLoadModal"
                 />
+                <DashboardBodyStatusCard ref="bodyStatusCard" :today-key="todayKey" />
                 <DashboardPerformanceScoresCard
                   ref="performanceScoresCard"
                   @open-score-modal="openScoreModal"
@@ -161,10 +165,10 @@
               </div>
             </details>
 
-            <details v-if="missingFields.length" class="today-page__disclosure">
+            <details v-if="relevantMissingFields.length" class="today-page__disclosure">
               <summary>{{ t('journey_profile_details') }}</summary>
               <div class="py-4 pb-7">
-                <DashboardMissingDataBanner :missing-fields="missingFields" />
+                <DashboardMissingDataBanner :missing-fields="relevantMissingFields" />
               </div>
             </details>
 
@@ -173,7 +177,11 @@
             </div>
 
             <footer class="today-page__footer">
-              <div v-if="isGarminConnected" class="flex items-center gap-2 text-xs text-muted">
+              <div
+                v-if="isGarminConnected"
+                class="flex items-center gap-2 text-xs text-muted"
+                data-testid="garmin-attribution"
+              >
                 <span>{{ t('attribution_garmin') }}</span>
                 <img
                   src="/images/logos/Garmin-Tag-black-high-res.png"
@@ -275,6 +283,7 @@
   })
 
   const recommendationStore = useRecommendationStore()
+  const activityStore = useActivityStore()
 
   const checkinStore = useCheckinStore()
   const nutritionEnabled = computed(
@@ -285,6 +294,7 @@
   const fuelingDepthOpen = ref(false)
   const recoveryDepthOpen = ref(false)
   const performanceScoresCard = ref<{ refresh: () => Promise<unknown> } | null>(null)
+  const bodyStatusCard = ref<{ refresh: () => Promise<unknown> } | null>(null)
 
   // Background Task Monitoring
   const { refresh: refreshRuns } = useUserRuns()
@@ -300,13 +310,17 @@
     await integrationStore.fetchStatus()
     await refreshOnboardingStatus()
     await Promise.all([
-      userStore.fetchProfile(),
+      userStore.fetchProfile(true),
       recommendationStore.fetchTodayRecommendation(),
+      activityStore.fetchRecentActivity(),
       fetchUpcomingWorkouts(),
       fetchTodaySessions(),
       checkinStore.fetchToday(),
       nutritionEnabled.value && fuelingDepthOpen.value ? fetchTodayNutrition() : Promise.resolve()
     ])
+    if (recoveryDepthOpen.value) {
+      await Promise.all([fetchFormSummary(), bodyStatusCard.value?.refresh()])
+    }
   }
 
   async function handleIngestAllComplete(run: {
@@ -369,6 +383,34 @@
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   )
   const todayLabel = computed(() => formatDateUTC(getUserLocalDate(), 'EEEE, d MMMM'))
+  const todayKey = computed(() => formatDateUTC(getUserLocalDate(), 'yyyy-MM-dd'))
+  const POWER_SPORTS = new Set([
+    'Ride',
+    'VirtualRide',
+    'GravelRide',
+    'MountainBikeRide',
+    'TrackRide',
+    'EBikeRide'
+  ])
+  const athleteUsesPower = computed(() => {
+    const recent: any[] = activityStore.recentActivity?.items || []
+    return (
+      recent.some(
+        (item) =>
+          item.type === 'workout' &&
+          (POWER_SPORTS.has(item.activityType) ||
+            item.details?.some((detail: any) => detail.label === 'Avg Power'))
+      ) ||
+      [...todayWorkouts.value, ...upcomingWorkouts.value].some(
+        (workout) => (workout.averageWatts ?? 0) > 0 || POWER_SPORTS.has(workout.type || '')
+      )
+    )
+  })
+  const relevantMissingFields = computed(() =>
+    missingFields.value.filter(
+      (field) => athleteUsesPower.value || field !== 'Functional Threshold Power (FTP)'
+    )
+  )
   const loadingUpcoming = ref(false)
   const isLoading = ref(true)
   const canUseDashboardActions = computed(
@@ -381,6 +423,8 @@
   const todayNutrition = ref<any>(null)
   const nutritionSettings = ref<any>(null)
   const loadingNutrition = ref(false)
+  const formSummary = ref<{ currentTSB?: number | null; currentCTL?: number | null } | null>(null)
+  const loadingForm = ref(false)
   const hasLoadedDashboardWidgets = ref(false)
 
   async function loadDashboardWidgets() {
@@ -393,6 +437,7 @@
       userStore.fetchProfile(),
       refreshOnboardingStatus(),
       recommendationStore.fetchTodayRecommendation(),
+      activityStore.fetchRecentActivity(),
       fetchUpcomingWorkouts(),
       fetchTodaySessions(),
       checkinStore.fetchToday(),
@@ -457,8 +502,21 @@
     if (fuelingDepthOpen.value) void fetchTodayNutrition()
   }
 
+  async function fetchFormSummary() {
+    loadingForm.value = true
+    try {
+      const data = await ($fetch as any)('/api/performance/pmc', { query: { days: 7 } })
+      formSummary.value = data?.summary ?? null
+    } catch {
+      formSummary.value = null
+    } finally {
+      loadingForm.value = false
+    }
+  }
+
   function handleRecoveryToggle(event: Event) {
     recoveryDepthOpen.value = (event.target as HTMLDetailsElement).open
+    if (recoveryDepthOpen.value) void fetchFormSummary()
   }
 
   function handleNutritionRefresh() {

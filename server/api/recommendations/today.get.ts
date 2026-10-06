@@ -2,6 +2,7 @@ import { requireAuth } from '../../utils/auth-guard'
 import { getUserTimezone, getUserLocalDate } from '../../utils/date'
 import { prisma } from '../../utils/db'
 import { activityRecommendationRepository } from '../../utils/repositories/activityRecommendationRepository'
+import { detectRecommendationPlanDrift } from '../../utils/recommendation-guardrails'
 
 defineRouteMeta({
   openAPI: {
@@ -25,7 +26,17 @@ defineRouteMeta({
                 status: { type: 'string' },
                 userAccepted: { type: 'boolean' },
                 analysisJson: { type: 'object' },
-                plannedWorkout: { type: 'object' }
+                plannedWorkout: { type: 'object' },
+                planChanged: {
+                  type: 'boolean',
+                  description:
+                    "True when today's planned workout changed after this recommendation was generated; the text may describe a session the athlete no longer sees and should be refreshed."
+                },
+                planChangeReason: {
+                  type: 'string',
+                  nullable: true,
+                  enum: ['workout_removed', 'workout_changed', 'workout_added']
+                }
               }
             }
           }
@@ -49,6 +60,24 @@ export default defineEventHandler(async (event) => {
 
   if (!recommendation) return null
 
+  const todayWorkouts = await prisma.plannedWorkout.findMany({
+    where: { userId, date: today },
+    select: {
+      id: true,
+      title: true,
+      type: true,
+      durationSec: true,
+      tss: true,
+      completed: true,
+      completedWorkouts: { select: { id: true } }
+    }
+  })
+  const drift = detectRecommendationPlanDrift({
+    analysisJson: recommendation.analysisJson,
+    userAccepted: recommendation.userAccepted,
+    todayWorkouts
+  })
+
   // Find associated LLM usage
   const llmUsage = await prisma.llmUsage.findFirst({
     where: {
@@ -65,6 +94,8 @@ export default defineEventHandler(async (event) => {
 
   return {
     ...recommendation,
+    planChanged: recommendation.status === 'COMPLETED' ? drift.changed : false,
+    planChangeReason: recommendation.status === 'COMPLETED' ? drift.reason : null,
     llmUsageId: llmUsage?.id,
     feedback: llmUsage?.feedback,
     feedbackText: llmUsage?.feedbackText

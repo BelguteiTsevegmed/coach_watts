@@ -21,7 +21,7 @@
 <template>
   <div
     v-if="comparisonStore.count > 0"
-    class="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-2xl border border-default/70 bg-default/95 p-2 shadow-2xl backdrop-blur"
+    class="fixed bottom-[calc(var(--app-bottom-nav-offset,0px)_+_1.25rem)] right-5 z-40 flex items-center gap-2 rounded-2xl border border-default/70 bg-default/95 p-2 shadow-2xl backdrop-blur"
   >
     <div class="hidden min-w-0 px-2 sm:block">
       <div class="text-[10px] font-black uppercase tracking-[0.2em] text-muted">

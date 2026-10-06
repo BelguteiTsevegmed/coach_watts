@@ -15,6 +15,9 @@ function makeTranslateStub() {
 }
 vi.mock('@tolgee/vue', () => ({ useTranslate: () => ({ t: makeTranslateStub() }) }))
 
+const authData = ref<any>({ user: { isAdmin: false } })
+mockNuxtImport('useAuth', () => () => ({ data: authData }))
+
 const pageRoute = reactive({ params: { id: 'session-1' }, query: {}, hash: '' })
 mockNuxtImport('useRoute', () => () => pageRoute)
 mockNuxtImport('useToast', () => () => ({ add: vi.fn() }))
@@ -106,6 +109,7 @@ describe('Completed workout journey', () => {
 
   beforeEach(() => {
     setActivePinia(createPinia())
+    authData.value = { user: { isAdmin: false } }
     pageRoute.params.id = 'session-1'
     pageRoute.hash = ''
     fetchMock.mockReset()
@@ -198,7 +202,7 @@ describe('Completed workout journey', () => {
     expect(wrapper.find('#analysis').exists()).toBe(false)
     expect(wrapper.find('#notes').exists()).toBe(false)
     expect(wrapper.find('#metrics').exists()).toBe(true)
-    expect(wrapper.find('#raw-data').exists()).toBe(true)
+    expect(wrapper.find('#raw-data').exists()).toBe(false)
     await wrapper.find('#metrics button').trigger('click')
     expect(wrapper.find('workouts-metric-detail-modal-stub').exists()).toBe(true)
     const stream = wrapper
@@ -207,6 +211,22 @@ describe('Completed workout journey', () => {
     expect(stream).toBeDefined()
     await stream!.trigger('click')
     expect(wrapper.find('stream-chart-modal-stub').attributes('streamkey')).toBe('watts')
+  })
+
+  it('shows raw data only for an admin while preserving athlete drill-downs', async () => {
+    const wrapper = await mountPage()
+    await chooseView(wrapper, 'journey_details')
+    expect(wrapper.find('#raw-data').exists()).toBe(false)
+    expect(wrapper.find('#metrics').exists()).toBe(true)
+    expect(wrapper.find('#streams').exists()).toBe(true)
+
+    authData.value = { user: { isAdmin: true } }
+    await nextTick()
+    expect(wrapper.find('#raw-data').exists()).toBe(true)
+
+    authData.value = { user: { isAdmin: false } }
+    await nextTick()
+    expect(wrapper.find('#raw-data').exists()).toBe(false)
   })
 
   it('respects existing section visibility preferences after changing views', async () => {

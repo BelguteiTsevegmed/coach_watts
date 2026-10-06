@@ -16,6 +16,8 @@ describe('Athlete journey navigation', () => {
     expect(getAthleteArea('/plans/template-1')).toBe('training')
     expect(getAthleteArea('/nutrition/2026-10-06')).toBe('today')
     expect(getAthleteArea('/reports/report-1')).toBe('progress')
+    expect(getAthleteArea('/injuries')).toBe('today')
+    expect(getAthleteArea('/performance/bests')).toBe('progress')
   })
 
   it('does not misclassify prefix collisions, account pages, or coaching roles', () => {

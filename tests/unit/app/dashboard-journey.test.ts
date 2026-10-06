@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import { reactive, ref } from 'vue'
+import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TrainingRecommendationCard from '../../../app/components/dashboard/TrainingRecommendationCard.vue'
 
@@ -8,7 +9,8 @@ const state = vi.hoisted(() => ({ recommendation: null as any, checkin: null as 
 
 vi.mock('@tolgee/vue', () => ({
   useTranslate: () => {
-    const t = (key: string) => key
+    const t = (key: string, params?: { load?: number }) =>
+      key === 'today_session_suggestion_load' ? `load ${params?.load}` : key
     ;(t as any).value = t
     return { t }
   }
@@ -23,7 +25,11 @@ mockNuxtImport('useRecommendationStore', () => () => state.recommendation)
 mockNuxtImport('useCheckinStore', () => () => state.checkin)
 mockNuxtImport('useIntegrationStore', () => () => ({ syncAllData: vi.fn() }))
 mockNuxtImport('useUserStore', () => () => ({ profile: null, generating: false }))
-mockNuxtImport('useQuotaPaywall', () => () => ({ handleLockedAction: vi.fn() }))
+mockNuxtImport('useQuotaPaywall', () => () => ({
+  handleLockedAction: vi.fn(async ({ onAllowed }: { onAllowed: () => Promise<unknown> }) =>
+    onAllowed()
+  )
+}))
 mockNuxtImport('useDataStatus', () => () => ({ checkProfileStale: () => ({ isStale: false }) }))
 mockNuxtImport('useToast', () => () => ({ add: vi.fn() }))
 mockNuxtImport('useAnalytics', () => () => ({
@@ -54,7 +60,8 @@ describe('Today next action', () => {
       loadingWorkout: false,
       generating: false,
       generatingAdHoc: false,
-      acceptRecommendation: vi.fn().mockResolvedValue(true)
+      acceptRecommendation: vi.fn().mockResolvedValue(true),
+      generateTodayRecommendation: vi.fn().mockResolvedValue(undefined)
     })
     state.checkin = reactive({
       isCompleted: false,
@@ -137,5 +144,44 @@ describe('Today next action', () => {
       .find((button) => button.text() === 'training_recommendation_accept_button')!
     await acceptance.trigger('click')
     expect(state.recommendation.acceptRecommendation).toHaveBeenCalledWith('recommendation')
+  })
+
+  it('shows the session, duration and load that accepting a proposal will apply', async () => {
+    state.recommendation.todayRecommendation = {
+      id: 'recommendation',
+      recommendation: 'modify',
+      analysisJson: {
+        suggested_modifications: {
+          description: 'Reduce the duration.',
+          new_title: 'Easy Run',
+          new_type: 'Run',
+          new_duration_min: 30,
+          new_tss: 20
+        }
+      },
+      userAccepted: false
+    }
+    const wrapper = await render()
+    expect(wrapper.get('[data-testid="today-suggested-change-summary"]').text()).toBe(
+      'Easy Run · 30 min · load 20'
+    )
+    expect(state.recommendation.acceptRecommendation).not.toHaveBeenCalled()
+  })
+
+  it('refreshes advice after the plan changes and prevents accepting the stale proposal', async () => {
+    state.recommendation.todayRecommendation = {
+      id: 'recommendation',
+      recommendation: 'modify',
+      planChanged: true,
+      analysisJson: { suggested_modifications: { description: 'Reduce the duration.' } },
+      userAccepted: false
+    }
+    const wrapper = await render()
+    expect(wrapper.text()).not.toContain('training_recommendation_accept_button')
+    expect(wrapper.text()).not.toContain('training_recommendation_accepted')
+    await wrapper.get('[data-testid="today-plan-changed"] button').trigger('click')
+    await flushPromises()
+    expect(state.recommendation.generateTodayRecommendation).toHaveBeenCalledWith(undefined)
+    expect(state.recommendation.acceptRecommendation).not.toHaveBeenCalled()
   })
 })

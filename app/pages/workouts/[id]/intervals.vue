@@ -235,6 +235,21 @@
 </template>
 
 <script setup lang="ts">
+  // Interval audit is an engineering/debug view: admins only. Athletes who
+  // follow an old link land on the workout's "Laps & intervals" section.
+  definePageMeta({
+    middleware: [
+      'auth',
+      (to) => {
+        if (useRuntimeConfig().public.authBypassEnabled) return
+        const { data } = useAuth()
+        if (!(data.value?.user as any)?.isAdmin) {
+          return navigateTo({ path: `/workouts/${to.params.id}`, hash: '#intervals' })
+        }
+      }
+    ]
+  })
+
   const route = useRoute()
   const data = ref<any>(null)
   const loading = ref(true)

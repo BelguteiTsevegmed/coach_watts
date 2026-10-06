@@ -1,117 +1,89 @@
 <template>
   <UModal
     v-model:open="isOpen"
-    title="Dashboard Layout Configuration"
-    description="Enable or disable specific sections of the performance dashboard to tailor it to your focus areas."
+    :title="t('sections_modal_title')"
+    :description="t('sections_modal_description')"
   >
-    <template #content>
-      <UCard>
-        <template #header>
-          <div class="flex items-center justify-between">
-            <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
-              Manage Performance Sections
-            </h3>
-            <UButton
-              icon="i-heroicons-x-mark"
-              color="neutral"
-              variant="ghost"
-              @click="
-                () => {
-                  isOpen = false
-                }
-              "
-            />
-          </div>
-        </template>
-
-        <div class="space-y-6">
-          <p class="text-xs text-gray-500 dark:text-gray-400">
-            Select which sections you want to display on your performance dashboard.
-          </p>
-          <div class="space-y-4">
-            <div
-              v-for="section in sectionOptions"
-              :key="section.key"
-              class="flex items-center justify-between"
-            >
-              <div class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ section.label }}
-              </div>
-              <USwitch v-model="settings[section.key].visible" />
-            </div>
-          </div>
+    <template #body>
+      <div class="space-y-4">
+        <div
+          v-for="section in sectionOptions"
+          :key="section.key"
+          class="flex items-center justify-between gap-4"
+        >
+          <label :for="`progress-section-${section.key}`" class="text-sm text-highlighted">
+            {{ section.label }}
+          </label>
+          <USwitch
+            :id="`progress-section-${section.key}`"
+            v-model="settings[section.key].visible"
+          />
         </div>
+      </div>
+    </template>
 
-        <template #footer>
-          <div class="flex justify-end gap-3">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              @click="
-                () => {
-                  void resetDefaults()
-                }
-              "
-            >
-              Reset Defaults
-            </UButton>
-            <UButton
-              color="primary"
-              @click="
-                () => {
-                  isOpen = false
-                }
-              "
-            >
-              Done
-            </UButton>
-          </div>
-        </template>
-      </UCard>
+    <template #footer>
+      <div class="flex w-full justify-end gap-3">
+        <UButton
+          color="neutral"
+          variant="ghost"
+          @click="
+            () => {
+              resetDefaults()
+            }
+          "
+        >
+          {{ t('sections_modal_reset') }}
+        </UButton>
+        <UButton
+          color="primary"
+          @click="
+            () => {
+              isOpen = false
+            }
+          "
+        >
+          {{ t('sections_modal_done') }}
+        </UButton>
+      </div>
     </template>
   </UModal>
 </template>
 
 <script setup lang="ts">
   import { useDebounceFn } from '@vueuse/core'
+  import { useTranslate } from '@tolgee/vue'
+  import {
+    POWER_SECTION_KEYS,
+    PROGRESS_SECTION_KEYS,
+    resolveSectionVisibility,
+    type ProgressSectionKey
+  } from '~/utils/progress-summary'
+
+  const props = defineProps<{
+    /** Hide power-only sections from the list for athletes without power data. */
+    showPowerSections: boolean
+    showNutrition: boolean
+  }>()
 
   const isOpen = defineModel<boolean>('open', { default: false })
   const userStore = useUserStore()
+  const { t } = useTranslate('performance')
 
-  const defaultSettings = {
-    highlights: { visible: true },
-    athleteProfile: { visible: true },
-    records: { visible: true },
-    pmc: { visible: true },
-    powerCurve: { visible: true },
-    efficiency: { visible: true },
-    ftp: { visible: true },
-    distribution: { visible: true },
-    workoutScores: { visible: true },
-    nutritionScores: { visible: true }
-  }
-
-  const settings = ref(
-    Object.keys(defaultSettings).reduce((acc, key) => {
-      acc[key] = {
-        ...defaultSettings[key as keyof typeof defaultSettings],
-        ...(userStore.user?.dashboardSettings?.performanceSections?.[key] || {})
-      }
-      return acc
-    }, {} as any)
-  )
+  const stored = () => userStore.user?.dashboardSettings?.performanceSections
+  const settings = ref(resolveSectionVisibility(stored()))
+  // Skip the save triggered by re-syncing from the store when the modal opens.
+  let syncing = false
 
   watch(
     () => isOpen.value,
     (open) => {
       if (open) {
-        settings.value = Object.keys(defaultSettings).reduce((acc, key) => {
-          acc[key] = {
-            ...defaultSettings[key as keyof typeof defaultSettings],
-            ...(userStore.user?.dashboardSettings?.performanceSections?.[key] || {})
-          }
-          return acc
-        }, {} as any)
+        syncing = true
+        settings.value = resolveSectionVisibility(stored())
+        void nextTick(() => {
+          syncing = false
+        })
       }
     }
   )
@@ -127,25 +99,34 @@
   watch(
     settings,
     () => {
-      saveSettings()
+      if (!syncing) void saveSettings()
     },
     { deep: true }
   )
 
-  const sectionOptions = [
-    { key: 'highlights', label: 'Activity Highlights' },
-    { key: 'athleteProfile', label: 'Athlete Profile' },
-    { key: 'records', label: 'Personal Bests' },
-    { key: 'pmc', label: 'Fitness & Readiness (PMC)' },
-    { key: 'powerCurve', label: 'Power Duration Curve' },
-    { key: 'efficiency', label: 'Aerobic Efficiency' },
-    { key: 'ftp', label: 'FTP Evolution' },
-    { key: 'distribution', label: 'Intensity Distribution' },
-    { key: 'workoutScores', label: 'Workout Performance' },
-    { key: 'nutritionScores', label: 'Nutrition Quality' }
-  ] as const
+  const labelKeys: Record<ProgressSectionKey, string> = {
+    goals: 'section_goals',
+    pmc: 'section_pmc',
+    volume: 'section_volume',
+    distribution: 'section_distribution',
+    records: 'section_records',
+    powerCurve: 'section_power_curve',
+    efficiency: 'section_efficiency',
+    ftp: 'section_ftp',
+    athleteProfile: 'section_athlete_profile',
+    workoutScores: 'section_workout_scores',
+    nutritionScores: 'section_nutrition_scores'
+  }
+
+  const sectionOptions = computed(() =>
+    PROGRESS_SECTION_KEYS.filter((key) => {
+      if (!props.showPowerSections && POWER_SECTION_KEYS.includes(key)) return false
+      if (!props.showNutrition && key === 'nutritionScores') return false
+      return true
+    }).map((key) => ({ key, label: t.value(labelKeys[key]) }))
+  )
 
   function resetDefaults() {
-    settings.value = JSON.parse(JSON.stringify(defaultSettings))
+    settings.value = resolveSectionVisibility(null)
   }
 </script>
