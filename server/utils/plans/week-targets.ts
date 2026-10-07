@@ -18,18 +18,20 @@ export const TSS_PER_HOUR = 50
 /**
  * Ramp-rate cap (CW-320): a brand-new plan must not prescribe a multiple of
  * what the athlete has actually been training. Week 1's loading volume is
- * capped at recent 4-week average x RAMP_BASE_MULTIPLIER (with an absolute
- * floor so low-history athletes can still start), then the allowance grows
+ * capped at recent 4-week average x RAMP_BASE_MULTIPLIER (with an explicit
+ * starter allowance only when there is no recent load), then the allowance grows
  * RAMP_GROWTH_PER_LOADING_WEEK per loading week until the athlete's chosen
  * volume is reached. The cap only ever lowers targets, never raises them.
  */
 export const RAMP_BASE_MULTIPLIER = 1.2
 export const RAMP_GROWTH_PER_LOADING_WEEK = 1.1
-export const RAMP_FLOOR_MINUTES = 240
+export const RAMP_STARTER_MINUTES = 60
 
 export function computeRampBaseMinutes(recentWeeklyAvgMinutes: number): number {
   return Math.round(
-    Math.max((recentWeeklyAvgMinutes || 0) * RAMP_BASE_MULTIPLIER, RAMP_FLOOR_MINUTES)
+    recentWeeklyAvgMinutes > 0
+      ? recentWeeklyAvgMinutes * RAMP_BASE_MULTIPLIER
+      : RAMP_STARTER_MINUTES
   )
 }
 
@@ -63,7 +65,13 @@ export function baseWeeklyVolumeMinutes(
   volumeHours?: number | null,
   volumePreference?: string | null
 ): number {
-  if (volumeHours && volumeHours > 0) return Math.round(volumeHours * 60)
+  if (
+    volumeHours !== null &&
+    volumeHours !== undefined &&
+    Number.isFinite(volumeHours) &&
+    volumeHours >= 0
+  )
+    return Math.round(volumeHours * 60)
   if (volumePreference === 'LOW') return LOW_WEEKLY_VOLUME_MINUTES
   if (volumePreference === 'HIGH') return HIGH_WEEKLY_VOLUME_MINUTES
   return DEFAULT_WEEKLY_VOLUME_MINUTES

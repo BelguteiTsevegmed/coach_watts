@@ -8,13 +8,14 @@ import {
   applyRampCap,
   DEFAULT_WEEKLY_VOLUME_MINUTES,
   RECOVERY_WEEK_FACTOR,
-  RAMP_FLOOR_MINUTES
+  RAMP_STARTER_MINUTES
 } from '../../../../../server/utils/plans/week-targets'
 
 describe('baseWeeklyVolumeMinutes', () => {
   it('prefers explicit volumeHours over the preference bucket', () => {
     expect(baseWeeklyVolumeMinutes(8, 'LOW')).toBe(480)
     expect(baseWeeklyVolumeMinutes(3.5)).toBe(210)
+    expect(baseWeeklyVolumeMinutes(0, 'HIGH')).toBe(0)
   })
 
   it('maps preference buckets and falls back to MID default', () => {
@@ -117,10 +118,14 @@ describe('calculateWeekTargets', () => {
 })
 
 describe('ramp-rate cap (CW-320)', () => {
-  it('bases the ramp on recent load with an absolute floor', () => {
+  it('does not turn a low-volume running baseline into four hours', () => {
+    expect(computeRampBaseMinutes(60)).toBe(72)
+    expect(computeRampBaseMinutes(100)).toBe(120)
+  })
+
+  it('bases the ramp on recent load with an explicit starter allowance', () => {
     expect(computeRampBaseMinutes(280)).toBe(336) // 280 * 1.2
-    expect(computeRampBaseMinutes(0)).toBe(RAMP_FLOOR_MINUTES)
-    expect(computeRampBaseMinutes(100)).toBe(RAMP_FLOOR_MINUTES)
+    expect(computeRampBaseMinutes(0)).toBe(RAMP_STARTER_MINUTES)
   })
 
   it('caps week 1 at the ramp base and grows the allowance per loading week', () => {

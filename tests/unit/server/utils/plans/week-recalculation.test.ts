@@ -175,3 +175,35 @@ describe('recalculation preservation and proposal validation', () => {
     expect(result.eligibleDays).toEqual(['2026-10-24', '2026-10-25'])
   })
 })
+
+it('subtracts completed and preserved running from the running budget during recalculation', () => {
+  const snapshot = buildRecalculationContext({
+    week: { ...week, volumeTargetMinutes: 300, sportVolumeTargets: { run: 72, ride: 228 } },
+    workouts: [{ ...workout, id: 'anchor', type: 'Run', durationSec: 30 * 60, managedBy: 'USER' }],
+    completed: [
+      {
+        date: new Date('2026-10-06Z'),
+        type: 'Run',
+        durationSec: 30 * 60,
+        tss: 0,
+        plannedWorkoutId: null
+      }
+    ],
+    availability: [],
+    timezone: 'UTC',
+    today: '2026-10-07',
+    anchorWorkoutIds: []
+  })
+  expect(snapshot.remainingSportVolumeTargets).toEqual({ run: 12, ride: 228 })
+  const value = {
+    weekSummary: 'Easy',
+    days: ['2026-10-09', '2026-10-10', '2026-10-11'].map((date, i) =>
+      ride(date, {
+        workoutType: i === 0 ? 'Run' : 'Rest',
+        durationMinutes: i === 0 ? 20 : 0,
+        targetTSS: 0
+      })
+    )
+  }
+  expect(() => validateRecalculationProposal(value, snapshot)).toThrow('sport-specific')
+})

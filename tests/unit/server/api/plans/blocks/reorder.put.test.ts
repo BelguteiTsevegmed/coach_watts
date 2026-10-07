@@ -20,6 +20,7 @@ vi.mock('../../../../../../server/utils/auth-guard', () => ({
 
 vi.mock('../../../../../../server/utils/db', () => ({
   prisma: {
+    trainingPlan: { findFirst: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(),
     $executeRawUnsafe: vi.fn()
   }

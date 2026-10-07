@@ -1,3 +1,4 @@
+import { refreshPlanWeekTargets } from '../plans/refresh-week-targets'
 import { prisma } from '../db'
 import {
   calculateWeekTargets,
@@ -176,6 +177,7 @@ export const planService = {
       // 5. Update Plan End Date
       await trainingPlanRepository.update(planId, userId, { targetDate: currentCursor })
 
+      await refreshPlanWeekTargets(tx, planId, userId)
       return { success: true }
     })
   }

@@ -27,11 +27,20 @@ vi.mock('../../../server/utils/db', () => ({
     goal: { findMany: vi.fn() },
     availabilitySchedule: { findMany: vi.fn() },
     trainingAvailability: { findMany: vi.fn(), findFirst: vi.fn() },
-    workout: { findMany: vi.fn(), findFirst: vi.fn() },
+    workout: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      groupBy: vi.fn().mockResolvedValue([{ type: 'Run', _sum: { durationSec: 3600 } }])
+    },
+    injury: { findMany: vi.fn().mockResolvedValue([]) },
     wellness: { findMany: vi.fn(), findFirst: vi.fn() },
 
     sportSettings: { findMany: vi.fn(), upsert: vi.fn() },
-    integration: { findMany: vi.fn(), findUnique: vi.fn() }
+    integration: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null)
+    }
   }
 }))
 
@@ -209,6 +218,144 @@ describe('generateWeeklyPlan task', () => {
       expect(prompt).toContain('Week Focus: Base')
       expect(prompt).toContain('at most 120 minutes and 80 TSS')
       expect(prompt).toContain('2026-03-18, 2026-03-19')
+    })
+
+    it.each(['UTC', 'America/Los_Angeles'])(
+      'enforces the saved running allowance after a preserved anchor in %s',
+      async (timezone) => {
+        vi.mocked(prisma.user.findUnique).mockResolvedValue({ ...user, timezone } as any)
+        const { generateStructuredAnalysis } = await import('../../../server/utils/gemini')
+        vi.mocked(prisma.trainingWeek.findUnique).mockResolvedValue({
+          ...trainingWeek,
+          sportVolumeTargets: { run: 72, ride: 228 }
+        } as any)
+        vi.mocked(prisma.plannedWorkout.findMany).mockResolvedValue([
+          {
+            id: 'anchor',
+            date: new Date('2026-03-16Z'),
+            type: 'Run',
+            durationSec: 1800,
+            tss: 20,
+            title: 'Preserved run'
+          }
+        ] as any)
+        vi.mocked(generateStructuredAnalysis).mockResolvedValue({
+          days: [{ ...day('2026-03-22', 120), workoutType: 'Run' }],
+          weekSummary: 'Base',
+          totalTSS: 50
+        } as any)
+        await runGenerateWeeklyPlan({
+          userId: 'user-1',
+          trainingWeekId: 'week-1',
+          daysToPlan: 7,
+          anchorWorkoutIds: ['anchor']
+        })
+        const persisted = vi.mocked(prisma.plannedWorkout.createMany).mock.calls[0]![0] as any
+        expect(persisted.data).toHaveLength(1)
+        expect(persisted.data[0]).toMatchObject({ type: 'Run', durationSec: 42 * 60 })
+      }
+    )
+
+    it('loads sport ceilings before validating an implicitly linked partial week', async () => {
+      const { generateStructuredAnalysis } = await import('../../../server/utils/gemini')
+      vi.mocked(prisma.trainingWeek.findFirst).mockResolvedValue({
+        ...trainingWeek,
+        sportVolumeTargets: { run: 72, ride: 228 }
+      } as any)
+      vi.mocked(generateStructuredAnalysis).mockResolvedValue({
+        days: [{ ...day('2026-03-18', 120), workoutType: 'Run' }],
+        weekSummary: 'Base',
+        totalTSS: 50
+      } as any)
+      await runGenerateWeeklyPlan({
+        userId: 'user-1',
+        startDate: '2026-03-16T00:00:00Z',
+        daysToPlan: 3
+      })
+      const persisted = vi.mocked(prisma.plannedWorkout.createMany).mock.calls[0]![0] as any
+      expect(persisted.data[0]).toMatchObject({ type: 'Run', durationSec: 72 * 60 })
+    })
+
+    it('deducts AI sessions that survive cleanup outside an implicit partial week', async () => {
+      const { generateStructuredAnalysis } = await import('../../../server/utils/gemini')
+      vi.mocked(prisma.trainingWeek.findFirst).mockResolvedValue({
+        ...trainingWeek,
+        sportVolumeTargets: { run: 72, ride: 228 }
+      } as any)
+      vi.mocked(prisma.plannedWorkout.findMany).mockResolvedValue([
+        {
+          id: 'replaced-monday',
+          date: new Date('2026-03-16Z'),
+          type: 'Run',
+          durationSec: 2700,
+          managedBy: 'AI',
+          completed: false
+        },
+        {
+          id: 'preserved-thursday',
+          date: new Date('2026-03-19Z'),
+          type: 'Run',
+          durationSec: 2700,
+          managedBy: 'AI',
+          completed: false
+        }
+      ] as any)
+      vi.mocked(generateStructuredAnalysis).mockResolvedValue({
+        days: [{ ...day('2026-03-18', 72), workoutType: 'Run' }],
+        weekSummary: 'Base',
+        totalTSS: 50
+      } as any)
+      await runGenerateWeeklyPlan({
+        userId: 'user-1',
+        startDate: '2026-03-16T00:00:00Z',
+        daysToPlan: 3
+      })
+      const persisted = vi.mocked(prisma.plannedWorkout.createMany).mock.calls[0]![0] as any
+      expect(persisted.data[0]).toMatchObject({ type: 'Run', durationSec: 27 * 60 })
+      // Preservation must retain cleanup's date filter so other weeks stay linked.
+      const unlinked = vi.mocked(prisma.plannedWorkout.updateMany).mock.calls[0]![0] as any
+      expect(unlinked.where).toMatchObject({
+        userId: 'user-1',
+        managedBy: 'USER',
+        completed: false,
+        OR: [{ date: { gte: new Date('2026-03-16Z'), lte: new Date('2026-03-18T23:59:59.999Z') } }]
+      })
+    })
+
+    it('subtracts unanchored user sessions and actual completed dose during regeneration', async () => {
+      const { generateStructuredAnalysis } = await import('../../../server/utils/gemini')
+      vi.mocked(prisma.trainingWeek.findUnique).mockResolvedValue({
+        ...trainingWeek,
+        sportVolumeTargets: { run: 72, ride: 228 }
+      } as any)
+      vi.mocked(prisma.plannedWorkout.findMany).mockResolvedValue([
+        {
+          id: 'user-run',
+          date: new Date('2026-03-16Z'),
+          type: 'Run',
+          durationSec: 1800,
+          managedBy: 'USER',
+          completed: true,
+          tss: 20
+        }
+      ] as any)
+      vi.mocked(prisma.workout.findMany).mockResolvedValue([
+        {
+          id: 'completed',
+          date: new Date('2026-03-16T12:00:00Z'),
+          type: 'Run',
+          durationSec: 2400,
+          plannedWorkoutId: 'user-run'
+        }
+      ] as any)
+      vi.mocked(generateStructuredAnalysis).mockResolvedValue({
+        days: [{ ...day('2026-03-18', 120), workoutType: 'Run' }],
+        weekSummary: 'Base',
+        totalTSS: 50
+      } as any)
+      await runGenerateWeeklyPlan({ userId: 'user-1', trainingWeekId: 'week-1', daysToPlan: 7 })
+      const persisted = vi.mocked(prisma.plannedWorkout.createMany).mock.calls[0]![0] as any
+      expect(persisted.data[0]).toMatchObject({ type: 'Run', durationSec: 32 * 60 })
     })
 
     it('clamps deterministically when the retry is still over budget', async () => {

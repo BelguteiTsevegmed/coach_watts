@@ -1,3 +1,5 @@
+import { classifySportFamily } from '../coaching/sport'
+import { readSportVolumeTargets } from './progression-policy'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { PlannedWorkout, TrainingAvailability, TrainingWeek, Workout } from '@prisma/client'
@@ -69,7 +71,9 @@ export function isReplaceableWorkout(
 export function buildRecalculationContext(params: {
   week: TrainingWeek
   workouts: PlannedWorkout[]
-  completed: Pick<Workout, 'date' | 'durationSec' | 'tss' | 'plannedWorkoutId'>[]
+  completed: (Pick<Workout, 'date' | 'durationSec' | 'tss' | 'plannedWorkoutId'> & {
+    type?: string | null
+  })[]
   availability: TrainingAvailability[]
   timezone: string
   today: string
@@ -105,7 +109,18 @@ export function buildRecalculationContext(params: {
     ...completed.map((w) => formatUserDate(w.date, timezone))
   ])
   const eligibleDays = calendarDays(boundary, end).filter((day) => !protectedDays.has(day))
+  const remainingSportVolumeTargets = readSportVolumeTargets(week.sportVolumeTargets)
+  if (remainingSportVolumeTargets) {
+    for (const session of [...committed, ...completed]) {
+      const sport = classifySportFamily(session.type)
+      remainingSportVolumeTargets[sport] = Math.max(
+        0,
+        (remainingSportVolumeTargets[sport] || 0) - (session.durationSec || 0) / 60
+      )
+    }
+  }
   return {
+    remainingSportVolumeTargets,
     boundary,
     end,
     eligibleDays,
@@ -145,6 +160,9 @@ export function validateRecalculationProposal(
   const covered = new Set<string>()
   let minutes = 0
   let tss = 0
+  const remainingSports = context.remainingSportVolumeTargets
+    ? { ...context.remainingSportVolumeTargets }
+    : null
   for (const day of proposal.days) {
     if (!context.eligibleDays.includes(day.date)) {
       throw new Error(`Proposal would overwrite a protected or out-of-range day: ${day.date}`)
@@ -185,6 +203,12 @@ export function validateRecalculationProposal(
       if (!slots.length && day.timeOfDay && !available[day.timeOfDay]) {
         throw new Error(`Unavailable training window on ${day.date}`)
       }
+    }
+    if (remainingSports) {
+      const sport = classifySportFamily(day.workoutType)
+      remainingSports[sport] = (remainingSports[sport] || 0) - day.durationMinutes
+      if (remainingSports[sport]! < -0.01)
+        throw new Error('Proposal exceeds remaining sport-specific weekly volume')
     }
     minutes += day.durationMinutes
     tss += day.targetTSS || 0
