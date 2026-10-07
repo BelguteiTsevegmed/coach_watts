@@ -1,3 +1,4 @@
+import type { PhysiologyResolution } from './physiology-references'
 /**
  * Pure structured-workout contract helpers shared by server, Trigger tasks, and the UI.
  * Canonical pace is metres per second. Callers must not infer an unknown unit from a
@@ -34,6 +35,8 @@ export type CanonicalStructuredWorkout = {
   source: StructureSource
   targetUnits: { pace: 'm/s'; duration: 'seconds'; distance: 'meters' }
   zoneProfileSnapshot: ZoneProfileSnapshot
+  physiology?: PhysiologyResolution
+  metricEstimates?: { stress: string; distance: string }
   steps: any[]
   exercises?: any[]
   blocks?: any[]
@@ -311,6 +314,8 @@ export function adaptStructuredWorkout(
     source: options.source || 'LEGACY_ADAPTER',
     targetUnits: { pace: 'm/s', duration: 'seconds', distance: 'meters' },
     zoneProfileSnapshot: snapshot,
+    ...(input.physiology ? { physiology: input.physiology } : {}),
+    ...(input.metricEstimates ? { metricEstimates: input.metricEstimates } : {}),
     steps: normalized.map((entry: NormalizedStepPaceResult) => entry.step),
     ...(Array.isArray(input.exercises) ? { exercises: input.exercises } : {}),
     ...(Array.isArray(input.blocks) ? { blocks: input.blocks } : {}),

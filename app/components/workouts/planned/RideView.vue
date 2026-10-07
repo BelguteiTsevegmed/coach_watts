@@ -23,7 +23,10 @@
       />
     </div>
 
+    <EffortWorkoutSteps :structure="workout.structuredWorkout" />
+
     <WorkoutChart
+      v-if="!isEffortOnlyWorkout(workout.structuredWorkout) || activeTab === 'edit'"
       v-model:steps-tab="activeTab"
       :workout="workout"
       :user-ftp="userFtp"
@@ -35,6 +38,8 @@
 </template>
 
 <script setup lang="ts">
+  import { isEffortOnlyWorkout } from '#shared/physiology-references'
+  import EffortWorkoutSteps from './EffortWorkoutSteps.vue'
   import WorkoutDetailToolsMenu from '~/components/workouts/WorkoutDetailToolsMenu.vue'
   import WorkoutChart from '~/components/workouts/WorkoutChart.vue'
 

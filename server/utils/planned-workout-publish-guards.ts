@@ -52,6 +52,8 @@ const STALENESS_LABELS: Record<string, string> = {
   profile_changed: 'sport profile',
   ftp_changed: 'FTP',
   lthr_changed: 'LTHR',
+  max_hr_changed: 'max HR',
+  reference_changed: 'reference evidence or availability',
   threshold_pace_changed: 'threshold pace',
   zones_changed: 'zone boundaries'
 }
@@ -61,7 +63,7 @@ export function formatSettingsStalenessPublishWarning(staleness: SettingsStalene
     .map((reason) => STALENESS_LABELS[reason] || reason)
     .join(', ')
   if (!changed) return ''
-  return ` Warning: your current ${changed} differ from when this structure was generated. Published absolute targets may not match what charts show unless you regenerate.`
+  return ` Warning: your current ${changed} differ from when this structure was generated. Regenerate to apply updated references; this workout retains its accepted targets.`
 }
 
 export function appendPublishStalenessWarning(

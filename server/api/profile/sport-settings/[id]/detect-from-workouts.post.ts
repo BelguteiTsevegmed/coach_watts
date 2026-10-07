@@ -1,5 +1,10 @@
+import {
+  corroborateThresholdEffortWithHr,
+  corroborateThresholdEffortWithWorkRate
+} from '../../../../utils/services/thresholdDetectionService'
 import { requireAuth } from '../../../../utils/auth-guard'
 import { attachStreamsToWorkouts } from '../../../../utils/repositories/workoutStreamRepository'
+import { resolvePhysiologyReferences } from '../../../../../shared/physiology-references'
 
 const LOOKBACK_DAYS_DEFAULT = 56
 const LOOKBACK_DAYS_MAX = 180
@@ -137,6 +142,7 @@ export default defineEventHandler(async (event) => {
       id: true,
       name: true,
       types: true,
+      isDefault: true,
       ftp: true,
       lthr: true,
       maxHr: true,
@@ -190,6 +196,10 @@ export default defineEventHandler(async (event) => {
 
   for (const workout of workouts) {
     if (!workout.streams) continue
+    const refs = resolvePhysiologyReferences({
+      workoutType: workout.type,
+      sportSettings: sportSetting
+    }).refs
 
     const powerSeries = alignSeries(workout.streams.time, workout.streams.watts)
     if (powerSeries.time.length > 0) {
@@ -199,7 +209,18 @@ export default defineEventHandler(async (event) => {
         powerSeries.values,
         FTP_TEST_DURATION_SEC
       )
-      if (peak20mPower) {
+      if (
+        peak20mPower &&
+        (refs.ftp ||
+          corroborateThresholdEffortWithHr({
+            times: workout.streams.time as number[],
+            heartrate: workout.streams.heartrate as number[],
+            startSec: peak20mPower.start,
+            endSec: peak20mPower.end,
+            lthr: refs.lthr,
+            maxHr: refs.maxHr
+          }).corroborated)
+      ) {
         ftpCandidates.push({
           estimate: Math.round(peak20mPower.average * 0.95),
           workout,
@@ -213,7 +234,19 @@ export default defineEventHandler(async (event) => {
     if (hrSeries.time.length > 0) {
       hrStreamCount++
       const peak20mHr = findPeakAverage(hrSeries.time, hrSeries.values, LTHR_TEST_DURATION_SEC)
-      if (peak20mHr) {
+      if (
+        peak20mHr &&
+        (refs.lthr ||
+          corroborateThresholdEffortWithWorkRate({
+            times: workout.streams.time as number[],
+            watts: workout.streams.watts as number[],
+            velocity: workout.streams.velocity as number[],
+            startSec: peak20mHr.start,
+            endSec: peak20mHr.end,
+            ftp: refs.ftp,
+            thresholdPaceSecPerKm: refs.thresholdPace ? 1000 / refs.thresholdPace : null
+          }).corroborated)
+      ) {
         lthrCandidates.push({
           estimate: Math.round(peak20mHr.average * 0.95),
           workout,
@@ -223,7 +256,11 @@ export default defineEventHandler(async (event) => {
       }
 
       const workoutMaxHr = Math.round(Math.max(...hrSeries.values))
-      if (Number.isFinite(workoutMaxHr) && workoutMaxHr > 0) {
+      if (
+        sportSetting.maxHr &&
+        Number.isFinite(workoutMaxHr) &&
+        workoutMaxHr > sportSetting.maxHr
+      ) {
         maxHrCandidates.push({
           estimate: workoutMaxHr,
           workout,
@@ -231,7 +268,7 @@ export default defineEventHandler(async (event) => {
           durationSec: workout.durationSec
         })
       }
-    } else if (workout.maxHr && workout.maxHr > 0) {
+    } else if (sportSetting.maxHr && workout.maxHr && workout.maxHr > sportSetting.maxHr) {
       maxHrCandidates.push({
         estimate: workout.maxHr,
         workout,
@@ -253,6 +290,18 @@ export default defineEventHandler(async (event) => {
       THRESHOLD_PACE_DURATION_SEC
     )
     if (!peak40mPace) continue
+    if (
+      !refs.thresholdPace &&
+      !corroborateThresholdEffortWithHr({
+        times: workout.streams.time as number[],
+        heartrate: workout.streams.heartrate as number[],
+        startSec: peak40mPace.start,
+        endSec: peak40mPace.end,
+        lthr: refs.lthr,
+        maxHr: refs.maxHr
+      }).corroborated
+    )
+      continue
 
     paceCandidates.push({
       estimate: Number(peak40mPace.average.toFixed(3)),
@@ -285,6 +334,7 @@ export default defineEventHandler(async (event) => {
             workoutId: bestFtp.workout.id,
             workoutTitle: bestFtp.workout.title,
             workoutDate: bestFtp.workout.date,
+            workoutType: bestFtp.workout.type,
             peakAverage: Number(bestFtp.peak.toFixed(1)),
             peakDurationSec: Math.round(bestFtp.durationSec)
           }
@@ -308,6 +358,7 @@ export default defineEventHandler(async (event) => {
             workoutId: bestLthr.workout.id,
             workoutTitle: bestLthr.workout.title,
             workoutDate: bestLthr.workout.date,
+            workoutType: bestLthr.workout.type,
             peakAverage: Number(bestLthr.peak.toFixed(1)),
             peakDurationSec: Math.round(bestLthr.durationSec)
           }
@@ -335,6 +386,7 @@ export default defineEventHandler(async (event) => {
             workoutId: bestMaxHr.workout.id,
             workoutTitle: bestMaxHr.workout.title,
             workoutDate: bestMaxHr.workout.date,
+            workoutType: bestMaxHr.workout.type,
             peakAverage: bestMaxHr.peak,
             peakDurationSec: Math.round(bestMaxHr.durationSec)
           }
@@ -377,6 +429,7 @@ export default defineEventHandler(async (event) => {
           workoutId: bestPace.workout.id,
           workoutTitle: bestPace.workout.title,
           workoutDate: bestPace.workout.date,
+          workoutType: bestPace.workout.type,
           peakAverage: Number(bestPace.peak.toFixed(3)),
           peakDurationSec: Math.round(bestPace.durationSec),
           improvedBySecPerKm
@@ -399,6 +452,11 @@ export default defineEventHandler(async (event) => {
     lookbackDays,
     workoutsAnalyzed: workouts.length,
     detectedAny,
-    detections
+    detections: Object.fromEntries(
+      Object.entries(detections).map(([metric, detection]) => [
+        metric,
+        { ...detection, referenceKind: 'estimated', evidenceQualified: Boolean(detection.detected) }
+      ])
+    )
   }
 })

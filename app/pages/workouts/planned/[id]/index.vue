@@ -1473,6 +1473,8 @@
       profile_changed: 'sport profile',
       ftp_changed: 'FTP',
       lthr_changed: 'LTHR',
+      max_hr_changed: 'max HR',
+      reference_changed: 'reference evidence or availability',
       threshold_pace_changed: 'threshold pace',
       zones_changed: 'zone boundaries'
     }
@@ -1480,7 +1482,7 @@
       .map((reason: string) => labels[reason] || reason)
       .join(', ')
     return changed
-      ? `Your current ${changed} differ from when this structure was generated. Charts still use the original snapshot; re-exporting or publishing may use different absolute targets unless you regenerate.`
+      ? `Your current ${changed} differ from when this structure was generated. This workout retains its accepted targets. Regenerate to apply updated references.`
       : ''
   })
 

@@ -36,8 +36,15 @@
       >
     </div>
 
+    <EffortWorkoutSteps :structure="workout.structuredWorkout" />
+
     <!-- Structure Chart & Editor -->
-    <div v-if="hasStructure" class="mb-6">
+    <div
+      v-if="
+        hasStructure && (!isEffortOnlyWorkout(workout.structuredWorkout) || activeTab === 'edit')
+      "
+      class="mb-6"
+    >
       <h4 class="text-sm font-semibold text-muted mb-3">Session profile</h4>
       <WorkoutRunChart
         v-model:steps-tab="activeTab"
@@ -61,6 +68,8 @@
 </template>
 
 <script setup lang="ts">
+  import { isEffortOnlyWorkout } from '#shared/physiology-references'
+  import EffortWorkoutSteps from './EffortWorkoutSteps.vue'
   import WorkoutDetailToolsMenu from '~/components/workouts/WorkoutDetailToolsMenu.vue'
   import WorkoutRunChart from '~/components/workouts/WorkoutRunChart.vue'
   import {
@@ -329,6 +338,7 @@
   })
 
   const avgIntensity = computed(() => {
+    if (isEffortOnlyWorkout(props.workout.structuredWorkout)) return 0
     const steps = props.workout.structuredWorkout?.steps
     if (!steps?.length) return 0
 

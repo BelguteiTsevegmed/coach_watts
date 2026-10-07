@@ -110,7 +110,9 @@ function toAbsolutePower(
   thresholds: GarminTargetThresholds
 ): number {
   if (!isRelativePowerUnits(units)) return Math.round(value)
-  const ftp = Number(thresholds.ftp) || 250
+  const ftp = Number(thresholds.ftp)
+  if (!(Number.isFinite(ftp) && ftp > 0))
+    throw new Error('A known FTP is required for Garmin power targets')
   return Math.round(normalizeRelativeFraction(value) * ftp)
 }
 
@@ -124,9 +126,11 @@ function toAbsoluteHeartRate(
     .trim()
     .toLowerCase()
   const basis =
-    normalized.includes('max') && thresholds.maxHr
+    normalized.includes('max') || normalized === 'hr'
       ? Number(thresholds.maxHr)
-      : Number(thresholds.lthr) || 160
+      : Number(thresholds.lthr)
+  if (!(Number.isFinite(basis) && basis > 0))
+    throw new Error('A known HR reference is required for Garmin relative heart-rate targets')
   return Math.round(normalizeRelativeFraction(value) * basis)
 }
 
@@ -289,7 +293,10 @@ function buildWorkoutStep(
     type: 'WorkoutStep',
     stepOrder,
     intensity: mapStepIntensity(step.type || ''),
-    description: step.name || undefined,
+    description:
+      [step.name, step.rpe ? `RPE ${step.rpe}/10` : null, step.description]
+        .filter(Boolean)
+        .join('. ') || undefined,
     durationType,
     ...(durationValue > 0 ? { durationValue } : {}),
     ...(durationType === 'DISTANCE' ? { durationValueType: 'METER' } : {}),
