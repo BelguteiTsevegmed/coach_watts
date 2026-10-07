@@ -131,6 +131,7 @@ type ChatSkillRouterParams = {
   roomMetadata?: Record<string, any> | null
   requireToolApproval?: boolean
   nutritionTrackingEnabled?: boolean
+  abortSignal?: AbortSignal
 }
 
 type ComposeSkillInstructionsContext = {
@@ -141,6 +142,7 @@ type ComposeSkillInstructionsContext = {
 }
 
 const ROUTER_MODEL_ID = 'gemini-3.1-flash-lite-preview'
+const ROUTER_TIMEOUT_MS = 10_000
 const ROUTER_CONFIDENCE_THRESHOLD = 0.55
 
 const skillSelectionSchema = z.object({
@@ -1258,6 +1260,7 @@ async function logRouterUsage(params: {
 export async function classifyChatSkills(
   params: ChatSkillRouterParams
 ): Promise<ChatSkillSelection> {
+  params.abortSignal?.throwIfAborted()
   const falseMissingReply = getFalseMissingReplySkillSelection(params.messages)
   if (falseMissingReply) {
     await logRouterUsage({
@@ -1338,13 +1341,21 @@ export async function classifyChatSkills(
   const google = createGoogle({
     apiKey: process.env.GEMINI_API_KEY
   })
+  const routerAbortController = new AbortController()
+  const routerTimeout = setTimeout(() => {
+    routerAbortController.abort(new Error('Chat skill routing timed out.'))
+  }, ROUTER_TIMEOUT_MS)
+  const abortSignal = params.abortSignal
+    ? AbortSignal.any([params.abortSignal, routerAbortController.signal])
+    : routerAbortController.signal
 
   try {
     const { object, usage } = await generateObject({
       model: google(ROUTER_MODEL_ID),
       schema: skillSelectionSchema,
       prompt,
-      maxRetries: 1
+      maxRetries: 1,
+      abortSignal
     })
 
     const selection = normalizeChatSkillSelection(object as ChatSkillSelection)
@@ -1363,12 +1374,22 @@ export async function classifyChatSkills(
 
     return selection
   } catch (error: any) {
+    // A router deadline may fall back; a cancelled turn must stop altogether.
+    params.abortSignal?.throwIfAborted()
+    const latestUserText = getLatestUserText(params.messages)
+    const readSkill: ChatSkillId | null = hasWorkoutDomainIntent(latestUserText)
+      ? hasPlanningDomainIntent(latestUserText)
+        ? 'planning_read'
+        : 'workout_read'
+      : null
     const selection: ChatSkillSelection = {
-      skillIds: ['general_chat'],
+      skillIds: readSkill ? [readSkill] : ['general_chat'],
       confidence: 0,
-      useTools: false,
+      useTools: !!readSkill,
       extractMemories: false,
-      reason: 'Router error fallback.',
+      reason: readSkill
+        ? 'Router error fallback with read-only workout tools.'
+        : 'Router error fallback.',
       usedFallback: true,
       source: 'fallback'
     }
@@ -1382,11 +1403,13 @@ export async function classifyChatSkills(
       promptPreview: prompt,
       responsePreview: JSON.stringify(selection),
       durationMs: Date.now() - startedAt,
-      errorType: 'ROUTER_FAILED',
+      errorType: routerAbortController.signal.aborted ? 'ROUTER_TIMEOUT' : 'ROUTER_FAILED',
       errorMessage: error?.message || 'Chat skill routing failed.'
     })
 
     return selection
+  } finally {
+    clearTimeout(routerTimeout)
   }
 }
 

@@ -956,6 +956,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
   }, CHAT_TURN_EXECUTION_TIMEOUT_LIMIT_MS)
 
   let slowResponseTimer: ReturnType<typeof setTimeout> | undefined
+  let assistantDraft: Awaited<ReturnType<typeof chatTurnService.createAssistantDraft>> | null = null
   const clearExecutionTimers = () => {
     clearInterval(heartbeatTimer)
     clearTimeout(executionTimeoutTimer)
@@ -974,16 +975,20 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         status: CHAT_TURN_STATUS.RUNNING,
         existingMessageId: turn.assistantMessageId
       })
+      assistantDraft = draft
 
+      currentPhase = 'building_context'
       const { systemInstruction: baseSystemInstruction } = await buildAthleteContext(turn.userId, {
         includeDomainToolInstructions: false
       })
       ensureTurnNotAborted()
+      currentPhase = 'loading_settings'
       const timezone = await getUserTimezone(turn.userId)
       ensureTurnNotAborted()
       const aiSettings = await getUserAiSettings(turn.userId)
       ensureTurnNotAborted()
       const roomMetadata = (turn.room.metadata as any) || {}
+      currentPhase = 'loading_memory'
       const { globalBlock: globalMemoryBlock, roomBlock: roomMemoryBlock } =
         await userMemoryService.composePromptMemoryBlock({
           userId: turn.userId,
@@ -1005,6 +1010,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
       const google = createGoogle({
         apiKey: process.env.GEMINI_API_KEY
       })
+      currentPhase = 'loading_model_settings'
       const opSettings = await getLlmOperationSettings(turn.userId, 'chat')
       ensureTurnNotAborted()
       const modelName = opSettings.modelId
@@ -1015,16 +1021,19 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         userId: turn.userId,
         actorUserId
       })
+      currentPhase = 'routing_skills'
       const routedSkillSelection = await classifyChatSkills({
         userId: turn.userId,
         turnId: turn.id,
         messages: submittedMessages,
         roomMetadata,
         requireToolApproval: !!aiSettings?.aiRequireToolApproval,
-        nutritionTrackingEnabled: aiSettings?.nutritionTrackingEnabled !== false
+        nutritionTrackingEnabled: aiSettings?.nutritionTrackingEnabled !== false,
+        abortSignal: executionAbortController.signal
       })
       const skillSelection = expandSkillSelectionForRequest(routedSkillSelection, content || '')
       ensureTurnNotAborted()
+      currentPhase = 'preparing_model_request'
       const { tools, selectedToolNames, systemInstruction } = await buildTurnExecutionSkillConfig({
         allTools,
         baseSystemInstruction: finalSystemInstruction,
@@ -2099,11 +2108,21 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         CHAT_TURN_STATUS.RECEIVED
       ]
       const reason =
-        error?.statusCode === 429
+        terminalFailureReason ||
+        (error?.statusCode === 429
           ? error?.message || 'Chat quota exceeded.'
           : error instanceof Error
             ? error.message
-            : 'Chat turn failed during execution.'
+            : 'Chat turn failed during execution.')
+      const finishedAt = new Date()
+      const executionDurationMs = Math.max(0, finishedAt.getTime() - startedAt.getTime())
+      const failureMetadata = {
+        timeoutReason: terminalTimeoutReason,
+        executionDurationMs,
+        firstOutputLatencyMs,
+        executionPhase: currentPhase,
+        finishedAt: finishedAt.toISOString()
+      }
 
       const failedUpdate = await prisma.chatTurn
         .updateMany({
@@ -2114,14 +2133,77 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
           },
           data: {
             status: CHAT_TURN_STATUS.FAILED,
-            finishedAt: new Date(),
+            finishedAt,
             failureReason: reason,
-            lastHeartbeatAt: new Date()
+            lastHeartbeatAt: finishedAt,
+            metadata: chatTurnService.mergeTurnMetadata(turn, failureMetadata)
           }
         })
         .catch(() => ({ count: 0 }))
 
       if (failedUpdate.count > 0) {
+        // Preparation errors occur before the stream's failure handler exists.
+        // Finalize the hidden draft so both realtime and a reload show a retry.
+        if (assistantDraft) {
+          const message = await chatTurnService
+            .updateAssistantDraft({
+              messageId: assistantDraft.id,
+              content: terminalTimeoutReason
+                ? "I couldn't start a response in time. Please retry your last message."
+                : "I couldn't start this response. Please retry your last message.",
+              metadata: {
+                ...((assistantDraft.metadata as any) || {}),
+                ...failureMetadata,
+                turnId: turn.id,
+                turnStatus: CHAT_TURN_STATUS.FAILED,
+                isDraft: false,
+                hideUntilContent: false,
+                hiddenBecauseEmptyFailure: false,
+                failureReason: reason
+              } as any
+            })
+            .catch(() => null)
+          if (message) {
+            await sendToUser(turn.userId, {
+              type: 'chat_message_upsert',
+              roomId: turn.roomId,
+              message: expandStoredChatMessage({
+                ...message,
+                senderId: 'ai_agent',
+                turn: {
+                  id: turn.id,
+                  status: CHAT_TURN_STATUS.FAILED,
+                  failureReason: reason,
+                  startedAt,
+                  finishedAt
+                }
+              })
+            }).catch(() => null)
+          }
+        }
+        await chatTurnService
+          .recordEvent(turn.id, CHAT_TURN_EVENT_TYPE.TURN_FAILED, {
+            reason: terminalTimeoutReason || 'failed',
+            failureReason: reason,
+            phase: currentPhase,
+            executionDurationMs,
+            firstOutputLatencyMs
+          })
+          .catch(() => null)
+        await prisma.llmUsage
+          .updateMany({
+            where: { turnId: turn.id, operation: 'chat_turn_start', errorType: 'IN_PROGRESS' },
+            data: {
+              success: false,
+              errorType: terminalTimeoutReason
+                ? String(terminalTimeoutReason).toUpperCase()
+                : 'FAILED',
+              errorMessage: reason,
+              durationMs: executionDurationMs,
+              ttft: firstOutputLatencyMs
+            }
+          })
+          .catch(() => null)
         await sendToUser(turn.userId, {
           type: 'chat_turn_status',
           roomId: turn.roomId,
