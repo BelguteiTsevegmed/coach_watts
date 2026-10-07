@@ -377,15 +377,6 @@
               </h3>
             </div>
           </template>
-
-          <UFormField name="billing">
-            <UCheckbox
-              v-model="state.billing"
-              :label="t('comm_label_billing')"
-              :description="t('comm_desc_billing')"
-              disabled
-            />
-          </UFormField>
         </UCard>
 
         <!-- Action Bar -->

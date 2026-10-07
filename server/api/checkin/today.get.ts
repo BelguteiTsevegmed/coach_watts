@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
 
   // Auto-recover stuck records (zombies)
   if (checkin && (checkin.status === 'PENDING' || checkin.status === 'PROCESSING')) {
-    const isStuck = Date.now() - checkin.updatedAt.getTime() > 60 * 1000 // 1 minute timeout
+    const isStuck = Date.now() - checkin.updatedAt.getTime() > 5 * 60 * 1000 // Match the generation task maximum duration
 
     if (isStuck) {
       const hasQuestions =

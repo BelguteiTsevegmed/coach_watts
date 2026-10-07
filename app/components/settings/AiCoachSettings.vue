@@ -46,8 +46,7 @@
             :key="model.value"
             class="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:border-primary transition-colors relative"
             :class="{
-              'border-primary bg-primary/5': localSettings.aiModelPreference === model.value,
-              'opacity-60 grayscale-[0.5]': !isModelAvailable(model)
+              'border-primary bg-primary/5': localSettings.aiModelPreference === model.value
             }"
             @click="
               () => {
@@ -58,18 +57,11 @@
             <input
               type="radio"
               :checked="localSettings.aiModelPreference === model.value"
-              :disabled="!isModelAvailable(model)"
               class="mt-1"
             />
             <div class="flex-1">
               <div class="flex items-center gap-2">
                 <div class="font-medium">{{ model.label }}</div>
-                <div v-if="shouldShowLock(model)" class="flex items-center gap-2">
-                  <UBadge color="primary" variant="subtle" size="sm">{{
-                    t('billing_tier_pro')
-                  }}</UBadge>
-                  <UIcon name="i-heroicons-lock-closed" class="w-4 h-4 text-neutral-500" />
-                </div>
               </div>
               <div class="text-sm text-muted mt-1">{{ model.description }}</div>
             </div>
@@ -170,8 +162,6 @@
   const localSettings = ref({ ...props.settings })
   const saving = ref(false)
   const isVoiceSettingsOpen = ref(false)
-  const userStore = useUserStore()
-  const upgradeModal = useUpgradeModal()
 
   const personaOptions = [
     { value: 'Analytical', label: t.value('coach_persona_analytical') },
@@ -201,30 +191,8 @@
     }
   ]
 
-  const isContributor = computed(() => userStore.user?.subscriptionStatus === 'CONTRIBUTOR')
-
-  function isModelAvailable(model: any) {
-    if (props.forceUnlocked) return true
-    if (model.minTier === 'FREE') return true
-    if (isContributor.value) return true
-    return userStore.hasMinimumTier(model.minTier as any)
-  }
-
-  function shouldShowLock(model: any) {
-    return model.minTier === 'PRO' && !isModelAvailable(model)
-  }
-
-  function handleModelClick(model: any) {
-    if (isModelAvailable(model)) {
-      selectModel(model.value)
-      return
-    }
-
-    upgradeModal.show({
-      featureTitle: `${model.label} ${t.value('coach_upgrade_analysis_suffix')}`,
-      featureDescription: t.value('coach_upgrade_analysis_desc'),
-      recommendedTier: 'pro'
-    })
+  function handleModelClick(model: { value: string }) {
+    selectModel(model.value)
   }
 
   function selectModel(value: string) {

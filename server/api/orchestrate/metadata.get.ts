@@ -147,10 +147,8 @@ export default defineEventHandler(async (event) => {
     const duplicateCount = totalWithDuplicates - totalWorkouts
 
     // Cap pending counts for FREE users
-    const workoutPending =
-      entitlements.tier === 'FREE' ? Math.min(workoutPendingCount, 10) : workoutPendingCount
-    const nutritionPending =
-      entitlements.tier === 'FREE' ? Math.min(nutritionPendingCount, 10) : nutritionPendingCount
+    const workoutPending = workoutPendingCount
+    const nutritionPending = nutritionPendingCount
 
     // Build metadata object
     const metadata: Record<string, any> = {}

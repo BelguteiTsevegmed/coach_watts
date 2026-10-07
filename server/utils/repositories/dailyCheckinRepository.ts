@@ -13,6 +13,14 @@ export const dailyCheckinRepository = {
     })
   },
 
+  async ensurePending(userId: string, date: Date) {
+    return prisma.dailyCheckin.upsert({
+      where: { userId_date: { userId, date } },
+      create: { userId, date, questions: [], status: 'PENDING' },
+      update: {}
+    })
+  },
+
   async findById(id: string) {
     return prisma.dailyCheckin.findUnique({
       where: { id }

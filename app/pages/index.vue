@@ -71,10 +71,7 @@
         </summary>
         <LandingIntegrations />
       </details>
-      <details id="pricing" :open="route.hash === '#pricing'">
-        <summary>{{ tr('journey_entry_membership', 'Plans and membership') }}</summary>
-        <LandingPricing />
-      </details>
+
       <details>
         <summary>{{ tr('journey_entry_stories', 'Stories from the community') }}</summary>
         <LandingCommunity />

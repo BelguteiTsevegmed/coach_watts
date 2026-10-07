@@ -699,45 +699,6 @@
                   </h3>
                 </div>
                 <div class="flex items-center gap-3">
-                  <div
-                    v-if="workout.aiAnalysisStatus === 'QUOTA_EXCEEDED' && !workout.aiAnalysis"
-                    class="rounded-xl border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-left max-w-md"
-                  >
-                    <p class="text-xs font-semibold text-amber-900 dark:text-amber-100">
-                      {{ t('analysis_quota_skipped_title') }}
-                    </p>
-                    <p class="text-xs text-amber-800/90 dark:text-amber-200 mt-1">
-                      {{ t('analysis_quota_skipped_desc') }}
-                    </p>
-                    <div class="flex flex-wrap gap-2 mt-3">
-                      <UButton
-                        size="xs"
-                        color="primary"
-                        variant="solid"
-                        @click="
-                          () => {
-                            void openWorkoutQuotaUpgrade()
-                          }
-                        "
-                      >
-                        {{ t('analysis_quota_skipped_upgrade') }}
-                      </UButton>
-                      <UButton
-                        v-if="canAnalyzeNowAfterQuotaReset"
-                        size="xs"
-                        color="neutral"
-                        variant="outline"
-                        :loading="analyzingWorkout"
-                        @click="
-                          () => {
-                            void analyzeWorkout()
-                          }
-                        "
-                      >
-                        {{ t('analysis_quota_skipped_retry') }}
-                      </UButton>
-                    </div>
-                  </div>
                   <UButton
                     v-if="!workout.aiAnalysis"
                     icon="i-heroicons-sparkles"
@@ -2180,8 +2141,6 @@
   const router = useRouter()
   const toast = useToast()
   const config = useRuntimeConfig()
-  const { showQuotaPaywall, getOperationQuota, isQuotaExhausted } = useQuotaPaywall()
-  const workoutAnalysisQuota = ref<any>(null)
   const comparisonStore = useWorkoutComparisonStore()
   const userStore = useUserStore()
   const { data: authData } = useAuth()
@@ -2201,36 +2160,6 @@
   const savingTags = ref(false)
   const showTagEditor = ref(false)
   const analysisFactsOpen = ref(false)
-  const quotaClock = useNow({ interval: 30_000 })
-  const canAnalyzeNowAfterQuotaReset = computed(() => {
-    if (workout.value?.aiAnalysisStatus !== 'QUOTA_EXCEEDED') return false
-    if (!workoutAnalysisQuota.value) return false
-    return !isQuotaExhausted(workoutAnalysisQuota.value, quotaClock.value)
-  })
-
-  async function refreshWorkoutAnalysisQuota() {
-    if (workout.value?.aiAnalysisStatus === 'QUOTA_EXCEEDED') {
-      workoutAnalysisQuota.value = await getOperationQuota('workout_analysis')
-    }
-  }
-
-  async function openWorkoutQuotaUpgrade() {
-    await showQuotaPaywall({
-      operation: 'workout_analysis',
-      title: 'Unlock Workout Analysis',
-      featureTitle: 'Workout Analysis',
-      reason: 'quota_skipped_workout',
-      quota: workoutAnalysisQuota.value
-    })
-  }
-
-  watch(
-    () => workout.value?.aiAnalysisStatus,
-    () => {
-      void refreshWorkoutAnalysisQuota()
-    },
-    { immediate: true }
-  )
   const analyzingWorkout = ref(false)
   const analyzingAdherence = ref(false)
   const unlinkingPlannedWorkout = ref(false)
@@ -3866,16 +3795,6 @@
       console.error('Error triggering workout analysis:', e)
       analyzingWorkout.value = false
 
-      if (e.data?.statusCode === 429 || e.status === 429) {
-        await showQuotaPaywall({
-          operation: 'workout_analysis',
-          title: 'Crush Your Training Momentum',
-          featureTitle: 'Workout Analysis',
-          reason: 'quota_exceeded'
-        })
-        return
-      }
-
       toast.add({
         title: t.value('analyzing_failed_title'),
         description: e?.data?.message || e?.message || 'Failed to start workout analysis',
@@ -3905,16 +3824,6 @@
     } catch (e: any) {
       console.error('Error triggering adherence analysis:', e)
       analyzingAdherence.value = false
-
-      if (e.data?.statusCode === 429 || e.status === 429) {
-        await showQuotaPaywall({
-          operation: 'workout_analysis',
-          title: 'Usage Quota Reached',
-          featureTitle: 'Plan Adherence Analysis',
-          reason: 'quota_exceeded'
-        })
-        return
-      }
 
       toast.add({
         title: t.value('analyzing_failed_title'),

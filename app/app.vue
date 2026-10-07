@@ -3,8 +3,6 @@
 
   const color = computed(() => (colorMode.value === 'dark' ? '#152523' : '#f6f9fa'))
 
-  const { isOpen, options } = useUpgradeModal()
-
   useHead({
     meta: [
       { charset: 'utf-8' },
@@ -36,8 +34,5 @@
     <NuxtLayout>
       <NuxtPage />
     </NuxtLayout>
-    <ClientOnly>
-      <UpgradeModal v-model:open="isOpen" v-bind="options" />
-    </ClientOnly>
   </UApp>
 </template>

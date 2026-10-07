@@ -52,23 +52,6 @@ export default defineEventHandler(async (event) => {
     throw error
   }
 
-  // Subscription Limit Check
-  if (workout.user.subscriptionTier === 'FREE') {
-    const { getUserLocalDate } = await import('../../../../utils/date')
-    const timezone = workout.user.timezone || 'UTC'
-    const today = getUserLocalDate(timezone)
-    const fourWeeksFromNow = new Date(today)
-    fourWeeksFromNow.setUTCDate(today.getUTCDate() + 28)
-
-    if (workout.date > fourWeeksFromNow) {
-      throw createError({
-        statusCode: 403,
-        message:
-          'Structured workout generation is limited to 4 weeks in advance for free users. Please upgrade to Pro to plan further ahead.'
-      })
-    }
-  }
-
   // Trigger the generation task
   try {
     const queued = await enqueuePlannedWorkoutStructureGeneration({

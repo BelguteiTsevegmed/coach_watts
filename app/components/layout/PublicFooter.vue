@@ -24,9 +24,6 @@
           class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-400"
           aria-label="Footer"
         >
-          <NuxtLink to="/#pricing" class="whitespace-nowrap transition-colors hover:text-white">{{
-            t('footer.pricing')
-          }}</NuxtLink>
           <NuxtLink to="/calendar" class="whitespace-nowrap transition-colors hover:text-white">{{
             t('footer.events')
           }}</NuxtLink>

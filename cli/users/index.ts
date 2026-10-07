@@ -6,13 +6,8 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
 import statsCommand from './stats'
 import growthCommand from './growth'
-import contributorCommand from './contributor'
-import analyzeCommand from './analyze'
 import adminsCommand from './admins'
 import locationCommand from './location'
-import trialsCommand from './trials'
-import quotaCommand from './quota'
-import resetQuotaCommand from './reset-quota'
 import cleanupOrphansCommand from './cleanup-orphans'
 import dataCommand from './data'
 
@@ -20,13 +15,8 @@ const usersCommand = new Command('users').description('User management commands'
 
 usersCommand.addCommand(statsCommand)
 usersCommand.addCommand(growthCommand)
-usersCommand.addCommand(contributorCommand)
-usersCommand.addCommand(analyzeCommand)
 usersCommand.addCommand(adminsCommand)
 usersCommand.addCommand(locationCommand)
-usersCommand.addCommand(trialsCommand)
-usersCommand.addCommand(quotaCommand)
-usersCommand.addCommand(resetQuotaCommand)
 usersCommand.addCommand(cleanupOrphansCommand)
 usersCommand.addCommand(dataCommand)
 usersCommand

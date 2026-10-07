@@ -232,8 +232,6 @@
 
   <!-- Share Coach Watts Modal -->
   <DashboardShareCoachWattsModal v-model:open="showShareCoachWattsModal" />
-
-  <DashboardTrialEndedModal />
 </template>
 
 <script setup lang="ts">
@@ -242,7 +240,6 @@
   import type { CalendarActivity } from '~/types/calendar'
   import { getCalendarActivities } from '~/utils/calendar'
   import { showDashboardProgressToast } from '~/utils/dashboard-progress-toast'
-  import DashboardTrialEndedModal from '~/components/dashboard/TrialEndedModal.vue'
 
   const { t } = useTranslate('dashboard')
   const { trackWidgetClick } = useAnalytics()

@@ -22,7 +22,7 @@ export type AppNavSectionId = 'primary' | 'coaching' | 'more' | 'account'
 export interface AppNavContext {
   /** Nutrition tracking is enabled for this athlete. */
   nutritionEnabled: boolean
-  /** Stripe is configured, so the billing settings page is meaningful. */
+  /** Legacy navigation input; billing is unavailable in this fork. */
   billingEnabled: boolean
   isAdmin: boolean
   /** Coaches at least one athlete (or has a pending request to). */
@@ -363,16 +363,6 @@ export function buildAccountMenuEntries(ctx: AppNavContext): AppNavEntry[] {
       to: '/settings/ai'
     }
   ]
-
-  if (ctx.billingEnabled) {
-    entries.push({
-      id: 'account-billing',
-      labelKey: 'navigation_settings_billing',
-      fallback: 'Billing',
-      icon: 'i-lucide-credit-card',
-      to: '/settings/billing'
-    })
-  }
 
   return entries
 }

@@ -204,7 +204,6 @@
               <strong>Cloud Infrastructure:</strong> Supabase & Vercel (Database and Hosting).
             </li>
             <li><strong>AI Processors:</strong> Google Cloud Platform (Vertex AI).</li>
-            <li><strong>Payment Processors:</strong> Stripe (for billing).</li>
             <li>
               <strong>Legal Obligations:</strong> We may disclose data if required by law, subpoena,
               or to protect the safety of any person.

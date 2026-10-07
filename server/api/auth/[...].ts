@@ -7,7 +7,6 @@ import { prisma } from '../../utils/db'
 import { dispatchTask } from '../../utils/task-dispatcher'
 import { getRequestIP, getRequestHeader } from 'h3'
 import { logAction } from '../../utils/audit'
-import { DEFAULT_TRIAL_DAYS } from '../../../shared/trial-config'
 import {
   triggerInitialProviderIngest,
   userHasHealthConsent
@@ -323,17 +322,6 @@ export default NuxtAuthHandler({
   events: {
     async createUser({ user }: any) {
       try {
-        const trialDays = DEFAULT_TRIAL_DAYS
-        const trialEndsAt = new Date()
-        trialEndsAt.setDate(trialEndsAt.getDate() + trialDays)
-
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { trialEndsAt }
-        })
-
-        console.log(`[Auth] New user ${user.id} trial set until ${trialEndsAt.toISOString()}`)
-
         await tryAttributeReferralDuringAuth(user.id)
 
         // Trigger Welcome Email & Onboarding Drip Sequence
@@ -353,7 +341,7 @@ export default NuxtAuthHandler({
           userId: user.id
         })
       } catch (error) {
-        console.error('[Auth] Failed to set user trial period or send welcome email:', error)
+        console.error('[Auth] Failed to send welcome email:', error)
       }
     },
     async linkAccount({ user, account }: any) {

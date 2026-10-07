@@ -34,9 +34,7 @@ export default defineEventHandler(async (event) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
-      createdAt: true,
-      subscriptionTier: true,
-      shareRewardClaimedAt: true
+      createdAt: true
     }
   })
 
@@ -44,39 +42,14 @@ export default defineEventHandler(async (event) => {
     return { message: null }
   }
 
-  const targetedGrowthTypes = new Set(['ADVERT', 'SHARE'])
-  let selectedMessage = null
-
-  const userAgeMs = new Date().getTime() - user.createdAt.getTime()
-
-  for (const msg of activeMessages) {
-    const minAgeMs = (msg.minUserAgeDays || 0) * 24 * 60 * 60 * 1000
-    const isTargetedGrowthType = targetedGrowthTypes.has(msg.type)
-
-    if (isTargetedGrowthType) {
-      if (user.subscriptionTier !== 'FREE') {
-        continue
-      }
-
-      if (userAgeMs < minAgeMs) {
-        continue
-      }
-
-      if (msg.type === 'SHARE' && user.shareRewardClaimedAt) {
-        continue
-      }
-
-      selectedMessage = msg
-      break
-    } else {
-      if (userAgeMs < minAgeMs) {
-        continue
-      }
-
-      selectedMessage = msg
-      break
-    }
-  }
+  const userAgeMs = Date.now() - user.createdAt.getTime()
+  const selectedMessage =
+    activeMessages.find(
+      (message) =>
+        message.type !== 'ADVERT' &&
+        message.type !== 'SHARE' &&
+        userAgeMs >= (message.minUserAgeDays || 0) * 24 * 60 * 60 * 1000
+    ) || null
 
   return { message: selectedMessage }
 })

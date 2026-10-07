@@ -70,6 +70,7 @@ export type GenerateDailyCheckinPayload = {
   date?: Date | string
   checkinId?: string
   source?: DailyCheckinSource
+  force?: boolean
 }
 
 /**
@@ -180,23 +181,16 @@ export async function runGenerateDailyCheckin(payload: GenerateDailyCheckinPaylo
         ? parsedDate
         : getUserLocalDate(await getUserTimezone(userId))
 
-    if (!checkinId) {
-      const existing = await dailyCheckinRepository.getByDate(userId, today)
-      if (existing) {
-        checkinId = existing.id
-        await dailyCheckinRepository.update(checkinId, { status: 'PROCESSING' })
-      } else {
-        const newCheckin = await dailyCheckinRepository.create({
-          user: { connect: { id: userId } },
-          date: today,
-          questions: [],
-          status: 'PROCESSING'
-        })
-        checkinId = newCheckin.id
-      }
-    } else {
-      await dailyCheckinRepository.update(checkinId, { status: 'PROCESSING' })
+    const existing = await dailyCheckinRepository.getByDate(userId, today)
+    if (existing?.status === 'COMPLETED' && !payload.force) {
+      return { success: true, skipped: true, questions: existing.questions }
     }
+
+    if (!checkinId) {
+      const pending = existing || (await dailyCheckinRepository.ensurePending(userId, today))
+      checkinId = pending.id
+    }
+    await dailyCheckinRepository.update(checkinId, { status: 'PROCESSING' })
 
     if (source !== 'auto') {
       try {

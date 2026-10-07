@@ -127,6 +127,23 @@ describe('Check-in as a short sequence', () => {
     wrapper.unmount()
   })
 
+  it('shows polling failures instead of hiding them behind the preparation spinner', async () => {
+    vi.useFakeTimers()
+    let polls = 0
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/checkin/history') return []
+      if (url === '/api/checkin/today' && polls++ === 0)
+        return { ...structuredClone(checkin), status: 'PENDING', questions: [] }
+      throw new Error('Check-in service unavailable')
+    })
+    const wrapper = await render()
+    await vi.advanceTimersByTimeAsync(3000)
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('Check-in service unavailable')
+    expect(wrapper.text()).not.toContain('Preparing your check-in…')
+    wrapper.unmount()
+  })
+
   it('shows one question and preserves the answer when going Back', async () => {
     const wrapper = await render()
     expect(wrapper.get('h2').text()).toBe('Did you sleep well?')

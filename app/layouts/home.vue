@@ -30,16 +30,7 @@
           >
             {{ t('nav.how_it_works') }}
           </NuxtLink>
-          <NuxtLink
-            to="/#pricing"
-            class="flex items-center gap-1.5 whitespace-nowrap transition-colors hover:text-white"
-          >
-            {{ t('nav.pricing') }}
-            <span
-              class="inline-flex items-center justify-center rounded-sm bg-emerald-400 px-1.5 py-0.5 text-xs font-bold leading-none text-emerald-950"
-              >{{ t('nav.pricing_badge') }}</span
-            >
-          </NuxtLink>
+
           <NuxtLink to="/works-with" class="whitespace-nowrap transition-colors hover:text-white">{{
             t('nav.integrations')
           }}</NuxtLink>
@@ -100,16 +91,7 @@
                   class="text-sm font-medium whitespace-nowrap transition-colors hover:text-primary"
                   >{{ t('nav.how_it_works') }}</NuxtLink
                 >
-                <NuxtLink
-                  to="/#pricing"
-                  class="flex items-center justify-between text-sm font-medium whitespace-nowrap transition-colors hover:text-primary"
-                >
-                  {{ t('nav.pricing') }}
-                  <span
-                    class="inline-flex items-center justify-center rounded-sm bg-emerald-400 px-1.5 py-0.5 text-xs font-bold leading-none text-emerald-950"
-                    >{{ t('nav.pricing_badge') }}</span
-                  >
-                </NuxtLink>
+
                 <NuxtLink
                   to="/works-with"
                   class="text-sm font-medium whitespace-nowrap transition-colors hover:text-primary"

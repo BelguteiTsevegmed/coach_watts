@@ -26,12 +26,10 @@ import calendarCommand from './calendar'
 import planCommand from './plan'
 import checkPlannedStepsCommand from './check-planned-steps'
 import authLogicCommand from './auth-logic'
-import subscriptionCommand from './subscription'
 import fixCheckinsCommand from './fix-checkins'
 import pmcCommand from './pmc'
 import formCommand from './form'
 import chatHistoryCommand from './chat-history'
-import quotasCommand from './quotas'
 import chartCommand from './chart'
 import nutritionPlanDebugCommand from './nutrition-plan'
 import chatLogCommand from './chat'
@@ -80,7 +78,6 @@ debugCommand.addCommand(calendarCommand)
 debugCommand.addCommand(planCommand)
 debugCommand.addCommand(checkPlannedStepsCommand)
 debugCommand.addCommand(authLogicCommand)
-debugCommand.addCommand(subscriptionCommand)
 debugCommand.addCommand(fixCheckinsCommand)
 debugCommand.addCommand(pmcCommand)
 debugCommand.addCommand(formCommand)
@@ -88,7 +85,6 @@ debugCommand.addCommand(chatHistoryCommand)
 debugCommand.addCommand(chatLogCommand)
 debugCommand.addCommand(chatroomCommand)
 debugCommand.addCommand(chatGeminiCommand)
-debugCommand.addCommand(quotasCommand)
 debugCommand.addCommand(chartCommand)
 debugCommand.addCommand(curveFreshnessCommand)
 debugCommand.addCommand(nutritionPlanDebugCommand)

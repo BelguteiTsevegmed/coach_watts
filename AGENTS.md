@@ -23,7 +23,7 @@ Files under `docs/issues/` are historical archives and specs, not a live queue. 
 
 ## Execution loop
 
-**Plan → Act → Verify → Report.** Inspect the current files, implement the requested outcome, run practical checks, and summarize changes and remaining limitations. Commit, push, or open a PR when the user requests publication or an agreed workflow calls for it. PRs for this fork target `master` unless the user specifies another base; ticket references are optional.
+**Plan → Act → Verify → Publish → Report.** Inspect the current files, implement the requested outcome, and run practical checks. The owner has given standing authorization: when a fix or implementation is finished, always commit it, push the focused branch, and merge it into `master` without asking again, unless the user explicitly requests otherwise. Prefer a pull request so the change and validation are reviewable. Respect required checks and branch protections; if publishing is blocked, report the blocker instead of claiming completion. Preserve unrelated local work, and summarize changes, verification, publication status, and remaining limitations. PRs for this fork target `master` unless the user specifies another base; ticket references are optional.
 
 ## Worktrees
 

@@ -47,7 +47,6 @@
   const settingsTabs = [
     { id: '/settings/apps', label: 'Connections', icon: 'i-lucide-plug' },
     { id: '/settings/ai', label: 'Coach preferences', icon: 'i-heroicons-sparkles' },
-    { id: '/settings/billing', label: 'Billing', icon: 'i-heroicons-credit-card' },
     { id: '/settings/developer', label: 'Developer', icon: 'i-heroicons-code-bracket' },
     { id: '/settings/danger', label: 'Account and data', icon: 'i-lucide-alert-triangle' }
   ]
@@ -75,10 +74,6 @@
   }
 
   const isFullWidth = computed(() => {
-    return (
-      route.path === '/settings/ai' ||
-      route.path.startsWith('/settings/llm') ||
-      route.path === '/settings/billing'
-    )
+    return route.path === '/settings/ai' || route.path.startsWith('/settings/llm')
   })
 </script>

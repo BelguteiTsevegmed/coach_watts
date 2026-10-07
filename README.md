@@ -133,7 +133,7 @@ vim .env # or on MacOS: open -a TextEdit .env
 
 ```bash
 pnpm prisma:generate
-npx prisma migrate dev
+pnpm exec prisma migrate deploy
 ```
 
 ### 5. Launch Development Server
@@ -142,7 +142,15 @@ npx prisma migrate dev
 pnpm dev
 ```
 
-Visit `http://localhost:3099` and log in!
+In a second terminal, run the background worker:
+
+```bash
+pnpm dev:worker
+```
+
+The Redis task driver requires this worker for check-ins, AI analysis, and sync jobs.
+Visit `http://localhost:3099` and log in. This personal fork has no subscriptions,
+billing, trials, or paid feature limits; all coaching features are available.
 
 ### 🛠️ CLI Tools
 

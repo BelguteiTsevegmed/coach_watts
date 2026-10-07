@@ -66,7 +66,7 @@
   /**
    * One compact notice slot for the Today screen. At most one notice shows at
    * a time, in priority order: setup incomplete > missing critical profile
-   * data > trial ending soon.
+   * data.
    */
   const props = defineProps<{
     setupStatus: OnboardingStatus | null
@@ -88,10 +88,8 @@
   const { trackWidgetClick } = useAnalytics()
 
   const PROFILE_DISMISS_KEY = 'profile-banner-dismissed'
-  const TRIAL_DISMISS_KEY = 'today-trial-notice-dismissed'
 
   const profileDismissed = ref(false)
-  const trialDismissedFor = ref<string | null>(null)
 
   function readStorage(key: string) {
     try {
@@ -111,7 +109,6 @@
 
   onMounted(() => {
     profileDismissed.value = !!readStorage(PROFILE_DISMISS_KEY)
-    trialDismissedFor.value = readStorage(TRIAL_DISMISS_KEY)
   })
 
   type Tone = 'primary' | 'warning' | 'error'
@@ -124,7 +121,7 @@
   }
 
   interface Notice {
-    key: 'setup' | 'profile' | 'trial'
+    key: 'setup' | 'profile'
     tone: Tone
     buttonColor: Tone
     icon: string
@@ -243,36 +240,7 @@
     }
   })
 
-  const trialKey = computed(() =>
-    props.trialEndsAt ? new Date(props.trialEndsAt).toISOString() : null
-  )
-
-  const trialNotice = computed<Notice | null>(() => {
-    if (!props.trialEndingSoon) return null
-    if (trialKey.value && trialDismissedFor.value === trialKey.value) return null
-    return {
-      key: 'trial',
-      tone: 'warning',
-      buttonColor: 'warning',
-      icon: 'i-heroicons-clock',
-      title: t.value('today_notice_trial_title', { date: props.trialEndsAtLabel }),
-      description: t.value('today_notice_trial_desc'),
-      actions: [
-        {
-          label: t.value('today_notice_trial_action'),
-          to: '/settings/billing',
-          primary: true,
-          onClick: () => trackWidgetClick('today_notice', 'trial_upgrade')
-        }
-      ],
-      onDismiss: () => {
-        trialDismissedFor.value = trialKey.value
-        if (trialKey.value) writeStorage(TRIAL_DISMISS_KEY, trialKey.value)
-      }
-    }
-  })
-
-  const notice = computed(() => setupNotice.value || profileNotice.value || trialNotice.value)
+  const notice = computed(() => setupNotice.value || profileNotice.value)
 
   const toneClass = computed(() => {
     switch (notice.value?.tone) {
