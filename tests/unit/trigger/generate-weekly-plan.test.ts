@@ -177,6 +177,40 @@ describe('generateWeeklyPlan task', () => {
       expect(createArg.data[0].durationSec).toBe(150 * 60)
     })
 
+    it('prepares a partial-week proposal without schedule writes or publication', async () => {
+      const { generateStructuredAnalysis } = await import('../../../server/utils/gemini')
+      vi.mocked(generateStructuredAnalysis).mockResolvedValue({
+        days: compliantDays,
+        weekSummary: 'Proposal',
+        totalTSS: 100
+      } as any)
+      const result = await runGenerateWeeklyPlan({
+        userId: 'user-1',
+        trainingWeekId: 'week-1',
+        proposalOnly: true,
+        replacementContext: {
+          boundary: '2026-03-18',
+          end: '2026-03-22',
+          eligibleDays: ['2026-03-18', '2026-03-19'],
+          remainingVolumeMinutes: 120,
+          remainingTSS: 80,
+          committedMinutes: 180,
+          committedTSS: 170
+        }
+      })
+      expect(result).toMatchObject({ success: true, proposal: { weekSummary: 'Proposal' } })
+      expect(prisma.weeklyTrainingPlan.create).not.toHaveBeenCalled()
+      expect(prisma.weeklyTrainingPlan.update).not.toHaveBeenCalled()
+      expect(prisma.plannedWorkout.deleteMany).not.toHaveBeenCalled()
+      expect(prisma.plannedWorkout.updateMany).not.toHaveBeenCalled()
+      expect(prisma.plannedWorkout.createMany).not.toHaveBeenCalled()
+      expect(generateStructuredAnalysis).toHaveBeenCalledTimes(1)
+      const prompt = vi.mocked(generateStructuredAnalysis).mock.calls[0]![0] as string
+      expect(prompt).toContain('Week Focus: Base')
+      expect(prompt).toContain('at most 120 minutes and 80 TSS')
+      expect(prompt).toContain('2026-03-18, 2026-03-19')
+    })
+
     it('clamps deterministically when the retry is still over budget', async () => {
       const { generateStructuredAnalysis } = await import('../../../server/utils/gemini')
       vi.mocked(generateStructuredAnalysis).mockResolvedValue({

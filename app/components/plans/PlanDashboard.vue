@@ -1085,6 +1085,7 @@
   import PlanOverviewModal from '~/components/plans/PlanOverviewModal.vue'
   import PlanTimelineEditor from '~/components/plans/PlanTimelineEditor.vue'
   import { TRAINING_BLOCK_FOCUSES } from '~/utils/training-constants'
+  import { planAdaptationToast } from '~/utils/plan-adaptation-result'
   import {
     getWorkoutIcon,
     getWorkoutColorClass as getIconColorClass,
@@ -1446,6 +1447,7 @@
   })
 
   onTaskFailed('adapt-training-plan', async (run) => {
+    if (!run.tags?.includes(`plan:${props.plan.id}`)) return
     emit('refresh')
     adapting.value = null
     toast.add({
@@ -1468,17 +1470,12 @@
   })
 
   onTaskCompleted('adapt-training-plan', async (run) => {
+    if (run.output?.planId !== props.plan.id && !run.tags?.includes(`plan:${props.plan.id}`)) return
     emit('refresh')
 
     adapting.value = null
 
-    toast.add({
-      title: 'Adaptation Complete',
-
-      description: 'Your plan has been updated.',
-
-      color: 'success'
-    })
+    toast.add(planAdaptationToast(run.output))
   })
 
   onTaskCompleted('generate-weekly-plan', async (run) => {
@@ -1913,15 +1910,17 @@
         method: 'POST',
         body: {
           planId: props.plan.id,
-          adaptationType: type
+          adaptationType: type,
+          requestId: crypto.randomUUID()
         }
       })
       refreshRuns()
 
       toast.add({
-        title: 'Adaptation Started',
-        description: 'AI is recalculating your plan. Check back in a minute.',
-        color: 'success'
+        title: 'Recalculation Queued',
+        description:
+          'Preparing replacements for the remaining week. Your current schedule stays in place until they are ready.',
+        color: 'info'
       })
 
       showAdaptModal.value = false

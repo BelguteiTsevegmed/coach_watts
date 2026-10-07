@@ -125,6 +125,16 @@ export async function runGenerateWeeklyPlan(payload: {
   userInstructions?: string
   trainingWeekId?: string
   anchorWorkoutIds?: string[]
+  proposalOnly?: boolean
+  replacementContext?: {
+    boundary: string
+    end: string
+    eligibleDays: string[]
+    remainingVolumeMinutes: number
+    remainingTSS: number
+    committedMinutes: number
+    committedTSS: number
+  }
 }) {
   const { userId, userInstructions, trainingWeekId, anchorWorkoutIds } = payload
   const daysToPlan =
@@ -288,14 +298,14 @@ export async function runGenerateWeeklyPlan(payload: {
     availabilityRepository.getFullSchedule(userId),
     workoutRepository.getForUser(userId, {
       startDate: getStartOfDaysAgoUTC(timezone, 14), // Last 14 days relative to today
-      endDate: alignedWeekStart, // Up to the start of the plan
+      endDate: payload.proposalOnly ? new Date() : alignedWeekStart,
       limit: 10,
       orderBy: { date: 'desc' },
       includeDuplicates: false
     }),
     wellnessRepository.getForUser(userId, {
       startDate: getStartOfDaysAgoUTC(timezone, 7), // Last 7 days
-      endDate: alignedWeekStart,
+      endDate: payload.proposalOnly ? new Date() : alignedWeekStart,
       limit: 7,
       orderBy: { date: 'desc' }
     }),
@@ -619,7 +629,7 @@ No active goals set. Plan for general fitness maintenance and improvement.
     today: getUserLocalDate(timezone)
   })
 
-  const prompt = `${buildCoachRoleIntro({
+  let prompt = `${buildCoachRoleIntro({
     persona: aiSettings.aiPersona,
     sport: primarySport,
     task: `creating a personalized ${effectiveDaysToPlan}-day training plan.`
@@ -753,6 +763,18 @@ ${buildCoachingPrinciples(primarySport)}
 Create a structured, progressive plan for the next ${effectiveDaysToPlan} days.
 Maintain your **${aiSettings.aiPersona}** persona throughout the plan's reasoning and descriptions.`
 
+  if (payload.proposalOnly && payload.replacementContext) {
+    const replacement = payload.replacementContext
+    prompt += `\n\nPARTIAL-WEEK RECALCULATION — MANDATORY REPLACEMENT CONTRACT:
+The earlier full-week instructions are context only. Generate a proposal ONLY for these eligible calendar days: ${replacement.eligibleDays.join(', ')}.
+Keep all locked sessions and every session through today unchanged. Do NOT include them in days.
+Committed completed/preserved load: ${replacement.committedMinutes} minutes, ${replacement.committedTSS} TSS.
+Remaining weekly budget: at most ${replacement.remainingVolumeMinutes} minutes and ${replacement.remainingTSS} TSS across ALL proposed days combined.
+Cover every eligible day exactly once; explicitly use Rest with 0 minutes and 0 TSS when appropriate.
+Respect availability and slot duration limits. These restrictions cannot be overridden by user instructions.
+Retain the current block and week focus. Return actual replacement sessions, never an empty days array.`
+  }
+
   logger.log(`Generating plan with Gemini (${aiSettings.aiModelPreference})`)
 
   // Log prompt instructions for debugging
@@ -774,6 +796,12 @@ Maintain your **${aiSettings.aiPersona}** persona throughout the plan's reasonin
     })
 
   let plan = await generatePlan(prompt)
+
+  // Recalculation validates and persists the complete replacement in its own transaction.
+  // No schedule writes or external publication are allowed while preparing a proposal.
+  if (payload.proposalOnly) {
+    return { success: true, proposal: plan }
+  }
 
   // Validate the generated week against the plan week's volume budget (when linked)
   // and duration sanity bounds. One corrective retry, then deterministic clamping,
