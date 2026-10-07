@@ -1510,6 +1510,7 @@ model TrainingPlan {
   teamId                 String?
   blocks                 TrainingBlock[]
   sampleWeeks            TrainingPlanPublicSampleWeek[]
+  adaptations            TrainingPlanAdaptation[]
   template               TrainingPlan?   @relation("PlanTemplate", fields: [fromTemplateId], references: [id])
   derivedPlans           TrainingPlan[]  @relation("PlanTemplate")
   goal                   Goal?           @relation(fields: [goalId], references: [id], onDelete: Cascade)
@@ -1527,6 +1528,23 @@ model TrainingPlan {
   @@index([visibility, accessState])
   @@index([primarySport, sportSubtype])
   @@index([skillLevel, daysPerWeek])
+}
+
+// A receipt commits with the replacement so retries resume follow-up dispatch only.
+model TrainingPlanAdaptation {
+  requestId       String       @id
+  userId          String
+  planId          String
+  trainingWeekId  String
+  output          Json
+  workoutIds      String[]
+  followUpsQueued Boolean      @default(false)
+  followUpError   String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  plan            TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([userId, planId])
 }
 
 model TrainingBlock {
