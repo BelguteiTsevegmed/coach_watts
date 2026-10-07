@@ -132,6 +132,21 @@ jobs:
       - name: Run unit tests
         run: pnpm test:unit
 
+      - name: Replay prescription scenarios without model calls
+        if: always()
+        run: pnpm eval:prescription
+
+      - name: Typecheck prescription evaluator
+        run: pnpm eval:prescription:typecheck
+
+      - name: Upload prescription evaluation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: prescription-evaluation
+          path: .tmp/prescription-evaluation/
+          if-no-files-found: warn
+
   mcp-tests:
     name: MCP tests
     runs-on: [self-hosted, shadow]

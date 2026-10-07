@@ -1,0 +1,756 @@
+[
+  {
+    "id": "beginner-runner",
+    "tags": ["beginner", "running"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Run"],
+    "requestedMinutes": 300,
+    "availability": [60, 60, 60, 60, 60, 60, 60],
+    "historyCompleteness": "COMPLETE",
+    "history": [
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 2
+      },
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 9
+      },
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 16
+      },
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 23
+      }
+    ],
+    "committed": [],
+    "missedMinutes": 0,
+    "restrictions": [],
+    "eventWeeks": 12,
+    "expectedFirstWeekMinutes": 72,
+    "expectedHistoryStatus": "ACTIVE",
+    "reference": [
+      {
+        "day": 1,
+        "type": "Run",
+        "minutes": 30,
+        "intensity": "easy",
+        "description": "30 minutes at conversational effort",
+        "claimedMinutes": 30,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 1800,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      }
+    ],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  },
+  {
+    "id": "returning-runner",
+    "tags": ["returning", "interruption"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Run"],
+    "requestedMinutes": 300,
+    "availability": [60, 60, 60, 60, 60, 60, 60],
+    "historyCompleteness": "COMPLETE",
+    "history": [
+      {
+        "type": "Run",
+        "minutes": 120,
+        "daysAgo": 18
+      },
+      {
+        "type": "Run",
+        "minutes": 120,
+        "daysAgo": 20
+      },
+      {
+        "type": "Run",
+        "minutes": 120,
+        "daysAgo": 22
+      },
+      {
+        "type": "Run",
+        "minutes": 120,
+        "daysAgo": 24
+      }
+    ],
+    "committed": [],
+    "missedMinutes": 0,
+    "restrictions": [],
+    "eventWeeks": 12,
+    "expectedFirstWeekMinutes": 72,
+    "expectedHistoryStatus": "RETURNING",
+    "reference": [
+      {
+        "day": 1,
+        "type": "Run",
+        "minutes": 30,
+        "intensity": "easy",
+        "description": "30 minutes at conversational effort",
+        "claimedMinutes": 30,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 1800,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      }
+    ],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  },
+  {
+    "id": "experienced-runner",
+    "tags": ["experienced", "running"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Run"],
+    "requestedMinutes": 300,
+    "availability": [60, 60, 60, 60, 60, 60, 60],
+    "historyCompleteness": "COMPLETE",
+    "history": [
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 2
+      },
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 9
+      },
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 16
+      },
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 23
+      }
+    ],
+    "committed": [],
+    "missedMinutes": 0,
+    "restrictions": [],
+    "eventWeeks": 12,
+    "expectedFirstWeekMinutes": 300,
+    "expectedHistoryStatus": "ACTIVE",
+    "reference": [
+      {
+        "day": 1,
+        "type": "Run",
+        "minutes": 60,
+        "intensity": "easy",
+        "description": "60 minutes at conversational effort",
+        "claimedMinutes": 60,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 3600,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      },
+      {
+        "day": 3,
+        "type": "Run",
+        "minutes": 60,
+        "intensity": "easy",
+        "description": "60 minutes at conversational effort",
+        "claimedMinutes": 60,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 3600,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      }
+    ],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  },
+  {
+    "id": "cyclist",
+    "tags": ["cycling", "experienced"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Ride"],
+    "requestedMinutes": 480,
+    "availability": [60, 60, 60, 60, 60, 60, 60],
+    "historyCompleteness": "COMPLETE",
+    "history": [
+      {
+        "type": "Ride",
+        "minutes": 300,
+        "daysAgo": 2
+      },
+      {
+        "type": "Ride",
+        "minutes": 300,
+        "daysAgo": 9
+      },
+      {
+        "type": "Ride",
+        "minutes": 300,
+        "daysAgo": 16
+      },
+      {
+        "type": "Ride",
+        "minutes": 300,
+        "daysAgo": 23
+      }
+    ],
+    "committed": [],
+    "missedMinutes": 0,
+    "restrictions": [],
+    "eventWeeks": 12,
+    "expectedFirstWeekMinutes": 360,
+    "expectedHistoryStatus": "ACTIVE",
+    "reference": [
+      {
+        "day": 1,
+        "type": "Ride",
+        "minutes": 60,
+        "intensity": "easy",
+        "description": "60 minutes at conversational effort",
+        "claimedMinutes": 60,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 3600,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      }
+    ],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  },
+  {
+    "id": "mixed-sport",
+    "tags": ["mixed-sport", "limited-running-exposure"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Run", "Ride"],
+    "requestedMinutes": 480,
+    "availability": [60, 60, 60, 60, 60, 60, 60],
+    "historyCompleteness": "COMPLETE",
+    "history": [
+      {
+        "type": "Run",
+        "minutes": 30,
+        "daysAgo": 2
+      },
+      {
+        "type": "Run",
+        "minutes": 30,
+        "daysAgo": 9
+      },
+      {
+        "type": "Run",
+        "minutes": 30,
+        "daysAgo": 16
+      },
+      {
+        "type": "Run",
+        "minutes": 30,
+        "daysAgo": 23
+      },
+      {
+        "type": "Ride",
+        "minutes": 300,
+        "daysAgo": 2
+      },
+      {
+        "type": "Ride",
+        "minutes": 300,
+        "daysAgo": 9
+      },
+      {
+        "type": "Ride",
+        "minutes": 300,
+        "daysAgo": 16
+      },
+      {
+        "type": "Ride",
+        "minutes": 300,
+        "daysAgo": 23
+      }
+    ],
+    "committed": [],
+    "missedMinutes": 0,
+    "restrictions": [],
+    "eventWeeks": 12,
+    "expectedFirstWeekMinutes": 396,
+    "expectedHistoryStatus": "ACTIVE",
+    "reference": [
+      {
+        "day": 1,
+        "type": "Run",
+        "minutes": 30,
+        "intensity": "easy",
+        "description": "30 minutes at conversational effort",
+        "claimedMinutes": 30,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 1800,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      },
+      {
+        "day": 3,
+        "type": "Ride",
+        "minutes": 60,
+        "intensity": "easy",
+        "description": "60 minutes at conversational effort",
+        "claimedMinutes": 60,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 3600,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      }
+    ],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  },
+  {
+    "id": "sparse-history",
+    "tags": ["sparse", "unverified"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Run"],
+    "requestedMinutes": 300,
+    "availability": [60, 60, 60, 60, 60, 60, 60],
+    "historyCompleteness": "UNKNOWN",
+    "history": [
+      {
+        "type": "Run",
+        "minutes": 120,
+        "daysAgo": 2
+      }
+    ],
+    "committed": [],
+    "missedMinutes": 0,
+    "restrictions": [],
+    "eventWeeks": 12,
+    "expectedFirstWeekMinutes": 30,
+    "expectedHistoryStatus": "ACTIVE",
+    "reference": [
+      {
+        "day": 1,
+        "type": "Run",
+        "minutes": 30,
+        "intensity": "easy",
+        "description": "30 minutes at conversational effort",
+        "claimedMinutes": 30,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 1800,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      }
+    ],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  },
+  {
+    "id": "stale-history",
+    "tags": ["stale", "unknown-history"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Run"],
+    "requestedMinutes": 300,
+    "availability": [60, 60, 60, 60, 60, 60, 60],
+    "historyCompleteness": "UNKNOWN",
+    "history": [
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 45
+      }
+    ],
+    "committed": [],
+    "missedMinutes": 0,
+    "restrictions": [],
+    "eventWeeks": 12,
+    "expectedFirstWeekMinutes": 60,
+    "expectedHistoryStatus": "UNKNOWN_HISTORY",
+    "reference": [
+      {
+        "day": 1,
+        "type": "Run",
+        "minutes": 30,
+        "intensity": "easy",
+        "description": "30 minutes at conversational effort",
+        "claimedMinutes": 30,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 1800,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      }
+    ],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  },
+  {
+    "id": "short-availability",
+    "tags": ["availability"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Run"],
+    "requestedMinutes": 300,
+    "availability": [0, 20, 0, 20, 0, 0, 0],
+    "historyCompleteness": "COMPLETE",
+    "history": [
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 2
+      },
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 9
+      },
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 16
+      },
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 23
+      }
+    ],
+    "committed": [],
+    "missedMinutes": 0,
+    "restrictions": [],
+    "eventWeeks": 12,
+    "expectedFirstWeekMinutes": 40,
+    "expectedHistoryStatus": "ACTIVE",
+    "reference": [
+      {
+        "day": 1,
+        "type": "Run",
+        "minutes": 20,
+        "intensity": "easy",
+        "description": "20 minutes at conversational effort",
+        "claimedMinutes": 20,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 1200,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      }
+    ],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  },
+  {
+    "id": "injured-runner",
+    "tags": ["injury", "restriction"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Run"],
+    "requestedMinutes": 300,
+    "availability": [60, 60, 60, 60, 60, 60, 60],
+    "historyCompleteness": "COMPLETE",
+    "history": [
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 2
+      },
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 9
+      },
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 16
+      },
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 23
+      }
+    ],
+    "committed": [],
+    "missedMinutes": 0,
+    "restrictions": ["Run"],
+    "eventWeeks": 12,
+    "expectedFirstWeekMinutes": 72,
+    "expectedHistoryStatus": "ACTIVE",
+    "reference": [],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  },
+  {
+    "id": "extra-and-missed",
+    "tags": ["extra-training", "missed-training", "protected-session"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Run"],
+    "requestedMinutes": 300,
+    "availability": [60, 60, 60, 60, 60, 60, 60],
+    "historyCompleteness": "COMPLETE",
+    "history": [
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 2
+      },
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 9
+      },
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 16
+      },
+      {
+        "type": "Run",
+        "minutes": 300,
+        "daysAgo": 23
+      }
+    ],
+    "committed": [
+      {
+        "day": 2,
+        "type": "Run",
+        "minutes": 60,
+        "source": "extra"
+      },
+      {
+        "day": 4,
+        "type": "Run",
+        "minutes": 45,
+        "source": "locked"
+      },
+      {
+        "day": 5,
+        "type": "Ride",
+        "minutes": 60,
+        "source": "external"
+      }
+    ],
+    "missedMinutes": 90,
+    "restrictions": [],
+    "eventWeeks": 12,
+    "expectedFirstWeekMinutes": 300,
+    "expectedHistoryStatus": "ACTIVE",
+    "reference": [
+      {
+        "day": 3,
+        "type": "Run",
+        "minutes": 45,
+        "intensity": "easy",
+        "description": "45 minutes at conversational effort",
+        "claimedMinutes": 45,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 2700,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      }
+    ],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  },
+  {
+    "id": "short-event-timeline",
+    "tags": ["event-timeline", "beginner"],
+    "now": "2026-10-07T12:00:00Z",
+    "sports": ["Run"],
+    "requestedMinutes": 480,
+    "availability": [60, 60, 60, 60, 60, 60, 60],
+    "historyCompleteness": "COMPLETE",
+    "history": [
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 2
+      },
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 9
+      },
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 16
+      },
+      {
+        "type": "Run",
+        "minutes": 60,
+        "daysAgo": 23
+      }
+    ],
+    "committed": [],
+    "missedMinutes": 0,
+    "restrictions": [],
+    "eventWeeks": 2,
+    "expectedFirstWeekMinutes": 72,
+    "expectedHistoryStatus": "ACTIVE",
+    "reference": [
+      {
+        "day": 1,
+        "type": "Run",
+        "minutes": 30,
+        "intensity": "easy",
+        "description": "30 minutes at conversational effort",
+        "claimedMinutes": 30,
+        "claimedQualityMinutes": 0,
+        "steps": [
+          {
+            "type": "Active",
+            "intent": "easy",
+            "durationSeconds": 1800,
+            "target": {
+              "metric": "rpe",
+              "value": 3
+            }
+          }
+        ]
+      }
+    ],
+    "coachReview": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null,
+      "rubricVersion": "coaching-rubric-v1",
+      "notes": "Synthetic engineering reference; independent human coaching review required before rollout."
+    }
+  }
+]
