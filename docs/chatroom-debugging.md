@@ -100,6 +100,12 @@ Use them for deeper inspection when the chatroom summary already narrowed the fa
 - The turn stopped heartbeating after work began.
 - This usually points to an executor crash, restart, or stuck process rather than a pure prompting issue.
 
+`first_output_timeout` before skill selection
+
+- Check the `chat_skill_router` usage duration. Routing is part of the turn's 60-second execution budget and has its own 10-second deadline.
+- A slow or failed router falls back to read-only workout tools for workout questions, or tool-free general chat for other requests. It cannot authorize changes through this fallback.
+- Preparation failures finalize the assistant draft with a visible retry message and close the `chat_turn_start` usage record. Turn metadata records the preparation phase, such as `building_context` or `routing_skills`.
+
 ## UI Sync vs Backend Failure
 
 If the command shows:

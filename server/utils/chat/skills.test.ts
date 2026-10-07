@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   classifyChatSkills,
   composeSkillInstructions,
@@ -159,9 +159,71 @@ describe('expandSkillSelectionForRequest', () => {
 })
 
 describe('classifyChatSkills', () => {
+  afterEach(() => vi.useRealTimers())
   beforeEach(() => {
     generateObjectMock.mockReset()
     llmUsageCreateMock.mockClear()
+  })
+
+  it('bounds a stalled router and preserves read-only access to a planned workout', async () => {
+    vi.useFakeTimers()
+    generateObjectMock.mockImplementationOnce(
+      ({ abortSignal }: any) =>
+        new Promise((_, reject) => {
+          abortSignal?.addEventListener('abort', () => reject(abortSignal.reason), { once: true })
+        })
+    )
+    let selection: any
+    const routing = classifyChatSkills({
+      userId: 'user-1',
+      turnId: 'turn-stalled',
+      messages: [
+        {
+          role: 'user',
+          content:
+            "I'd like to discuss my upcoming planned workout (ID: 00000000-0000-4000-8000-000000000001). Can I do 4 min intervals?"
+        }
+      ]
+    }).then((result) => {
+      selection = result
+    })
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(selection).toMatchObject({
+      skillIds: ['planning_read'],
+      useTools: true,
+      usedFallback: true
+    })
+    await routing
+    const tools = selectToolsForSkills(
+      {
+        get_planned_workout_details: {},
+        adjust_planned_workout: {},
+        delete_planned_workout: {}
+      },
+      selection.skillIds,
+      { useTools: selection.useTools }
+    )
+    expect(Object.keys(tools)).toEqual(['get_planned_workout_details'])
+  })
+
+  it('propagates turn cancellation instead of starting a fallback response', async () => {
+    const controller = new AbortController()
+    generateObjectMock.mockImplementationOnce(
+      ({ abortSignal }: any) =>
+        new Promise((_, reject) => {
+          abortSignal?.addEventListener('abort', () => reject(abortSignal.reason), { once: true })
+        })
+    )
+    const routing = classifyChatSkills({
+      userId: 'user-1',
+      turnId: 'turn-cancelled',
+      messages: [{ role: 'user', content: 'What should I focus on in my workout?' }],
+      abortSignal: controller.signal
+    })
+    const rejected = expect(routing).rejects.toThrow('Turn cancelled')
+    controller.abort(new Error('Turn cancelled'))
+    await rejected
   })
 
   it('normalizes a support routing result for a multilingual ticket prompt', async () => {
