@@ -12,7 +12,7 @@
     <template #body>
       <div class="checkin-journey">
         <div
-          v-if="loading || (isPending && localQuestions.length === 0)"
+          v-if="!error && (loading || (isPending && localQuestions.length === 0))"
           class="py-10 space-y-4"
           role="status"
         >
@@ -215,7 +215,6 @@
                 >{{ tr('daily_checkin_delete', 'Delete check-in') }}</UButton
               >
             </div>
-            <QuotaMeter operation="daily_checkin" />
             <AiFeedback
               v-if="checkin?.llmUsageId"
               :llm-usage-id="checkin.llmUsageId"
@@ -334,7 +333,7 @@
   })
   const recentCheckins = ref<any[]>([])
   const deleting = ref(false)
-  const { showQuotaPaywall, handleLockedAction } = useQuotaPaywall()
+  const { handleLockedAction } = useQuotaPaywall()
   const toast = useToast()
   const { formatDateUTC } = useFormat()
   const { trackDailyCheckinStart, trackDailyCheckinComplete } = useAnalytics()
@@ -451,7 +450,7 @@
         await generate(false)
       }
     } catch (e: any) {
-      if (!silent) error.value = e.message
+      error.value = e?.data?.message || e?.message || 'Failed to load check-in'
     } finally {
       if (!silent) loading.value = false
     }
@@ -495,21 +494,7 @@
 
       refreshRuns()
     } catch (e: any) {
-      const statusCode = e?.statusCode ?? e?.status
-      if (statusCode === 429) {
-        error.value = tr(
-          'daily_checkin_quota_error',
-          'You have reached your Daily Coach Check-In quota for your current plan. Try again after your quota resets, or upgrade for more check-ins.'
-        )
-        await showQuotaPaywall({
-          operation: 'daily_checkin',
-          title: 'Usage Quota Reached',
-          featureTitle: 'Daily Coach Check-In',
-          reason: 'quota_exceeded'
-        })
-      } else {
-        error.value = e?.data?.message || e?.message || 'Failed to generate check-in'
-      }
+      error.value = e?.data?.message || e?.message || 'Failed to generate check-in'
     } finally {
       loading.value = false
     }
@@ -561,6 +546,7 @@
       if (isOpen) {
         trackDailyCheckinStart()
         submitError.value = null
+        if (isPending.value) resumePoll()
         fetchToday()
         fetchHistory()
       } else {

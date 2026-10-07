@@ -13,6 +13,7 @@ vi.mock('../../../../../server/utils/repositories/dailyCheckinRepository', () =>
     getByDate: vi.fn(),
     getHistory: vi.fn().mockResolvedValue([]),
     create: vi.fn(),
+    ensurePending: vi.fn(),
     update: vi.fn()
   }
 }))
@@ -67,6 +68,19 @@ describe('Daily Check-in Service', () => {
       expect.objectContaining({ userId: 'u123', source: 'auto' }),
       expect.objectContaining({ concurrencyKey: 'u123' })
     )
+  })
+
+  it('reuses completed questions when queued retries finally reach the worker', async () => {
+    const questions = [{ id: 'sleep', text: 'Did you sleep well?' }]
+    vi.mocked(dailyCheckinRepository.getByDate).mockResolvedValueOnce({
+      id: 'c1',
+      status: 'COMPLETED',
+      questions
+    } as any)
+    await expect(
+      runGenerateDailyCheckin({ userId: 'u123', date: new Date('2026-03-15') })
+    ).resolves.toEqual({ success: true, skipped: true, questions })
+    expect(dailyCheckinRepository.update).not.toHaveBeenCalled()
   })
 
   it('formats past check-in history context properly', async () => {

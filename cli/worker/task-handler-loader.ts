@@ -166,8 +166,7 @@ async function loadTriggerModules() {
     import('../../trigger/send-email'),
     import('../../trigger/sentry-error-test'),
     import('../../trigger/suggest-goals'),
-    import('../../trigger/summarize-chat'),
-    import('../../trigger/trial-ending-reminder')
+    import('../../trigger/summarize-chat')
   ])
 
   for (const manifest of resourceCatalog.listTaskManifests()) {

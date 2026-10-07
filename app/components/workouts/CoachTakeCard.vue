@@ -210,46 +210,6 @@
       <p class="text-sm text-gray-600 dark:text-gray-300">{{ t('coach_take_analyzing') }}</p>
     </div>
 
-    <!-- Skipped because of the plan's analysis quota -->
-    <div
-      v-else-if="workout?.aiAnalysisStatus === 'QUOTA_EXCEEDED'"
-      class="rounded-xl border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 p-4"
-    >
-      <p class="text-sm font-semibold text-amber-900 dark:text-amber-100">
-        {{ t('analysis_quota_skipped_title') }}
-      </p>
-      <p class="text-sm text-amber-800/90 dark:text-amber-200 mt-1">
-        {{ t('analysis_quota_skipped_desc') }}
-      </p>
-      <div class="flex flex-wrap gap-2 mt-3">
-        <UButton
-          size="sm"
-          color="primary"
-          variant="solid"
-          @click="
-            () => {
-              emit('upgrade')
-            }
-          "
-        >
-          {{ t('analysis_quota_skipped_upgrade') }}
-        </UButton>
-        <UButton
-          v-if="canRetryAfterQuotaReset"
-          size="sm"
-          color="neutral"
-          variant="outline"
-          @click="
-            () => {
-              emit('analyze')
-            }
-          "
-        >
-          {{ t('analysis_quota_skipped_retry') }}
-        </UButton>
-      </div>
-    </div>
-
     <!-- Not analysed yet: one clear action -->
     <div v-else class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <p class="text-sm text-gray-600 dark:text-gray-300 max-w-xl">
@@ -294,7 +254,6 @@
   const props = defineProps<{
     workout: any
     analyzing?: boolean
-    canRetryAfterQuotaReset?: boolean
     canPublish?: boolean
     publishing?: boolean
     isAdmin?: boolean
@@ -302,7 +261,6 @@
 
   const emit = defineEmits<{
     analyze: []
-    upgrade: []
     publish: []
   }>()
 

@@ -996,30 +996,6 @@ export async function runGenerateStructuredWorkout(
       profile: contextProfile
     })
 
-    // Subscription Limit Check
-    // Free users cannot generate structured workouts more than 4 weeks (28 days) in the future
-    if (entityType === 'PlannedWorkout' && workout.user.subscriptionTier === 'FREE') {
-      const today = getUserLocalDate(timezone)
-      const fourWeeksFromNow = new Date(today)
-      fourWeeksFromNow.setUTCDate(today.getUTCDate() + 28)
-
-      // Compare dates (both are UTC midnight aligned)
-      if (workout.date > fourWeeksFromNow) {
-        logger.log('Skipping structured workout generation: Free tier limit (4 weeks)', {
-          userId: workout.userId,
-          workoutDate: workout.date,
-          limitDate: fourWeeksFromNow
-        })
-        return finalizeAndReturn({
-          success: false,
-          skipped: true,
-          reason: 'FREE_TIER_LIMIT',
-          message: 'Structured workout generation is limited to 4 weeks in advance for free users.'
-        })
-      }
-    }
-    logStage('subscription-check-passed', { subscriptionTier: workout.user.subscriptionTier })
-
     const warmupTime = sportSettings?.warmupTime ?? 10
     const cooldownTime = sportSettings?.cooldownTime ?? 10
     const existingStructureSummary = preserveExistingStructure

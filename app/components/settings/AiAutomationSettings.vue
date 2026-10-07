@@ -15,28 +15,7 @@
             v-model="localSettings.aiAutoAnalyzeReadiness"
             :label="t('automation_readiness_label')"
             :description="t('automation_readiness_desc')"
-            :disabled="!canUseTier('SUPPORTER')"
             @update:model-value="handleChange"
-          />
-        </div>
-        <div v-if="!canUseTier('SUPPORTER')" class="flex items-center gap-2">
-          <UBadge color="primary" variant="subtle" size="xs">{{
-            t('billing_tier_supporter')
-          }}</UBadge>
-          <UButton
-            icon="i-heroicons-lock-closed"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            @click="
-              () => {
-                upgradeModal.show({
-                  featureTitle: t('automation_readiness_label'),
-                  featureDescription: t('automation_readiness_upgrade_desc'),
-                  recommendedTier: 'supporter'
-                })
-              }
-            "
           />
         </div>
       </div>
@@ -48,28 +27,7 @@
             v-model="localSettings.aiAutoAnalyzeWorkouts"
             :label="t('automation_workouts_label')"
             :description="t('automation_workouts_desc')"
-            :disabled="!canUseTier('SUPPORTER')"
             @update:model-value="handleChange"
-          />
-        </div>
-        <div v-if="!canUseTier('SUPPORTER')" class="flex items-center gap-2">
-          <UBadge color="primary" variant="subtle" size="xs">{{
-            t('billing_tier_supporter')
-          }}</UBadge>
-          <UButton
-            icon="i-heroicons-lock-closed"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            @click="
-              () => {
-                upgradeModal.show({
-                  featureTitle: t('automation_workouts_label'),
-                  featureDescription: t('automation_workouts_upgrade_desc'),
-                  recommendedTier: 'supporter'
-                })
-              }
-            "
           />
         </div>
       </div>
@@ -81,28 +39,7 @@
             v-model="localSettings.aiAutoAnalyzeNutrition"
             :label="t('automation_nutrition_label')"
             :description="t('automation_nutrition_desc')"
-            :disabled="!canUseTier('SUPPORTER')"
             @update:model-value="handleChange"
-          />
-        </div>
-        <div v-if="!canUseTier('SUPPORTER')" class="flex items-center gap-2">
-          <UBadge color="primary" variant="subtle" size="xs">{{
-            t('billing_tier_supporter')
-          }}</UBadge>
-          <UButton
-            icon="i-heroicons-lock-closed"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            @click="
-              () => {
-                upgradeModal.show({
-                  featureTitle: t('automation_nutrition_label'),
-                  featureDescription: t('automation_nutrition_upgrade_desc'),
-                  recommendedTier: 'supporter'
-                })
-              }
-            "
           />
         </div>
       </div>
@@ -114,26 +51,7 @@
             v-model="localSettings.aiDeepAnalysisEnabled"
             :label="t('automation_thoughtful_label')"
             :description="t('automation_thoughtful_desc')"
-            :disabled="!canUseTier('PRO')"
             @update:model-value="handleChange"
-          />
-        </div>
-        <div v-if="!canUseTier('PRO')" class="flex items-center gap-2">
-          <UBadge color="primary" variant="subtle" size="xs">{{ t('billing_tier_pro') }}</UBadge>
-          <UButton
-            icon="i-heroicons-lock-closed"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            @click="
-              () => {
-                upgradeModal.show({
-                  featureTitle: t('automation_thoughtful_label'),
-                  featureDescription: t('automation_thoughtful_upgrade_desc'),
-                  recommendedTier: 'pro'
-                })
-              }
-            "
           />
         </div>
       </div>
@@ -145,26 +63,7 @@
             v-model="localSettings.aiProactivityEnabled"
             :label="t('automation_proactive_label')"
             :description="t('automation_proactive_desc')"
-            :disabled="!canUseTier('PRO')"
             @update:model-value="handleChange"
-          />
-        </div>
-        <div v-if="!canUseTier('PRO')" class="flex items-center gap-2">
-          <UBadge color="primary" variant="subtle" size="xs">{{ t('billing_tier_pro') }}</UBadge>
-          <UButton
-            icon="i-heroicons-lock-closed"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            @click="
-              () => {
-                upgradeModal.show({
-                  featureTitle: t('automation_proactive_label'),
-                  featureDescription: t('automation_proactive_upgrade_desc'),
-                  recommendedTier: 'pro'
-                })
-              }
-            "
           />
         </div>
       </div>
@@ -226,13 +125,6 @@
 
   const localSettings = ref({ ...props.settings })
   const saving = ref(false)
-  const userStore = useUserStore()
-  const upgradeModal = useUpgradeModal()
-
-  function canUseTier(tier: 'SUPPORTER' | 'PRO') {
-    if (props.forceUnlocked) return true
-    return userStore.hasMinimumTier(tier)
-  }
 
   function handleChange() {
     // Auto-save on change (optional)

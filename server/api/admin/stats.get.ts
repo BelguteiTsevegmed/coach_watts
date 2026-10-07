@@ -1,10 +1,8 @@
 import { defineEventHandler, createError } from 'h3'
 import { getServerSession } from '../../utils/session'
 import { prisma } from '../../utils/db'
-import type { SubscriptionTier } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { webhookQueue, pingQueue } from '../../utils/queue'
-import { QUOTA_REGISTRY } from '../../utils/quotas/registry'
 
 export default defineEventHandler(async (event) => {
   const session = await getServerSession(event)
@@ -16,33 +14,6 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Forbidden'
     })
   }
-
-  // Quota Near Limit Check
-  const nearLimitChecks: Promise<any[]>[] = []
-  const validDbTiers = ['FREE', 'SUPPORTER', 'PRO']
-
-  for (const tier of Object.keys(QUOTA_REGISTRY) as SubscriptionTier[]) {
-    if (!validDbTiers.includes(tier)) continue
-
-    const tierQuotas = QUOTA_REGISTRY[tier]
-    for (const [op, def] of Object.entries(tierQuotas)) {
-      if (!def) continue
-      const threshold = Math.max(1, Math.floor(def.limit * 0.8))
-      nearLimitChecks.push(prisma.$queryRaw<any[]>`
-        SELECT u.id
-        FROM "User" u
-        JOIN "LlmUsage" l ON l."userId" = u.id
-        WHERE u."subscriptionTier"::text = ${tier}
-          AND l.operation = ${op}
-          AND l.success = true
-          AND l."createdAt" >= NOW() - CAST(${def.window} AS interval)
-        GROUP BY u.id
-        HAVING COUNT(l.id) >= ${threshold}
-      `)
-    }
-  }
-  const nearLimitResults = await Promise.all(nearLimitChecks)
-  const uniqueNearLimitUsers = new Set(nearLimitResults.flat().map((r) => r.id))
 
   // Basic totals & System Status
   const [totalUsers, totalWorkouts, dbCheck] = await Promise.all([
@@ -61,7 +32,7 @@ export default defineEventHandler(async (event) => {
     database: dbCheck ? 'Online' : 'Offline',
     trigger: process.env.TRIGGER_SECRET_KEY ? 'Connected' : 'Not Configured',
     queues: !webhookPaused && !pingPaused ? 'Running' : 'Paused',
-    nearLimitUsers: uniqueNearLimitUsers.size
+    nearLimitUsers: 0
   }
 
   // AI Costs & Usage (last 30 days)
@@ -110,45 +81,6 @@ export default defineEventHandler(async (event) => {
   // Simple forecast for today
   const hoursPassed = now.getHours() + now.getMinutes() / 60 || 0.1
   const aiCostForecastToday = aiCostToday * (24 / hoursPassed)
-
-  // --- Subscription Stats ---
-  const [activeSubscribers, activeTierCounts, recentPremiumUsers] = await Promise.all([
-    prisma.user.count({
-      where: {
-        subscriptionStatus: 'ACTIVE',
-        subscriptionTier: { in: ['SUPPORTER', 'PRO'] }
-      }
-    }),
-    prisma.user.groupBy({
-      by: ['subscriptionTier'],
-      _count: { id: true },
-      where: {
-        subscriptionStatus: 'ACTIVE',
-        subscriptionTier: { in: ['SUPPORTER', 'PRO'] }
-      }
-    }),
-    prisma.user.findMany({
-      where: { subscriptionTier: { in: ['SUPPORTER', 'PRO'] } },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        subscriptionTier: true,
-        subscriptionStatus: true
-      }
-    })
-  ])
-
-  let estimatedMRR = 0
-  activeTierCounts.forEach((group) => {
-    if (group.subscriptionTier === 'SUPPORTER') {
-      estimatedMRR += group._count.id * 8.99
-    } else if (group.subscriptionTier === 'PRO') {
-      estimatedMRR += group._count.id * 14.99
-    }
-  })
 
   // --- Daily Histograms via Raw SQL for Performance ---
 
@@ -262,9 +194,6 @@ export default defineEventHandler(async (event) => {
     aiCostToday,
     aiCostForecastToday,
     aiCostMTD,
-    estimatedMRR,
-    activeSubscribers,
-    recentPremiumUsers,
     totalAiCalls,
     aiSuccessRate,
     avgAiCostPerCall,

@@ -35,56 +35,6 @@ export function useAnalytics() {
   return {
     trackEvent,
 
-    // 1. Monetization & Quota
-    trackUpgradeView: (featureName: string, reason: string = 'upsell') => {
-      trackEvent('view_promotion', {
-        promotion_id: 'upgrade_modal',
-        promotion_name: featureName,
-        creative_slot: reason
-      })
-    },
-
-    trackCheckoutStart: (
-      planId: string,
-      tierName: string,
-      interval: string,
-      value: number,
-      currency: string
-    ) => {
-      trackEvent('begin_checkout', {
-        currency: currency.toUpperCase(),
-        value,
-        items: [
-          {
-            item_id: planId,
-            item_name: `${tierName} (${interval})`,
-            item_category: tierName,
-            price: value,
-            quantity: 1
-          }
-        ]
-      })
-    },
-
-    trackPurchase: (transactionId: string, value: number, currency: string, tier?: string) => {
-      trackEvent('purchase', {
-        transaction_id: transactionId,
-        value,
-        currency: currency.toUpperCase(),
-        item_category: tier
-      })
-    },
-
-    trackBillingPortalView: () => {
-      trackEvent('view_billing_portal')
-    },
-
-    trackPricingView: (entryPoint: string = 'direct') => {
-      trackEvent('pricing_view', {
-        entry_point: entryPoint
-      })
-    },
-
     // 2. AI Coaching & Recommendations
     trackRecommendationRequest: (isRefinement: boolean, hasFeedback: boolean) => {
       trackEvent('recommendation_request', {

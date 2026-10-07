@@ -109,35 +109,3 @@ export function formatPrice(price: number, currency: 'usd' | 'eur' = 'usd'): str
 export function getPrice(plan: PricingPlan, interval: BillingInterval): number {
   return interval === 'annual' && plan.annualPrice ? plan.annualPrice : plan.monthlyPrice
 }
-
-/**
- * Get Stripe price ID for a plan, interval, and currency
- */
-export function getStripePriceId(
-  plan: PricingPlan,
-  interval: BillingInterval,
-  currency: 'usd' | 'eur' = 'usd'
-): string | undefined {
-  const config = useRuntimeConfig()
-  const eur = currency === 'eur'
-
-  if (plan.key === 'supporter') {
-    if (interval === 'monthly') {
-      return eur
-        ? config.public.stripeSupporterMonthlyEurPriceId
-        : config.public.stripeSupporterMonthlyPriceId
-    }
-    return eur
-      ? config.public.stripeSupporterAnnualEurPriceId
-      : config.public.stripeSupporterAnnualPriceId
-  }
-
-  if (plan.key === 'pro') {
-    if (interval === 'monthly') {
-      return eur ? config.public.stripeProMonthlyEurPriceId : config.public.stripeProMonthlyPriceId
-    }
-    return eur ? config.public.stripeProAnnualEurPriceId : config.public.stripeProAnnualPriceId
-  }
-
-  return undefined
-}

@@ -4,7 +4,6 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   const { gtag } = useGtag()
   const { data } = useAuth()
-  const userStore = useUserStore()
   const colorMode = useColorMode()
 
   // Watch for changes in the user session
@@ -20,19 +19,6 @@ export default defineNuxtPlugin((nuxtApp) => {
         // Clear user_id on logout
         gtag('set', {
           user_id: undefined
-        })
-      }
-    },
-    { immediate: true }
-  )
-
-  // Watch for subscription tier changes
-  watch(
-    () => userStore.entitlements?.tier,
-    (tier) => {
-      if (tier) {
-        gtag('set', {
-          subscription_tier: tier
         })
       }
     },

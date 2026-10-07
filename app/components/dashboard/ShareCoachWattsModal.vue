@@ -1,7 +1,7 @@
 <template>
   <UModal
     v-model:open="open"
-    :title="rewardEnabled ? t('share_modal_title_reward') : t('share_modal_title_default')"
+    :title="t('share_modal_title_default')"
     :ui="{
       content: 'overflow-hidden sm:max-w-md'
     }"
@@ -66,13 +66,6 @@
 
         <div class="w-full border-b border-dashed border-gray-200 dark:border-gray-800" />
 
-        <div
-          v-if="rewardEnabled"
-          class="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-900 dark:border-primary-900/60 dark:bg-primary-950/30 dark:text-primary-100"
-        >
-          {{ t('share_modal_reward_desc') }}
-        </div>
-
         <ShareAccessPanel
           mode="static"
           :link="shareLink"
@@ -88,30 +81,6 @@
           @copy="handleShareCopy"
           @network-click="handleNetworkClick"
         />
-
-        <div
-          v-if="rewardEnabled"
-          class="flex items-center justify-between gap-4 rounded-2xl bg-gray-50 p-4 dark:bg-gray-900/60 border border-gray-100 dark:border-white/5"
-        >
-          <p
-            class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider leading-relaxed"
-          >
-            {{ hasShareIntent ? t('share_modal_intent_detected') : t('share_modal_intent_prompt') }}
-          </p>
-          <UButton
-            :label="t('share_modal_claim_button')"
-            color="primary"
-            variant="solid"
-            class="font-black uppercase tracking-widest rounded-xl"
-            :disabled="!hasShareIntent || claimingReward"
-            :loading="claimingReward"
-            @click="
-              () => {
-                void claimReward()
-              }
-            "
-          />
-        </div>
       </div>
     </template>
   </UModal>
@@ -123,29 +92,15 @@
 
   const open = defineModel<boolean>('open', { default: false })
 
-  const { rewardEnabled = false, messageId = null } = defineProps<{
-    rewardEnabled?: boolean
-    messageId?: string | null
-  }>()
-
-  const emit = defineEmits<{
-    claimed: []
-  }>()
-
-  const hasShareIntent = ref(false)
-  const claimingReward = ref(false)
   const qrCodeDataUrl = ref('')
   const shareLink = ref('')
   const loadingShareLink = ref(false)
   const { t } = useTranslate('dashboard')
-  const userStore = useUserStore()
   const toast = useToast()
   const {
     trackShareModalOpen,
     trackShareLinkCopy,
     trackShareNetworkClick,
-    trackShareRewardClaim,
-    trackShareRewardClaimRejected,
     trackModalOpen,
     trackModalComplete,
     trackModalDismiss
@@ -248,7 +203,6 @@
     if (!shareLink.value) return
     try {
       await navigator.clipboard.writeText(shareLink.value)
-      hasShareIntent.value = true
       shareCompleted.value = true
       trackShareLinkCopy()
       toast.add({
@@ -267,60 +221,14 @@
   }
 
   function handleNetworkClick(network: string) {
-    hasShareIntent.value = true
     shareCompleted.value = true
     trackShareNetworkClick(network)
-  }
-
-  async function claimReward() {
-    if (!rewardEnabled || !hasShareIntent.value || claimingReward.value) return
-
-    claimingReward.value = true
-    try {
-      const response = (await ($fetch as any)('/api/system-messages/share-reward/claim', {
-        method: 'POST',
-        body: { messageId: messageId || undefined }
-      } as any)) as {
-        trialEndsAt: string
-        daysGranted: number
-        alreadyClaimed: boolean
-      }
-
-      trackShareRewardClaim(response.daysGranted)
-      trackModalComplete('share_coach_watts', 'reward_claim')
-      await userStore.fetchUser(true)
-      toast.add({
-        title: t.value('share_modal_reward_claimed_title'),
-        description: t.value('share_modal_reward_claimed_desc', { days: response.daysGranted }),
-        color: 'success'
-      })
-      open.value = false
-      emit('claimed')
-    } catch (error: any) {
-      const statusCode = error?.statusCode || error?.data?.statusCode
-      const description =
-        error?.data?.statusMessage ||
-        error?.statusMessage ||
-        t.value('share_modal_reward_claim_failed_fallback')
-      trackShareRewardClaimRejected(String(statusCode || 'unknown'))
-      toast.add({
-        title:
-          statusCode === 409
-            ? t.value('share_modal_reward_already_claimed')
-            : t.value('share_modal_reward_claim_failed_title'),
-        description,
-        color: 'error'
-      })
-    } finally {
-      claimingReward.value = false
-    }
   }
 
   watch(
     () => open.value,
     async (isOpen) => {
       if (isOpen) {
-        hasShareIntent.value = false
         shareCompleted.value = false
         qrCodeDataUrl.value = ''
         await loadShareLink()
@@ -333,7 +241,6 @@
         if (!shareCompleted.value) {
           trackModalDismiss('share_coach_watts')
         }
-        hasShareIntent.value = false
       }
     }
   )

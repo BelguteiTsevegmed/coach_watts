@@ -51,7 +51,6 @@ const SECTION_GROUP_ICONS: Partial<Record<AppNavSectionId, string>> = {
 export function useAppNavigation(options: UseAppNavigationOptions = {}) {
   const { t } = useTranslate('common')
   const route = useRoute()
-  const config = useRuntimeConfig()
   const { data: authData } = useAuth()
   const userStore = useUserStore()
   const { trackNavClick } = useAnalytics()
@@ -69,7 +68,7 @@ export function useAppNavigation(options: UseAppNavigationOptions = {}) {
     nutritionEnabled:
       userStore.profile?.nutritionTrackingEnabled !== false &&
       userStore.user?.nutritionTrackingEnabled !== false,
-    billingEnabled: Boolean(config.public.stripePublishableKey),
+    billingEnabled: false,
     isAdmin: Boolean((authData.value?.user as { isAdmin?: boolean } | undefined)?.isAdmin),
     isCoach: isCoachForAnyone.value,
     hasOwnCoach: hasOwnCoach.value

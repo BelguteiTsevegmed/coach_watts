@@ -163,13 +163,12 @@ describe('buildAppNavigation', () => {
 })
 
 describe('buildAccountMenuEntries', () => {
-  it('offers profile, zones, connected apps and AI coach — billing only with Stripe', () => {
+  it('offers profile, zones, connected apps and AI coach — without billing', () => {
     expect(buildAccountMenuEntries(ctx()).map((entry) => entry.to)).toEqual([
       '/profile/settings',
       '/profile/settings?tab=sports',
       '/settings/apps',
-      '/settings/ai',
-      '/settings/billing'
+      '/settings/ai'
     ])
     expect(
       buildAccountMenuEntries(ctx({ billingEnabled: false })).map((entry) => entry.id)

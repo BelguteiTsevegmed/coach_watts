@@ -73,7 +73,6 @@
     "prisma": "^7.9.1",
     "qrcode": "^1.5.4",
     "resend": "^6.17.2",
-    "stripe": "^22.3.0",
     "svix": "^1.96.1",
     "tsx": "^4.21.0",
     "turndown": "^7.2.2",
@@ -142,7 +141,6 @@
   },
   "private": true,
   "scripts": {
-    "backfill:provider-subscriptions": "tsx scripts/backfill-provider-subscriptions.ts",
     "backfill-scores": "tsx scripts/backfill-scores.ts",
     "test": "vitest",
     "test:unit": "vitest run",

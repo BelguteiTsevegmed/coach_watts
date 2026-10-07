@@ -12,7 +12,6 @@ import oauthCommand from './oauth'
 import statsCommand from './stats'
 import usersCommand from './users'
 import nutritionCommand from './nutrition'
-import subscriptionsCommand from './subscriptions'
 import geminiCommand from './gemini'
 import llmCommand from './llm'
 import triggerCommand from './trigger'
@@ -27,7 +26,6 @@ import bugsCommand from './bugs'
 import supportCommand from './support'
 import importCommand from './import'
 import translationsCommand from './translations'
-import partnersCommand from './partners'
 import eventsCommand from './events'
 
 const program = new Command()
@@ -44,7 +42,6 @@ program.addCommand(oauthCommand)
 program.addCommand(statsCommand)
 program.addCommand(usersCommand)
 program.addCommand(nutritionCommand)
-program.addCommand(subscriptionsCommand)
 program.addCommand(geminiCommand)
 program.addCommand(llmCommand)
 program.addCommand(triggerCommand)
@@ -59,7 +56,6 @@ program.addCommand(bugsCommand)
 program.addCommand(supportCommand)
 program.addCommand(importCommand)
 program.addCommand(translationsCommand)
-program.addCommand(partnersCommand)
 program.addCommand(eventsCommand)
 
 program.parse(process.argv)

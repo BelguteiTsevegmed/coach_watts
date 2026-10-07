@@ -86,29 +86,6 @@ export default defineEventHandler(async (event) => {
     getAverageCostPerUser(lastWeekStart, thisWeekStart)
   ])
 
-  // 1. Tier Economics (Filtered)
-  const tierStatsRaw = await prisma.$queryRaw<
-    { tier: string; total_cost: number; active_users: bigint }[]
-  >`
-    SELECT 
-      u."subscriptionTier" as tier,
-      SUM(COALESCE(lu."estimatedCost", 0)) as total_cost,
-      COUNT(DISTINCT lu."userId") as active_users
-    FROM "LlmUsage" lu
-    JOIN "User" u ON lu."userId" = u.id
-    WHERE lu."createdAt" >= ${filterStart}
-      ${filterEnd ? Prisma.sql`AND lu."createdAt" < ${filterEnd}` : Prisma.empty}
-    GROUP BY u."subscriptionTier"
-  `
-
-  const tierStats = tierStatsRaw.map((row) => ({
-    tier: row.tier,
-    totalCost: Number(row.total_cost || 0),
-    activeUsers: Number(row.active_users),
-    avgCostPerUser:
-      Number(row.active_users) > 0 ? Number(row.total_cost || 0) / Number(row.active_users) : 0
-  }))
-
   // 2. Cost Distribution (Filtered)
   const userCostsRaw = await prisma.$queryRaw<{ user_id: string; total_cost: number }[]>`
     SELECT "userId" as user_id, SUM("estimatedCost") as total_cost
@@ -159,13 +136,12 @@ export default defineEventHandler(async (event) => {
     topSpendersRaw.map(async (item) => {
       const user = await prisma.user.findUnique({
         where: { id: item.userId! },
-        select: { name: true, email: true, subscriptionTier: true }
+        select: { name: true, email: true }
       })
       return {
         id: item.userId,
         name: user?.name,
         email: user?.email,
-        tier: user?.subscriptionTier,
         totalCost: item._sum.estimatedCost || 0,
         totalTokens: item._sum.totalTokens || 0
       }
@@ -189,7 +165,6 @@ export default defineEventHandler(async (event) => {
 
   return {
     period,
-    tierStats,
     costDistribution: buckets,
     topSpenders,
     dailyActiveUsers,

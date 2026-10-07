@@ -37,14 +37,6 @@
       }
     },
     {
-      label: 'Subscriptions',
-      icon: 'i-heroicons-banknotes',
-      to: '/admin/subscriptions',
-      onSelect: () => {
-        isOpen.value = false
-      }
-    },
-    {
       label: 'Statistics',
       icon: 'i-lucide-bar-chart-3',
       to: '/admin/stats',
@@ -145,14 +137,6 @@
           label: 'Caching',
           icon: 'i-lucide-hard-drive',
           to: '/admin/stats/llm/caching',
-          onSelect: () => {
-            isOpen.value = false
-          }
-        },
-        {
-          label: 'Quotas',
-          icon: 'i-lucide-gauge',
-          to: '/admin/stats/llm/quotas',
           onSelect: () => {
             isOpen.value = false
           }

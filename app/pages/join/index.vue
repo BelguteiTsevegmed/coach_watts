@@ -201,7 +201,7 @@
   )
   const joinFormSubtitle = translateOrFallback(
     'join.form_subtitle',
-    'Start free with a 14-day full-access trial. No credit card required.',
+    'Create your account to start training with Coach Watts.',
     ['Create your Coach Watts account. No credit card required.']
   )
   const joinErrorTitle = translateOrFallback('join.error_title', 'Signup failed')
@@ -227,7 +227,7 @@
   const joinIntervals = translateOrFallback('join.intervals', 'Create Account with Intervals.icu')
   const joinFreeForeverNote = translateOrFallback(
     'join.free_forever_note',
-    'Free forever with optional upgrades. Your 14-day trial starts at signup.'
+    'All coaching features are available without a subscription.'
   )
   const joinAlreadyAccount = translateOrFallback('join.already_account', 'Already have an account?')
   const joinLogin = translateOrFallback('join.login', 'Log in')

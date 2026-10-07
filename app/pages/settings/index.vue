@@ -20,7 +20,6 @@
     await navigateTo({ path: '/settings/apps', query: route.query }, { replace: true })
   }
 
-  const config = useRuntimeConfig()
   const sections = [
     {
       title: 'Your profile',
@@ -39,17 +38,7 @@
       description: 'Choose the guidance and level of detail that suit you.',
       to: '/settings/ai',
       icon: 'i-lucide-message-circle'
-    },
-    ...(config.public.stripePublishableKey
-      ? [
-          {
-            title: 'Membership',
-            description: 'Manage your plan and billing details.',
-            to: '/settings/billing',
-            icon: 'i-lucide-credit-card'
-          }
-        ]
-      : [])
+    }
   ]
 </script>
 

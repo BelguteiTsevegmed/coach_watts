@@ -44,20 +44,6 @@
     query: { period }
   })
 
-  const tierChartData = computed(() => {
-    if (!stats.value?.tierStats) return { labels: [], datasets: [] }
-    return {
-      labels: stats.value.tierStats.map((t) => t.tier),
-      datasets: [
-        {
-          label: 'Avg Cost per User',
-          backgroundColor: ['#94a3b8', '#3b82f6', '#ec4899'], // gray, blue, pink
-          data: stats.value.tierStats.map((t) => t.avgCostPerUser)
-        }
-      ]
-    }
-  })
-
   const distributionChartData = computed(() => {
     if (!stats.value?.costDistribution) return { labels: [], datasets: [] }
     return {
@@ -178,21 +164,6 @@
             <UCard>
               <template #header>
                 <div class="flex justify-between items-center">
-                  <h3 class="font-semibold">Tier Margins (Avg Cost / User)</h3>
-                </div>
-              </template>
-              <div class="h-64 relative">
-                <Bar
-                  :key="period"
-                  :data="tierChartData"
-                  :options="{ responsive: true, maintainAspectRatio: false }"
-                />
-              </div>
-            </UCard>
-
-            <UCard>
-              <template #header>
-                <div class="flex justify-between items-center">
                   <h3 class="font-semibold">Cost Distribution (User Count)</h3>
                 </div>
               </template>
@@ -238,7 +209,7 @@
                     class="text-left text-xs uppercase text-gray-500 bg-gray-50 dark:bg-gray-900/50"
                   >
                     <th class="py-3 px-4">User</th>
-                    <th class="py-3 px-4">Tier</th>
+
                     <th class="py-3 px-4 text-right">Total Cost</th>
                     <th class="py-3 px-4 text-right">Total Tokens</th>
                   </tr>
@@ -255,20 +226,7 @@
                       </div>
                       <div class="text-xs text-gray-500">{{ user.email }}</div>
                     </td>
-                    <td class="py-2 px-4">
-                      <UBadge
-                        :color="
-                          user.tier === 'PRO'
-                            ? 'primary'
-                            : user.tier === 'SUPPORTER'
-                              ? 'info'
-                              : 'neutral'
-                        "
-                        size="xs"
-                      >
-                        {{ user.tier }}
-                      </UBadge>
-                    </td>
+
                     <td class="py-2 px-4 text-right font-mono text-emerald-600 font-bold">
                       ${{ user.totalCost.toFixed(2) }}
                     </td>

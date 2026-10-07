@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { toRaw } from 'vue'
-import type { SubscriptionTier, SubscriptionStatus } from '@prisma/client'
 import { LBS_TO_KG } from '~/utils/metrics'
 import { showDashboardProgressToast } from '~/utils/dashboard-progress-toast'
 interface User {
@@ -8,29 +7,12 @@ interface User {
   email: string
   name: string | null
   image: string | null
-  stripeCustomerId: string | null
-  stripeSubscriptionId: string | null
-  subscriptionTier: SubscriptionTier
-  subscriptionStatus: SubscriptionStatus
-  subscriptionPeriodEnd: Date | null
   nutritionTrackingEnabled?: boolean
-  pendingSubscriptionTier: SubscriptionTier | null
-  pendingSubscriptionPeriodEnd: Date | null
-  trialEndsAt: Date | null
-  shareRewardClaimedAt: Date | null
-  shareRewardDaysGranted: number | null
   dashboardSettings?: any
   isAdmin?: boolean
   language?: string
   uiLanguage?: string
   entitlements?: UserEntitlements
-  activePromotionalGrant?: {
-    tier: SubscriptionTier
-    endsAt: string
-    campaignSlug: string
-    partnerName: string
-    campaignName: string
-  } | null
 }
 
 interface UserEntitlements {
@@ -54,7 +36,7 @@ export const useUserStore = defineStore('user', () => {
   const { refresh: refreshRuns } = useUserRuns()
   const { onTaskCompleted } = useUserRunsState()
 
-  // Fetch user data (including subscription)
+  // Fetch user data
   async function fetchUser(force = false) {
     if (user.value && !force) return
 
@@ -109,98 +91,19 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  // Calculate user entitlements based on subscription, trial, and promotional grants
-  const entitlements = computed<UserEntitlements | null>(() => {
-    if (!user.value) return null
-
-    if (user.value.entitlements) {
-      return user.value.entitlements
-    }
-
-    const config = useRuntimeConfig()
-
-    // If Stripe is not configured (self-hosted mode), everyone is PRO
-    if (!config.public.stripePublishableKey) {
-      return {
-        tier: 'PRO',
-        autoSync: true,
-        autoAnalysis: true,
-        aiModel: 'pro',
-        priorityProcessing: true,
-        proactivity: true
-      }
-    }
-
-    const now = new Date()
-    const periodEnd = user.value.subscriptionPeriodEnd
-      ? new Date(user.value.subscriptionPeriodEnd)
-      : new Date(0)
-
-    const isContributor = user.value.subscriptionStatus === 'CONTRIBUTOR'
-
-    // Grace period logic
-    const isEffectivePremium =
-      user.value.subscriptionStatus === 'ACTIVE' ||
-      isContributor ||
-      (user.value.subscriptionPeriodEnd && now < periodEnd)
-
-    let effectiveTier: SubscriptionTier = 'FREE'
-
-    if (isContributor) {
-      effectiveTier = 'PRO'
-    } else if (isEffectivePremium) {
-      effectiveTier = user.value.subscriptionTier
-    }
-
-    const isTrialActive = Boolean(
-      user.value.trialEndsAt &&
-      new Date(user.value.trialEndsAt) > now &&
-      user.value.subscriptionTier === 'FREE'
-    )
-    if (isTrialActive && !isEffectivePremium) {
-      effectiveTier = effectiveTier === 'PRO' ? 'PRO' : 'SUPPORTER'
-    }
-
-    const promotionalTier = user.value.activePromotionalGrant?.tier
-    if (promotionalTier) {
-      const rank = { FREE: 0, SUPPORTER: 1, PRO: 2 }
-      effectiveTier = rank[promotionalTier] > rank[effectiveTier] ? promotionalTier : effectiveTier
-    }
-
-    return {
-      tier: effectiveTier,
-      autoSync: effectiveTier !== 'FREE',
-      autoAnalysis: effectiveTier !== 'FREE',
-      aiModel: effectiveTier === 'PRO' ? 'pro' : 'flash',
-      priorityProcessing: effectiveTier !== 'FREE',
-      proactivity: effectiveTier === 'PRO'
-    }
-  })
-
-  const isTrialActive = computed(() => {
-    if (!user.value?.trialEndsAt) return false
-    return new Date(user.value.trialEndsAt) > new Date()
-  })
-
-  const trialDaysRemaining = computed(() => {
-    if (!user.value?.trialEndsAt) return 0
-    const end = new Date(user.value.trialEndsAt).getTime()
-    const now = new Date().getTime()
-    return Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)))
-  })
-
-  // Check if user has a specific entitlement
-  function hasEntitlement(feature: keyof Omit<UserEntitlements, 'tier'>): boolean | string {
-    return entitlements.value?.[feature] ?? false
-  }
-
-  // Check if user has minimum tier
-  function hasMinimumTier(minimumTier: 'FREE' | 'SUPPORTER' | 'PRO'): boolean {
-    if (!entitlements.value) return false
-    const tierHierarchy = { FREE: 0, SUPPORTER: 1, PRO: 2 }
-    return tierHierarchy[entitlements.value.tier] >= tierHierarchy[minimumTier]
-  }
-
+  // Access does not depend on stored billing records in this personal fork.
+  const entitlements = computed<UserEntitlements | null>(() =>
+    user.value
+      ? {
+          tier: 'PRO',
+          autoSync: true,
+          autoAnalysis: true,
+          aiModel: 'pro',
+          priorityProcessing: true,
+          proactivity: true
+        }
+      : null
+  )
   async function fetchProfile(force = false) {
     if (profile.value && !force) return
 
@@ -458,16 +361,12 @@ export const useUserStore = defineStore('user', () => {
     generating,
     userLoading,
     entitlements,
-    isTrialActive,
-    trialDaysRemaining,
     dataSyncStatus,
     missingFields,
     fetchUser,
     updateDashboardSettings,
     fetchProfile,
     generateProfile,
-    updateUserMetrics,
-    hasEntitlement,
-    hasMinimumTier
+    updateUserMetrics
   }
 })

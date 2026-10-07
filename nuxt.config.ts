@@ -322,29 +322,6 @@ export default defineNuxtConfig({
     resendApiKey: process.env.RESEND_API_KEY || '',
     resendWebhookSecret: process.env.RESEND_WEBHOOK_SECRET || '',
 
-    // Stripe Configuration
-    stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
-    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
-    stripeSupporterProductId: process.env.STRIPE_SUPPORTER_PRODUCT_ID || '',
-    stripeSupporterMonthlyPriceId: process.env.STRIPE_SUPPORTER_MONTHLY_PRICE_ID || '',
-    stripeSupporterAnnualPriceId: process.env.STRIPE_SUPPORTER_ANNUAL_PRICE_ID || '',
-    stripeSupporterMonthlyEurPriceId: process.env.STRIPE_SUPPORTER_MONTHLY_EUR_PRICE_ID || '',
-    stripeSupporterAnnualEurPriceId: process.env.STRIPE_SUPPORTER_ANNUAL_EUR_PRICE_ID || '',
-    stripeProProductId: process.env.STRIPE_PRO_PRODUCT_ID || '',
-    stripeProMonthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || '',
-    stripeProAnnualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || '',
-    stripeProMonthlyEurPriceId: process.env.STRIPE_PRO_MONTHLY_EUR_PRICE_ID || '',
-    stripeProAnnualEurPriceId: process.env.STRIPE_PRO_ANNUAL_EUR_PRICE_ID || '',
-
-    // RevenueCat and provider-neutral subscription reconciliation (server-only keys)
-    revenueCatApiBaseUrl: process.env.REVENUECAT_API_BASE_URL || 'https://api.revenuecat.com/v1',
-    revenueCatSecretApiKey: process.env.REVENUECAT_SECRET_API_KEY || '',
-    revenueCatStripePublicApiKey: process.env.REVENUECAT_STRIPE_APP_PUBLIC_API_KEY || '',
-    revenueCatWebhookAuthorization: process.env.REVENUECAT_WEBHOOK_AUTHORIZATION || '',
-    revenueCatAcceptSandbox: process.env.REVENUECAT_ACCEPT_SANDBOX || 'false',
-    subscriptionSupporterProductIds: process.env.SUBSCRIPTION_SUPPORTER_PRODUCT_IDS || '',
-    subscriptionProProductIds: process.env.SUBSCRIPTION_PRO_PRODUCT_IDS || '',
-
     public: {
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3099',
       version: pkg.version,
@@ -358,17 +335,6 @@ export default defineNuxtConfig({
       authBypassEnabled: process.env.E2E_MODE === 'true' ? false : !!process.env.AUTH_BYPASS_USER,
       authBypassUser: process.env.E2E_MODE === 'true' ? '' : process.env.AUTH_BYPASS_USER || '',
       authBypassName: process.env.E2E_MODE === 'true' ? '' : process.env.AUTH_BYPASS_NAME || '',
-      stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
-      stripeSupporterMonthlyPriceId: process.env.STRIPE_SUPPORTER_MONTHLY_PRICE_ID || '',
-      stripeSupporterAnnualPriceId: process.env.STRIPE_SUPPORTER_ANNUAL_PRICE_ID || '',
-      stripeSupporterMonthlyEurPriceId: process.env.STRIPE_SUPPORTER_MONTHLY_EUR_PRICE_ID || '',
-      stripeSupporterAnnualEurPriceId: process.env.STRIPE_SUPPORTER_ANNUAL_EUR_PRICE_ID || '',
-      stripeProMonthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || '',
-      stripeProAnnualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || '',
-      stripeProMonthlyEurPriceId: process.env.STRIPE_PRO_MONTHLY_EUR_PRICE_ID || '',
-      stripeProAnnualEurPriceId: process.env.STRIPE_PRO_ANNUAL_EUR_PRICE_ID || '',
-      subscriptionsEnabled: process.env.NUXT_PUBLIC_SUBSCRIPTIONS_ENABLED !== 'false',
-      nativeSubscriptionsEnabled: process.env.NUXT_PUBLIC_NATIVE_SUBSCRIPTIONS_ENABLED === 'true',
       stravaEnabled: process.env.NUXT_PUBLIC_STRAVA_ENABLED !== 'false',
       // Sign in with Apple (Guideline 4.8) — true when Services ID + key env are present
       appleSignInEnabled: Boolean(

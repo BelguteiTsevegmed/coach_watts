@@ -102,13 +102,6 @@
     "id": "summarize-chat"
   },
   {
-    "id": "trial-ending-reminder-cron",
-    "schedule": {
-      "cron": "0 9 * * *",
-      "timezone": "UTC"
-    }
-  },
-  {
     "id": "adapt-training-plan",
     "maxDuration": 600,
     "queue": {

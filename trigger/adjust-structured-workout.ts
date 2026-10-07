@@ -805,27 +805,6 @@ export async function runAdjustStructuredWorkout(
     }
     logStage('quota-check-passed')
 
-    if (entityType === 'PlannedWorkout' && workout.user.subscriptionTier === 'FREE') {
-      const timezone = await getUserTimezone(workout.userId)
-      const today = getUserLocalDate(timezone)
-      const fourWeeksFromNow = new Date(today)
-      fourWeeksFromNow.setUTCDate(today.getUTCDate() + 28)
-
-      if (workout.date > fourWeeksFromNow) {
-        logger.log('Skipping structured workout adjustment: Free tier limit (4 weeks)', {
-          entityId,
-          workoutDate: workout.date,
-          limitDate: fourWeeksFromNow
-        })
-        return finalizeAndReturn({
-          success: false,
-          reason: 'FREE_TIER_LIMIT',
-          message: 'Structured workout adjustment is limited to 4 weeks in advance for free users.'
-        })
-      }
-    }
-    logStage('subscription-check-passed', { subscriptionTier: workout.user.subscriptionTier })
-
     // Fetch Sport Specific Settings
     const sportSettings = await sportSettingsRepository.getForActivityType(
       workout.userId,

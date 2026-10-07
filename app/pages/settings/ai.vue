@@ -9,53 +9,11 @@
       </template>
     </UCard>
 
-    <UCard
-      v-if="showUpgradeBanner && !hasSuccessBypass && !userStore.hasMinimumTier('SUPPORTER')"
-      :ui="profileSettingsCardUi"
-      class="mb-6"
-    >
-      <div class="flex items-start gap-4">
-        <UIcon name="i-heroicons-sparkles" class="w-10 h-10 text-primary shrink-0 mt-1" />
-        <div class="flex-1 flex justify-between items-start">
-          <div>
-            <h3 class="text-lg font-bold text-gray-900 dark:text-white">
-              {{ t('upgrade_banner_title') }}
-            </h3>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400 font-medium">
-              {{ t('upgrade_banner_desc') }}
-            </p>
-            <div class="mt-3">
-              <UButton
-                to="/settings/billing"
-                color="primary"
-                size="sm"
-                :label="t('upgrade_banner_button')"
-                icon="i-heroicons-arrow-right"
-                trailing
-              />
-            </div>
-          </div>
-          <UButton
-            icon="i-heroicons-x-mark"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            @click="
-              () => {
-                showUpgradeBanner = false
-              }
-            "
-          />
-        </div>
-      </div>
-    </UCard>
-
     <!-- Three-column layout for settings, analytics, and charts -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <SettingsAiCoachSettings
         v-if="aiSettings"
         :settings="aiSettings as any"
-        :force-unlocked="hasSuccessBypass"
         @save="saveAiSettings"
       />
 
@@ -63,17 +21,12 @@
         <SettingsAiAutomationSettings
           v-if="aiSettings"
           :settings="aiSettings as any"
-          :force-unlocked="hasSuccessBypass"
           @save="saveAiSettings"
         />
         <ClientOnly>
           <SettingsAiUsageCharts />
         </ClientOnly>
       </div>
-
-      <ClientOnly>
-        <SettingsAiQuotas />
-      </ClientOnly>
     </div>
 
     <!-- Identity & Context -->
@@ -87,13 +40,11 @@
 </template>
 
 <script setup lang="ts">
-  import { useLocalStorage } from '@vueuse/core'
   import { useTranslate } from '@tolgee/vue'
   import { profileSettingsCardUi } from '~/utils/mobile-surface-ui'
 
   const { t } = useTranslate('settings')
   const toast = useToast()
-  const route = useRoute()
 
   definePageMeta({
     middleware: 'auth'
@@ -108,10 +59,6 @@
       }
     ]
   })
-
-  const userStore = useUserStore()
-  const showUpgradeBanner = useLocalStorage('ai-settings-upgrade-banner', true)
-  const hasSuccessBypass = computed(() => route.query.success === 'true')
 
   // Fetch AI settings
   const { data: aiSettings, refresh: refreshSettings } = await useFetch('/api/settings/ai', {

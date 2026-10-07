@@ -84,7 +84,7 @@
     })
   }
 
-  // Ensure user data (including subscription) is loaded
+  // Ensure user data is loaded
   await callOnce(async () => {
     if (data.value?.user) {
       await Promise.all([userStore.fetchUser(), userStore.fetchProfile()])
@@ -435,18 +435,6 @@
             open.value = false
           }
         },
-        ...(config.public.stripePublishableKey
-          ? [
-              {
-                label: navLabel('navigation_settings_billing', 'Billing'),
-                icon: 'i-lucide-credit-card',
-                to: '/settings/billing',
-                onSelect: () => {
-                  open.value = false
-                }
-              }
-            ]
-          : []),
         {
           label: navLabel('navigation_settings_apps', 'Apps'),
           icon: 'i-lucide-layout-grid',
@@ -688,15 +676,6 @@
       }
     ]
 
-    if (config.public.stripePublishableKey) {
-      settingsItems.push({
-        label: navLabel('navigation_settings_billing', 'Billing'),
-        icon: 'i-lucide-credit-card',
-        to: '/settings/billing',
-        onSelect: () => (open.value = false)
-      })
-    }
-
     searchGroups.push({
       id: 'settings',
       label: navLabel('navigation_settings_title', 'Settings'),
@@ -713,12 +692,6 @@
             label: navLabel('navigation_admin_nav_users', 'Users Management'),
             icon: 'i-lucide-users-2',
             to: '/admin/users',
-            onSelect: () => (open.value = false)
-          },
-          {
-            label: navLabel('navigation_admin_nav_subscriptions', 'Subscriptions'),
-            icon: 'i-lucide-wallet',
-            to: '/admin/subscriptions',
             onSelect: () => (open.value = false)
           },
           {
@@ -957,15 +930,6 @@
         icon: 'i-lucide-sliders-horizontal',
         to: '/settings/ai'
       },
-      ...(config.public.stripePublishableKey
-        ? [
-            {
-              label: navLabel('navigation_settings_billing', 'Billing'),
-              icon: 'i-lucide-credit-card',
-              to: '/settings/billing'
-            }
-          ]
-        : []),
       {
         label: navLabel('journey_settings', 'All settings'),
         icon: 'i-lucide-settings',

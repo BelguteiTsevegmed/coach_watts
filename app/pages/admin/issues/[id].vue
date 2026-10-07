@@ -1033,14 +1033,6 @@
               <template #header>
                 <div class="flex items-center justify-between">
                   <h3 class="text-sm font-semibold">User Info</h3>
-                  <UBadge
-                    v-if="report?.user.subscriptionTier"
-                    :color="report.user.subscriptionTier === 'PRO' ? 'primary' : 'neutral'"
-                    variant="soft"
-                    size="xs"
-                  >
-                    {{ report.user.subscriptionTier }}
-                  </UBadge>
                 </div>
               </template>
               <div class="space-y-4">
@@ -1107,9 +1099,7 @@
                         >Status</span
                       >
                       <span class="font-bold">{{
-                        isReportedUserDeactivated
-                          ? 'DEACTIVATED'
-                          : report?.user.subscriptionStatus || 'NONE'
+                        isReportedUserDeactivated ? 'DEACTIVATED' : 'ACTIVE'
                       }}</span>
                     </div>
                   </div>

@@ -1,68 +1,53 @@
-import { z } from 'zod'
+import { createError, defineEventHandler, readBody } from 'h3'
 import { requireAuth } from '../../utils/auth-guard'
 import { dailyCheckinRepository } from '../../utils/repositories/dailyCheckinRepository'
 import { getUserTimezone, getUserLocalDate } from '../../utils/date'
-import { dispatchTask } from '../../utils/task-dispatcher'
-import { assertQuotaAllowed } from '../../utils/quotas/http'
+import { dispatchTask, getTaskDriver } from '../../utils/task-dispatcher'
+import { mainTaskQueue } from '../../utils/queue'
 import { publishTaskRunStartedEvent } from '../../utils/task-run-events'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event, ['health:write'])
   const userId = user.id
-  // 0. Quota Check
-  await assertQuotaAllowed(userId, 'daily_checkin', undefined, event)
-
   const timezone = await getUserTimezone(userId)
   const today = getUserLocalDate(timezone)
-
-  // Check if already exists
   const checkin = await dailyCheckinRepository.getByDate(userId, today)
-
-  // Check if stuck in PENDING state (older than 30s)
-  const isStuckPending =
-    checkin?.status === 'PENDING' && Date.now() - checkin.updatedAt.getTime() > 30 * 1000
-
-  // If exists and completed/pending (and not stuck), return it (unless force regenerate)
-  // The UI can handle "regenerate" by passing a flag.
   const body = await readBody(event).catch(() => ({}))
-  const force = body.force === true
+  const force = body?.force === true
+  const isStuck =
+    checkin &&
+    ['PENDING', 'PROCESSING'].includes(checkin.status) &&
+    Date.now() - checkin.updatedAt.getTime() > 5 * 60 * 1000
 
-  if (checkin && !force && !isStuckPending) {
-    return checkin
+  if (checkin && !force && !isStuck && checkin.status !== 'FAILED') return checkin
+
+  if (getTaskDriver() === 'redis' && (await mainTaskQueue.getWorkers()).length === 0) {
+    throw createError({
+      statusCode: 503,
+      message: 'The background worker is offline. Start pnpm dev:worker, then try again.'
+    })
   }
 
-  // Trigger the task (without creating a DB record first)
-  // If forced or stuck, use a unique key to bypass idempotency TTL
+  // Persist before enqueueing so polling can always observe progress or failure.
+  // Upsert also protects simultaneous first requests from a unique-key race.
+  const pending = checkin || (await dailyCheckinRepository.ensurePending(userId, today))
+  if (checkin) await dailyCheckinRepository.update(pending.id, { status: 'PENDING' })
   const idempotencyKey =
-    checkin && (force || isStuckPending)
+    checkin && (force || isStuck || checkin.status === 'FAILED')
       ? `${userId}-${today.getTime()}-${Date.now()}`
       : `${userId}-${today.getTime()}`
 
-  const handle = await dispatchTask(
-    'generate-daily-checkin',
-    {
-      userId,
-      date: today,
-      checkinId: checkin?.id, // Pass ID if it exists, otherwise task handles it
-      source: 'user'
-    },
-    {
-      concurrencyKey: userId,
-      tags: [`user:${userId}`]
-    }
-  )
-
+  let handle: { id: string }
+  try {
+    handle = await dispatchTask(
+      'generate-daily-checkin',
+      { userId, date: today, checkinId: pending.id, source: 'user', force },
+      { idempotencyKey, concurrencyKey: userId, tags: [`user:${userId}`] }
+    )
+  } catch (error) {
+    await dailyCheckinRepository.update(pending.id, { status: 'FAILED' })
+    throw error
+  }
   await publishTaskRunStartedEvent(userId, 'generate-daily-checkin', handle)
-
-  // Return existing checkin if available, otherwise a placeholder
-  // The UI will switch to "Loading" because of the task trigger + WebSocket
-  if (checkin) {
-    return { ...checkin, status: 'PENDING' } // Hint to UI that it's updating
-  }
-
-  return {
-    status: 'PENDING',
-    date: today,
-    questions: []
-  }
+  return { ...pending, status: 'PENDING' }
 })

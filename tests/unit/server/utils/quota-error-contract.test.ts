@@ -1,7 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { prisma } from '../../../../server/utils/db'
-import { getActivePromotionalGrant } from '../../../../server/utils/partner-campaigns'
+import { describe, expect, it } from 'vitest'
 import {
   buildQuotaErrorPayload,
   quotaRetryAfterSeconds
@@ -10,24 +7,6 @@ import {
   quotaFeatureCode,
   resolveUpgradeForOperation
 } from '../../../../server/utils/quotas/registry'
-
-vi.mock('../../../../server/utils/partner-campaigns', () => ({
-  getActivePromotionalGrant: vi.fn()
-}))
-
-vi.mock('../../../../server/utils/db', () => ({
-  prisma: {
-    user: { findUnique: vi.fn(), create: vi.fn() },
-    quotaDenial: { create: vi.fn() },
-    $queryRaw: vi.fn()
-  }
-}))
-
-vi.mock('../../../../server/utils/date', () => ({
-  getUserTimezone: vi.fn(),
-  getStartOfDayUTC: vi.fn(() => new Date('2026-03-08T00:00:00.000Z')),
-  getEndOfDayUTC: vi.fn(() => new Date('2026-03-08T23:59:59.999Z'))
-}))
 
 describe('quota feature codes', () => {
   it('maps metered operations to the client-facing feature', () => {
@@ -126,42 +105,5 @@ describe('429 payload', () => {
     expect(payload.feature).toBeNull()
     expect(payload.retryAfterSeconds).toBeNull()
     expect(payload.requiredTier).toBeNull()
-  })
-})
-
-describe('checkQuota', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('throws a 429 carrying the full contract', async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({
-      subscriptionTier: 'FREE',
-      subscriptionStatus: 'NONE',
-      subscriptionPeriodEnd: null,
-      trialEndsAt: null,
-      timezone: 'UTC'
-    } as any)
-    vi.mocked(getActivePromotionalGrant).mockResolvedValue(null)
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([
-      { count: 6, firstUsedAt: new Date('2026-03-01T00:00:00.000Z') }
-    ] as any)
-    vi.mocked(prisma.quotaDenial.create).mockResolvedValue({} as any)
-
-    const { checkQuota } = await import('../../../../server/utils/quotas/engine')
-
-    await expect(checkQuota('user-123', 'workout_analysis')).rejects.toMatchObject({
-      statusCode: 429,
-      data: {
-        code: 'QUOTA_EXCEEDED',
-        feature: 'ACTIVITY_ANALYSIS',
-        operation: 'workout_analysis',
-        limit: 6,
-        used: 6,
-        requiredTier: 'SUPPORTER',
-        requiredTierLimit: 30,
-        quotaExceeded: true
-      }
-    })
   })
 })

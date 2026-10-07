@@ -604,36 +604,6 @@ emailCommand
   })
 
 emailCommand
-  .command('queue-subscription')
-  .description('Queue a test Subscription Started email')
-  .argument('<userId>', 'User ID')
-  .action(async (userId) => {
-    const user = await prisma.user.findUnique({ where: { id: userId } })
-    if (!user) {
-      console.error(`User ${userId} not found`)
-      return
-    }
-
-    console.log(`Queueing Subscription Started email for ${user.email}...`)
-
-    await queueEmailTask({
-      userId: user.id,
-      templateKey: 'SubscriptionStarted',
-      eventKey: 'CLI_TEST_SUBSCRIPTION',
-      audience: 'TRANSACTIONAL',
-      subject: 'Welcome to Coach Watts Pro!',
-      props: {
-        name: user.name || 'Athlete',
-        tier: 'PRO',
-        unsubscribeUrl: 'https://app.coachwatts.com/settings/profile'
-      }
-    })
-
-    console.log('Task triggered successfully! Check the Admin > Emails page.')
-    process.exit(0)
-  })
-
-emailCommand
   .command('queue-daily-coach')
   .description('Queue a test Daily Recommendation email')
   .argument('<userId>', 'User ID')
