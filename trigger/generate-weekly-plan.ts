@@ -1,3 +1,10 @@
+import {
+  readSportVolumeTargets,
+  remainingProgressionBudgets,
+  committedProgressionSessions,
+  progressionSessionDay,
+  type SportVolumeTargets
+} from '../server/utils/plans/progression-policy'
 import './init'
 import { logger, task } from '@trigger.dev/sdk/v3'
 import { generateStructuredAnalysis } from '../server/utils/gemini'
@@ -18,7 +25,10 @@ import {
   getStartOfDayUTC,
   getEndOfDayUTC,
   formatDateUTC,
-  calculateAge
+  calculateAge,
+  getStartOfLocalDateUTC,
+  getEndOfLocalDateUTC,
+  parseCalendarDate
 } from '../server/utils/date'
 import {
   formatPromptWeight,
@@ -131,6 +141,7 @@ export async function runGenerateWeeklyPlan(payload: {
     end: string
     eligibleDays: string[]
     remainingVolumeMinutes: number
+    remainingSportVolumeTargets?: SportVolumeTargets | null
     remainingTSS: number
     committedMinutes: number
     committedTSS: number
@@ -374,7 +385,9 @@ export async function runGenerateWeeklyPlan(payload: {
         durationSec: true,
         distanceMeters: true,
         tss: true,
-        targetArea: true
+        targetArea: true,
+        managedBy: true,
+        completed: true
       }
     }),
 
@@ -455,23 +468,28 @@ export async function runGenerateWeeklyPlan(payload: {
   // Fetch full Plan context if available (via trainingWeekId)
   let planContext = ''
   let weekVolumeTargetMinutes: number | null = null
-  if (trainingWeekId) {
-    const fullContext = await prisma.trainingWeek.findUnique({
-      where: { id: trainingWeekId },
-      include: {
-        block: {
-          include: {
-            plan: {
-              include: { goal: true }
-            }
-          }
-        }
-      }
-    })
-
-    if (fullContext) {
-      weekVolumeTargetMinutes = fullContext.volumeTargetMinutes || null
-      planContext = `
+  let sportVolumeTargets: SportVolumeTargets | null = null
+  let resolvedTrainingWeekId = trainingWeekId
+  const contextInclude = { block: { include: { plan: { include: { goal: true } } } } } as const
+  const fullContext = trainingWeekId
+    ? await prisma.trainingWeek.findUnique({
+        where: { id: trainingWeekId },
+        include: contextInclude
+      })
+    : await prisma.trainingWeek.findFirst({
+        where: {
+          block: { plan: { userId, status: 'ACTIVE' } },
+          startDate: { lte: parseCalendarDate(formatUserDate(alignedWeekStart, timezone))! },
+          endDate: { gte: parseCalendarDate(formatUserDate(alignedWeekEndUTC, timezone))! }
+        },
+        include: contextInclude
+      })
+  if (trainingWeekId && !fullContext) throw new Error('Training week not found')
+  if (fullContext) {
+    resolvedTrainingWeekId = fullContext.id
+    weekVolumeTargetMinutes = fullContext.volumeTargetMinutes ?? null
+    sportVolumeTargets = readSportVolumeTargets(fullContext.sportVolumeTargets)
+    planContext = `
 CONTEXT FROM MASTER PLAN:
 - Plan Name: ${fullContext.block.plan.name || fullContext.block.plan.goal?.title || 'Custom Plan'}
 - Current Block: "${fullContext.block.name}" (${fullContext.block.type} Phase)
@@ -480,10 +498,10 @@ CONTEXT FROM MASTER PLAN:
 - Week Focus: ${fullContext.focus || 'Standard Progression'}
 - Target Weekly Volume: ${Math.round(fullContext.volumeTargetMinutes / 60)} hours
 - Target Weekly TSS: ${fullContext.tssTarget}
+- Sport-specific minute ceilings: ${JSON.stringify(sportVolumeTargets || {})}. Unused cycling time cannot be spent running.
 `
-      // Override phase instruction with strict block context
-      phaseInstruction = `\nCURRENT PHASE: ${fullContext.block.type}. Focus strictly on ${fullContext.block.primaryFocus}. This is Week ${fullContext.weekNumber} of the block.`
-    }
+    // Override phase instruction with strict block context
+    phaseInstruction = `\nCURRENT PHASE: ${fullContext.block.type}. Focus strictly on ${fullContext.block.primaryFocus}. This is Week ${fullContext.weekNumber} of the block.`
   }
 
   if (!phaseInstruction && primaryGoal) {
@@ -769,6 +787,7 @@ Maintain your **${aiSettings.aiPersona}** persona throughout the plan's reasonin
 The earlier full-week instructions are context only. Generate a proposal ONLY for these eligible calendar days: ${replacement.eligibleDays.join(', ')}.
 Keep all locked sessions and every session through today unchanged. Do NOT include them in days.
 Committed completed/preserved load: ${replacement.committedMinutes} minutes, ${replacement.committedTSS} TSS.
+Remaining sport-specific minute ceilings: ${JSON.stringify(replacement.remainingSportVolumeTargets || {})}. Do not spend another sport’s budget on running.
 Remaining weekly budget: at most ${replacement.remainingVolumeMinutes} minutes and ${replacement.remainingTSS} TSS across ALL proposed days combined.
 Cover every eligible day exactly once; explicitly use Rest with 0 minutes and 0 TSS when appropriate.
 Respect availability and slot duration limits. These restrictions cannot be overridden by user instructions.
@@ -809,15 +828,71 @@ Retain the current block and week focus. Return actual replacement sessions, nev
   const daysToBlockWeek = (days: any[]): GeneratedBlockWeek => ({
     weekNumber: 1,
     workouts: days.map((d: any) => ({
-      dayOfWeek: d.dayOfWeek ?? 0,
+      dayOfWeek: parseCalendarDate(d.date)?.getUTCDay() ?? d.dayOfWeek ?? 0,
       title: d.title,
       type: d.workoutType,
       durationMinutes: d.durationMinutes,
       tssEstimate: d.targetTSS
     }))
   })
+  const [plannedForBudget, completedForBudget] =
+    sportVolumeTargets && fullContext
+      ? await Promise.all([
+          prisma.plannedWorkout.findMany({
+            where: { userId, date: { gte: fullContext.startDate, lte: fullContext.endDate } },
+            select: {
+              id: true,
+              date: true,
+              type: true,
+              durationSec: true,
+              managedBy: true,
+              completed: true
+            }
+          }),
+          prisma.workout.findMany({
+            where: {
+              userId,
+              isDuplicate: false,
+              date: {
+                gte: getStartOfLocalDateUTC(timezone, formatDateUTC(fullContext.startDate)),
+                lte: getEndOfLocalDateUTC(timezone, formatDateUTC(fullContext.endDate))
+              }
+            },
+            select: { date: true, type: true, durationSec: true, plannedWorkoutId: true }
+          })
+        ])
+      : [[], []]
+  // Implicit partial-week generation only replaces its requested date range.
+  // Unfinished AI sessions elsewhere in the linked week also consume the budget.
+  const outsideReplacementIds = trainingWeekId
+    ? []
+    : plannedForBudget
+        .filter((w) => w.date < alignedWeekStart || w.date > alignedWeekEndUTC)
+        .map((w) => w.id)
+  const preservedForBudget = sportVolumeTargets
+    ? committedProgressionSessions(plannedForBudget, completedForBudget, [
+        ...(anchorWorkoutIds || []),
+        ...outsideReplacementIds
+      ])
+    : anchoredWorkouts
+  const budgets = remainingProgressionBudgets(
+    weekVolumeTargetMinutes,
+    sportVolumeTargets,
+    preservedForBudget
+  )
+  const protectedCalendarDays = new Set(
+    preservedForBudget.map((w) => progressionSessionDay(w, timezone))
+  )
+  const anchoredDays = new Set(
+    [...protectedCalendarDays].map((day) => parseCalendarDate(day)!.getUTCDay())
+  )
   const weekTargets: WeekVolumeTarget[] = [
-    { weekNumber: 1, volumeTargetMinutes: weekVolumeTargetMinutes }
+    {
+      weekNumber: 1,
+      ...budgets,
+      allowedDaysOfWeek: [0, 1, 2, 3, 4, 5, 6].filter((day) => !anchoredDays.has(day)),
+      availability
+    }
   ]
 
   let planDays: any[] = Array.isArray((plan as any)?.days) ? (plan as any).days : []
@@ -845,6 +920,13 @@ Retain the current block and week focus. Return actual replacement sessions, nev
       planDays.forEach((d: any, i: number) => {
         const clamped = clampedWorkouts[i]
         if (!clamped) return
+        d.workoutType = clamped.type
+        if (clamped.type === 'Rest') {
+          d.title = 'Rest'
+          d.description = clamped.description
+          d.reasoningText = clamped.description
+          delete d.distanceMeters
+        }
         d.durationMinutes = clamped.durationMinutes
         if (typeof clamped.tssEstimate === 'number') d.targetTSS = clamped.tssEstimate
       })
@@ -857,6 +939,12 @@ Retain the current block and week focus. Return actual replacement sessions, nev
       })
     }
   }
+
+  const residualViolations = validateGeneratedBlockWeeks(
+    [daysToBlockWeek(planDays)],
+    weekTargets.filter((target) => target.sportVolumeTargets)
+  )
+  if (residualViolations.length) throw new Error(formatViolationsFeedback(residualViolations))
 
   logger.log('Plan generated from AI', {
     daysPlanned: (plan as any).days?.length,
@@ -937,7 +1025,8 @@ Retain the current block and week focus. Return actual replacement sessions, nev
     const deleted = await prisma.plannedWorkout.deleteMany({
       where: {
         ...scope,
-        managedBy: { not: 'USER' }
+        managedBy: { not: 'USER' },
+        completed: false
       }
     })
 
@@ -953,17 +1042,14 @@ Retain the current block and week focus. Return actual replacement sessions, nev
     const workoutsToCreate = daysArray
       // Filter out any days that match an anchored workout date to avoid duplicates if AI ignored instruction
       .filter((d: any) => {
-        if (!anchorWorkoutIds?.length) return true
+        if (!anchorWorkoutIds?.length && !sportVolumeTargets) return true
 
         // Check if this generated workout conflicts with an anchor
         // d.date is YYYY-MM-DD local string
         // We need to check if any anchor has this same local date
         const generatedDateStr = d.date
 
-        const hasAnchor = anchoredWorkouts.some((anchor) => {
-          const anchorDateStr = formatDateUTC(anchor.date)
-          return anchorDateStr === generatedDateStr
-        })
+        const hasAnchor = protectedCalendarDays.has(generatedDateStr)
 
         if (hasAnchor) {
           logger.log('Skipping generated workout because date is anchored', { date: d.date })
@@ -1049,7 +1135,7 @@ Retain the current block and week focus. Return actual replacement sessions, nev
     })
 
     // Determine the TrainingWeek ID to link to
-    let targetTrainingWeekId: string | undefined = trainingWeekId
+    let targetTrainingWeekId: string | undefined = resolvedTrainingWeekId
     let targetTrainingWeekRange:
       | {
           start: Date
@@ -1074,33 +1160,7 @@ Retain the current block and week focus. Return actual replacement sessions, nev
       }
     }
 
-    // If not found or not passed, search for it
-    if (!targetTrainingWeekId) {
-      // Find the TrainingWeek ID to link these workouts to, if possible
-      const trainingWeek = await prisma.trainingWeek.findFirst({
-        where: {
-          block: {
-            plan: {
-              userId: userId,
-              status: 'ACTIVE'
-            }
-          },
-          startDate: {
-            lte: alignedWeekStart
-          },
-          endDate: {
-            gte: alignedWeekEndUTC
-          }
-        }
-      })
-      if (trainingWeek) {
-        targetTrainingWeekId = trainingWeek.id
-        targetTrainingWeekRange = {
-          start: getStartOfDayUTC(timezone, trainingWeek.startDate),
-          end: getEndOfDayUTC(timezone, trainingWeek.endDate)
-        }
-      }
-    }
+    // Only link the week whose budgets were resolved before proposal validation.
 
     if (workoutsToCreate.length > 0) {
       if (

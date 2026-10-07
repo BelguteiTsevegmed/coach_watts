@@ -172,3 +172,102 @@ describe('formatViolationsFeedback', () => {
     expect(feedback).toContain('windows')
   })
 })
+
+describe('sport progression ceilings', () => {
+  const budgets: WeekVolumeTarget[] = [
+    {
+      weekNumber: 1,
+      volumeTargetMinutes: 200,
+      sportVolumeTargets: { run: 72, ride: 128 },
+      availability: [{ dayOfWeek: 1, slots: [{ duration: 40, activityTypes: ['Run'] }] }]
+    }
+  ]
+  it('rejects excess running even when combined endurance minutes fit', () => {
+    expect(
+      validateGeneratedBlockWeeks(
+        [{ weekNumber: 1, workouts: [{ dayOfWeek: 2, type: 'Run', durationMinutes: 100 }] }],
+        [{ ...budgets[0]!, availability: undefined }]
+      )
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'over_sport_volume' })]))
+  })
+  it('clamps individual slots and sport dose then leaves no residual violation', () => {
+    const result = clampGeneratedBlockWeeks(
+      [
+        {
+          weekNumber: 1,
+          workouts: [{ dayOfWeek: 1, type: 'Run', durationMinutes: 100 }, ride(2, 100)]
+        }
+      ],
+      budgets
+    )
+    expect(result.weeks[0]!.workouts![0]!.durationMinutes).toBeLessThanOrEqual(40)
+    expect(result.weeks[0]!.workouts![1]!.type).toBe('Rest')
+    expect(validateGeneratedBlockWeeks(result.weeks, budgets)).toEqual([])
+  })
+  it('does not exceed tiny or zero budgets to satisfy minimum session duration', () => {
+    for (const volume of [0, 10, 20, 30, 72]) {
+      const targets: WeekVolumeTarget[] = [
+        { weekNumber: 1, volumeTargetMinutes: volume, sportVolumeTargets: { run: volume } }
+      ]
+      const result = clampGeneratedBlockWeeks(
+        [
+          {
+            weekNumber: 1,
+            workouts: [1, 2, 3, 4, 5, 6, 0].map((dayOfWeek) => ({
+              dayOfWeek,
+              type: 'Run',
+              durationMinutes: 60
+            }))
+          }
+        ],
+        targets
+      )
+      expect(weekScheduledMinutes(result.weeks[0]!, targets[0]!)).toBeLessThanOrEqual(volume)
+      expect(validateGeneratedBlockWeeks(result.weeks, targets)).toEqual([])
+    }
+  })
+})
+
+it('prevents multiple sessions from filling the same availability slot twice', () => {
+  const limits: WeekVolumeTarget[] = [
+    {
+      weekNumber: 1,
+      volumeTargetMinutes: 200,
+      sportVolumeTargets: { run: 200 },
+      availability: [
+        { dayOfWeek: 1, slots: [{ duration: 40 }] },
+        { dayOfWeek: 2, slots: [{ duration: 160 }] }
+      ]
+    }
+  ]
+  const week = {
+    weekNumber: 1,
+    workouts: [1, 1].map((dayOfWeek) => ({ dayOfWeek, type: 'Run', durationMinutes: 40 }))
+  }
+  expect(validateGeneratedBlockWeeks([week], limits)).toEqual(
+    expect.arrayContaining([expect.objectContaining({ kind: 'availability' })])
+  )
+  const result = clampGeneratedBlockWeeks([week], limits)
+  expect(weekScheduledMinutes(result.weeks[0]!, limits[0]!)).toBe(40)
+  expect(validateGeneratedBlockWeeks(result.weeks, limits)).toEqual([])
+})
+
+it('normalizes global block week numbers before checking sport ceilings', async () => {
+  const { normalizeGeneratedBlockWeeks } =
+    await import('../../../../../server/utils/plans/block-volume')
+  const weeks = normalizeGeneratedBlockWeeks(
+    [{ weekNumber: 5, workouts: [{ dayOfWeek: 1, type: 'Run', durationMinutes: 450 }] }],
+    1,
+    5
+  )
+  expect(weeks[0]!.weekNumber).toBe(1)
+  expect(
+    validateGeneratedBlockWeeks(weeks, [
+      { weekNumber: 1, volumeTargetMinutes: 72, sportVolumeTargets: { run: 72 } }
+    ])
+  ).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'over_sport_volume' })]))
+  expect(() => normalizeGeneratedBlockWeeks([{ weekNumber: 1 }, { weekNumber: 1 }], 2, 5)).toThrow(
+    'week numbering'
+  )
+  expect(() => normalizeGeneratedBlockWeeks([{ weekNumber: 1 }], 2, 5)).toThrow('week numbering')
+})

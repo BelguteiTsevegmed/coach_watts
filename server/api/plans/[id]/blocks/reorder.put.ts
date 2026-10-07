@@ -1,3 +1,4 @@
+import { refreshPlanWeekTargets } from '../../../../utils/plans/refresh-week-targets'
 import { requireAuth } from '../../../../utils/auth-guard'
 import { prisma } from '../../../../utils/db'
 import { trainingPlanRepository } from '../../../../utils/repositories/trainingPlanRepository'
@@ -55,12 +56,16 @@ export default defineEventHandler(async (event) => {
     }
 
     // 2. Fetch reordered blocks to recalculate dates
-    const updatedBlocks = await trainingBlockRepository.list(planId!, {
-      orderBy: { order: 'asc' },
-      include: {
-        weeks: { orderBy: { weekNumber: 'asc' } }
-      }
-    })
+    const updatedBlocks = await trainingBlockRepository.list(
+      planId!,
+      {
+        orderBy: { order: 'asc' },
+        include: {
+          weeks: { orderBy: { weekNumber: 'asc' } }
+        }
+      },
+      tx
+    )
 
     const currentCursor = new Date(plan.startDate!)
 
@@ -102,6 +107,7 @@ export default defineEventHandler(async (event) => {
       currentCursor.setUTCDate(currentCursor.getUTCDate() + block.durationWeeks * 7)
     }
 
+    await refreshPlanWeekTargets(tx, planId!, user.id)
     return { success: true }
   })
 })

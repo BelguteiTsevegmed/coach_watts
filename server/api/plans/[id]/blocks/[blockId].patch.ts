@@ -1,3 +1,4 @@
+import { refreshPlanWeekTargets } from '../../../../utils/plans/refresh-week-targets'
 import { requireAuth } from '../../../../utils/auth-guard'
 import { prisma } from '../../../../utils/db'
 import { shiftPlanDates } from '../../../../utils/plan-logic'
@@ -134,6 +135,7 @@ export default defineEventHandler(async (event) => {
       tx
     )
 
+    await refreshPlanWeekTargets(tx, planId!, user.id)
     return updatedBlock
   })
 })

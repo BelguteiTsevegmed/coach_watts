@@ -69,9 +69,10 @@ export const trainingBlockRepository = {
     options: {
       orderBy?: Prisma.TrainingBlockOrderByWithRelationInput
       include?: T
-    } = {}
+    } = {},
+    tx: Prisma.TransactionClient = prisma
   ) {
-    return prisma.trainingBlock.findMany({
+    return tx.trainingBlock.findMany({
       where: { trainingPlanId: planId },
       orderBy: options.orderBy || { order: 'asc' },
       include: options.include

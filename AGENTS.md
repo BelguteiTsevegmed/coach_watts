@@ -10,6 +10,8 @@ Primary context for AI agents (Claude Code, Gemini CLI, Cursor) working in this 
 
 This is a personal fork at `origin`, based on `master`. The owner has permanently retired the previous Linear workflow for this repository. **Do not connect to Linear, require CW tickets, claim issues, manage labels or states, or create external follow-ups.** A direct user request authorizes work within its scope; no ticket or ticket-defined `Owned Paths` is required.
 
+Before starting a GitHub issue, assign it to the authenticated GitHub account (`gh issue edit <number> --add-assignee @me`) so other agents can see it is taken. This does not reinstate the retired Linear workflow.
+
 Use a focused branch, normally `codex/<description>`, from the relevant current state. Work in the existing checkout unless isolation is useful. Worktrees are optional; when creating one, use the scripts described below.
 
 Files under `docs/issues/` are historical archives and specs, not a live queue. The [issue-management guide](docs/04-guides/issue-management.md) preserves the former workflow for reference only; its ticket, claim, worktree, and PR requirements do not apply to this fork.

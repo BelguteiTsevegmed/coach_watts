@@ -1,3 +1,9 @@
+import {
+  readSportVolumeTargets,
+  remainingProgressionBudgets,
+  committedProgressionSessions,
+  progressionSessionDay
+} from '../server/utils/plans/progression-policy'
 import './init'
 import { logger, task } from '@trigger.dev/sdk/v3'
 import { generateStructuredAnalysis } from '../server/utils/gemini'
@@ -11,7 +17,9 @@ import {
   formatUserDate,
   getUserLocalDate,
   formatDateUTC,
-  calculateAge
+  calculateAge,
+  getStartOfLocalDateUTC,
+  getEndOfLocalDateUTC
 } from '../server/utils/date'
 import { getCurrentFitnessSummary } from '../server/utils/training-stress'
 import { getUserAiSettings } from '../server/utils/ai-user-settings'
@@ -30,6 +38,7 @@ import { fetchOpenInjuries, formatInjuriesForPrompt } from '../server/utils/coac
 import { normalizeGeneratedWorkoutType } from '../server/utils/plans/workout-type'
 import {
   validateGeneratedBlockWeeks,
+  normalizeGeneratedBlockWeeks,
   clampGeneratedBlockWeeks,
   formatViolationsFeedback,
   type WeekVolumeTarget
@@ -141,6 +150,7 @@ export async function runGenerateTrainingBlock(payload: {
         select: {
           weekNumber: true,
           volumeTargetMinutes: true,
+          sportVolumeTargets: true,
           tssTarget: true,
           isRecovery: true
         },
@@ -196,6 +206,40 @@ export async function runGenerateTrainingBlock(payload: {
       })
     : []
 
+  const capturedProgression = block.weeks.some((w) => readSportVolumeTargets(w.sportVolumeTargets))
+  const blockEnd = new Date(block.startDate)
+  blockEnd.setUTCDate(blockEnd.getUTCDate() + block.durationWeeks * 7 - 1)
+  const [preservedPlanned, completedForBudget] = capturedProgression
+    ? await Promise.all([
+        prisma.plannedWorkout.findMany({
+          where: {
+            userId,
+            date: { gte: block.startDate, lte: blockEnd },
+            OR: [{ managedBy: 'USER' }, { completed: true }, { id: { in: anchorWorkoutIds || [] } }]
+          },
+          select: {
+            id: true,
+            date: true,
+            type: true,
+            durationSec: true,
+            managedBy: true,
+            completed: true
+          }
+        }),
+        prisma.workout.findMany({
+          where: {
+            userId,
+            isDuplicate: false,
+            date: {
+              gte: getStartOfLocalDateUTC(timezone, formatDateUTC(block.startDate)),
+              lte: getEndOfLocalDateUTC(timezone, formatDateUTC(blockEnd))
+            }
+          },
+          select: { date: true, type: true, durationSec: true, plannedWorkoutId: true }
+        })
+      ])
+    : [[], []]
+
   // Fetch latest athlete profile
   const athleteProfileReport = await prisma.report.findFirst({
     where: {
@@ -242,7 +286,10 @@ ${profile.planning_context?.opportunities?.length ? `Opportunities: ${profile.pl
   // 2. Prepare Context Data
   // Map existing weeks to get volume targets before we delete them
   const volumeTargets = block.weeks
-    .map((w) => `Week ${w.weekNumber}: ${w.volumeTargetMinutes} mins (TSS ~${w.tssTarget})`)
+    .map(
+      (w) =>
+        `Week ${w.weekNumber}: at most ${w.volumeTargetMinutes} mins (TSS ~${w.tssTarget}). Sport ceilings (minutes): ${JSON.stringify(w.sportVolumeTargets || {})}`
+    )
     .join('\n')
 
   // Calculate Global Week Context
@@ -497,16 +544,36 @@ Return valid JSON matching the schema provided.`
     throw new Error('AI returned no weeks for the block')
   }
 
+  result.weeks = normalizeGeneratedBlockWeeks(result.weeks, block.durationWeeks, globalWeekStart)
+
   // 4.5 Validate the generated schedule against the wizard's weekly volume budgets.
   // One corrective retry; if the model still over-schedules, clamp deterministically
   // so a week can never persist at a multiple of the athlete's chosen volume. (CW-316)
+  const committedSessions = capturedProgression
+    ? committedProgressionSessions(preservedPlanned, completedForBudget, anchorWorkoutIds)
+    : anchoredWorkouts
+  const protectedCalendarDays = new Set(
+    committedSessions.map((w) => progressionSessionDay(w, timezone))
+  )
   const weekTargets: WeekVolumeTarget[] = weekSchedules.map((schedule) => {
     const original = block.weeks.find((w) => w.weekNumber === schedule.weekNumber)
+    const preserved = committedSessions.filter((w) => {
+      const day = progressionSessionDay(w, timezone)
+      return day >= formatDateUTC(schedule.startDate) && day <= formatDateUTC(schedule.endDate)
+    })
+    const budgets = remainingProgressionBudgets(
+      original?.volumeTargetMinutes ?? null,
+      readSportVolumeTargets(original?.sportVolumeTargets),
+      preserved
+    )
     return {
       weekNumber: schedule.weekNumber,
-      volumeTargetMinutes: original?.volumeTargetMinutes ?? null,
+      ...budgets,
+      availability,
       isRecovery: original?.isRecovery,
-      allowedDaysOfWeek: schedule.validDays.map((d) => d.getUTCDay())
+      allowedDaysOfWeek: schedule.validDays
+        .filter((d) => !protectedCalendarDays.has(formatDateUTC(d)))
+        .map((d) => d.getUTCDay())
     }
   })
 
@@ -519,7 +586,7 @@ Return valid JSON matching the schema provided.`
 
     const retry = await generateWeeks(`${prompt}\n\n${formatViolationsFeedback(volumeViolations)}`)
     if (retry.weeks && retry.weeks.length > 0) {
-      result.weeks = retry.weeks
+      result.weeks = normalizeGeneratedBlockWeeks(retry.weeks, block.durationWeeks, globalWeekStart)
       volumeViolations = validateGeneratedBlockWeeks(result.weeks, weekTargets)
     }
 
@@ -535,6 +602,12 @@ Return valid JSON matching the schema provided.`
       })
     }
   }
+
+  const remainingViolations = validateGeneratedBlockWeeks(
+    result.weeks,
+    weekTargets.filter((target) => target.sportVolumeTargets)
+  )
+  if (remainingViolations.length) throw new Error(formatViolationsFeedback(remainingViolations))
 
   logger.log('Persisting generated plan...', { weeksCount: result.weeks.length })
 
@@ -573,7 +646,7 @@ Return valid JSON matching the schema provided.`
             where: {
               trainingWeekId: { in: weekIds },
               id: { notIn: anchorWorkoutIds || [] },
-              managedBy: 'USER'
+              OR: [{ managedBy: 'USER' }, { completed: true }]
             },
             data: { trainingWeekId: null }
           })
@@ -581,7 +654,8 @@ Return valid JSON matching the schema provided.`
             where: {
               trainingWeekId: { in: weekIds },
               id: { notIn: anchorWorkoutIds || [] },
-              managedBy: { not: 'USER' }
+              managedBy: { not: 'USER' },
+              completed: false
             }
           })
           await tx.trainingWeek.deleteMany({ where: { blockId } })
@@ -593,12 +667,9 @@ Return valid JSON matching the schema provided.`
           if (!schedule) continue
           const globalWeekNumber = globalWeekStart + i
 
-          // Find AI data for this specific week
-          // Support: Block-relative (1-based), Global (1-based), or Fallback to array index
-          const weekData =
-            result.weeks.find((w: any) => Number(w.weekNumber) === schedule.weekNumber) ||
-            result.weeks.find((w: any) => Number(w.weekNumber) === globalWeekNumber) ||
-            result.weeks[i] // Last resort: assume same order
+          const weekData = result.weeks.find(
+            (w: any) => Number(w.weekNumber) === schedule.weekNumber
+          )
 
           // Validate Focus Key
           let focusKey = (weekData?.focus_key || '').toUpperCase()
@@ -622,7 +693,8 @@ Return valid JSON matching the schema provided.`
               focusLabel: focusLabel,
               explanation: weekData?.explanation || 'Weekly progression.',
               volumeTargetMinutes:
-                originalWeek?.volumeTargetMinutes || weekData?.volumeTargetMinutes || 0,
+                originalWeek?.volumeTargetMinutes ?? weekData?.volumeTargetMinutes ?? 0,
+              sportVolumeTargets: originalWeek?.sportVolumeTargets ?? undefined,
               tssTarget:
                 weekData?.workouts?.reduce(
                   (acc: number, w: any) => acc + (w.tssEstimate || 0),
@@ -662,11 +734,9 @@ Return valid JSON matching the schema provided.`
                 )
                 if (!targetDate) return null
 
-                if (anchorWorkoutIds?.length) {
+                if (anchorWorkoutIds?.length || capturedProgression) {
                   const targetDateStr = formatDateUTC(targetDate)
-                  const hasAnchor = anchoredWorkouts.some(
-                    (anchor) => formatDateUTC(anchor.date) === targetDateStr
-                  )
+                  const hasAnchor = protectedCalendarDays.has(targetDateStr)
                   if (hasAnchor) return null
                 }
 

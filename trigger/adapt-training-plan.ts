@@ -76,6 +76,7 @@ async function loadSnapshot(db: Prisma.TransactionClient, payload: AdaptationPay
         id: true,
         date: true,
         durationSec: true,
+        type: true,
         tss: true,
         plannedWorkoutId: true,
         updatedAt: true

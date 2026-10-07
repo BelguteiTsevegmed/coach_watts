@@ -4,21 +4,21 @@ import { requireAuth } from '../../utils/auth-guard'
 import { getUserTimezone, getUserLocalDate } from '../../utils/date'
 import { generateStructuredAnalysis } from '../../utils/gemini'
 
+import {
+  buildPlanProgression,
+  calculateProgressionWeekTargets,
+  weeklyAvailabilityMinutes
+} from '../../utils/plans/progression-policy'
 import { trainingPlanRepository } from '../../utils/repositories/trainingPlanRepository'
 import { getAthletePrimarySport, getDefaultActivityTypes } from '../../utils/coaching/sport'
-import {
-  baseWeeklyVolumeMinutes,
-  calculateWeekTargets,
-  computeRampBaseMinutes,
-  isRecoveryWeek
-} from '../../utils/plans/week-targets'
+import { baseWeeklyVolumeMinutes, isRecoveryWeek } from '../../utils/plans/week-targets'
 
 const initializePlanSchema = z.object({
   goalId: z.string(),
   startDate: z.string().datetime(), // ISO string
   endDate: z.string().datetime().optional(), // ISO string
   volumePreference: z.enum(['LOW', 'MID', 'HIGH']).default('MID'),
-  volumeHours: z.number().optional(),
+  volumeHours: z.number().finite().min(0).max(168).optional(),
   strategy: z
     .enum(['LINEAR', 'UNDULATING', 'BLOCK', 'POLARIZED', 'REVERSE', 'MAINTENANCE'])
     .default('LINEAR'),
@@ -26,7 +26,8 @@ const initializePlanSchema = z.object({
   preferredActivityTypes: z.array(z.string()).optional(),
   customInstructions: z.string().optional(),
   recoveryRhythm: z.number().int().min(2).max(5).default(4), // 4 = 3:1 ratio, 3 = 2:1 ratio
-  startingPhase: z.enum(['BASE', 'BUILD', 'PEAK']).default('BASE')
+  startingPhase: z.enum(['BASE', 'BUILD', 'PEAK']).default('BASE'),
+  historyCompleteness: z.enum(['COMPLETE', 'UNKNOWN']).default('UNKNOWN')
 })
 
 export default defineEventHandler(async (event) => {
@@ -262,22 +263,28 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // 4.5 Ramp-rate cap (CW-320): base the on-ramp on what the athlete actually
-  // trained in the last 4 weeks, so a plan can't jump straight to a multiple
-  // of their real load. The cap grows per loading week until it reaches the
-  // requested volume; it never raises targets.
-  const twentyEightDaysAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000)
-  const recentLoad = await prisma.workout.aggregate({
-    _sum: { durationSec: true },
-    where: {
-      userId,
-      isDuplicate: false,
-      date: { gte: twentyEightDaysAgo }
-    }
+  // Keep sport exposure and import uncertainty distinct from the athlete's availability.
+  const now = new Date()
+  const [workouts, availability] = await Promise.all([
+    prisma.workout.findMany({
+      where: {
+        userId,
+        isDuplicate: false,
+        date: { gte: new Date(now.getTime() - 28 * 86400000), lte: now }
+      },
+      select: { id: true, type: true, date: true, durationSec: true, isDuplicate: true }
+    }),
+    prisma.trainingAvailability.findMany({ where: { userId } })
+  ])
+  const progressionContext = buildPlanProgression({
+    now,
+    workouts,
+    activityTypes: preferredActivityTypes,
+    requestedVolumeMinutes: baseWeeklyVolumeMinutes(volumeHours, volumePreference),
+    availabilityMinutes: weeklyAvailabilityMinutes(availability),
+    historyCompleteness: validation.data.historyCompleteness,
+    planWeeks: totalWeeks
   })
-  const recentWeeklyAvgMinutes = (recentLoad._sum.durationSec || 0) / 60 / 4
-  const requestedBaseMinutes = baseWeeklyVolumeMinutes(volumeHours, volumePreference)
-  const rampBaseMinutes = computeRampBaseMinutes(recentWeeklyAvgMinutes)
   let loadingWeekOrdinal = 0
 
   // 5. Create Plan Skeleton
@@ -292,7 +299,11 @@ export default defineEventHandler(async (event) => {
       activityTypes: preferredActivityTypes,
       customInstructions: customInstructions,
       recoveryRhythm,
-      description: aiStructure?.rationale || 'Generated Training Plan',
+      progressionContext,
+      description: [
+        aiStructure?.rationale || 'Generated Training Plan',
+        ...progressionContext.explanations
+      ].join('\n\n'),
       blocks: {
         create: finalBlocksConfig.map((blockConfig: any, index: number) => {
           // Calculate Start Date for this block
@@ -324,13 +335,11 @@ export default defineEventHandler(async (event) => {
                 const isRecovery = isRecoveryWeek(i + 1, recoveryRhythm, blockConfig.type)
                 if (!isRecovery) loadingWeekOrdinal++
 
-                const targets = calculateWeekTargets({
+                const targets = calculateProgressionWeekTargets(progressionContext, {
                   blockType: blockConfig.type,
                   weekNumber: i + 1,
                   blockDurationWeeks: blockConfig.durationWeeks,
                   isRecovery,
-                  baseVolumeMinutes: requestedBaseMinutes,
-                  rampBaseMinutes,
                   loadingWeekOrdinal: Math.max(1, loadingWeekOrdinal)
                 })
 

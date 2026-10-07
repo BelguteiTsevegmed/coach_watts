@@ -1505,6 +1505,7 @@ model TrainingPlan {
   activityTypes          Json?
   customInstructions     String?
   recoveryRhythm         Int             @default(4)
+  progressionContext     Json? // Athlete history, requested availability and versioned sport progression policy
   hasBeenSavedAsTemplate Boolean         @default(false)
   folderId               String?
   teamId                 String?
@@ -1574,6 +1575,7 @@ model TrainingWeek {
   startDate           DateTime
   endDate             DateTime
   volumeTargetMinutes Int
+  sportVolumeTargets  Json? // Minutes per sport family; null for legacy plans
   tssTarget           Int
   isRecovery          Boolean          @default(false)
   focus               String?

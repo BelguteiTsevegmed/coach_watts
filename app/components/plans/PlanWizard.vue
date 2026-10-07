@@ -135,12 +135,21 @@
             </button>
           </div>
         </fieldset>
-        <UFormField label="Hours available each week" name="volumeHours">
+        <UCheckbox
+          v-model="historyComplete"
+          label="My training history for the last 28 days is complete"
+          description="Check only after importing or logging all sessions, including any weeks off. Otherwise we use a cautious starting allowance."
+        />
+        <UFormField
+          label="Hours available each week"
+          name="volumeHours"
+          description="An upper limit on training time. Your starting workload may be lower based on recent training in each sport."
+        >
           <div class="flex items-center gap-3">
             <UInput
               v-model.number="volumeHours"
               type="number"
-              :min="3"
+              :min="0.5"
               :max="20"
               :step="0.5"
               class="w-28"
@@ -148,7 +157,7 @@
           </div>
           <USlider
             v-model="volumeHours"
-            :min="3"
+            :min="0.5"
             :max="20"
             :step="0.5"
             color="primary"
@@ -726,6 +735,7 @@
   }
 
   // Step 2 State
+  const historyComplete = ref(false)
   const volumeHours = ref(6) // Default 6 hours
   const strategy = ref('LINEAR')
   const recoveryRhythm = ref(4) // Default 3:1
@@ -1018,8 +1028,8 @@
     }
 
     const availableHours = Number(volumeHours.value)
-    if (!Number.isFinite(availableHours) || availableHours < 3 || availableHours > 20) {
-      toast.add({ title: 'Choose between 3 and 20 hours per week', color: 'error' })
+    if (!Number.isFinite(availableHours) || availableHours < 0.5 || availableHours > 20) {
+      toast.add({ title: 'Choose between 0.5 and 20 hours per week', color: 'error' })
       initializing.value = false
       return
     }
@@ -1050,6 +1060,7 @@
           endDate: finalEndDate ? new Date(finalEndDate).toISOString() : undefined,
           volumePreference: volumeBucket,
           volumeHours: volumeHours.value,
+          historyCompleteness: historyComplete.value ? 'COMPLETE' : 'UNKNOWN',
           strategy: strategy.value,
           preferredActivityTypes: selectedActivityTypes.value,
           customInstructions: customInstructions.value,
