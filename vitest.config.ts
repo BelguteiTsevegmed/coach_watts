@@ -36,7 +36,13 @@ export default defineVitestConfig({
     globals: true,
     hookTimeout: 180_000,
     testTimeout: 30_000,
-    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**', '**/.claude/**'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'e2e/**',
+      '**/.claude/**',
+      'tests/integration/training-prescription.test.ts'
+    ],
 
     setupFiles: [path.resolve(rootDir, './tests/unit/setup.ts')],
     coverage: {

@@ -1501,6 +1501,7 @@ OUTPUT JSON matching the schema.`
           'UPDATE',
           {
             id: updatedWorkout.id,
+            structureRevision: updatedWorkout.structureRevision,
             externalId: updatedWorkout.externalId,
             date: updatedWorkout.date,
             startTime: updatedWorkout.startTime,

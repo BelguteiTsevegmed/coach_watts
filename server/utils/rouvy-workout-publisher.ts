@@ -1,3 +1,4 @@
+import { withPrescriptionPublication } from './training-prescription/publication'
 import { prisma } from './db'
 import { buildZonedDateTimeFromUtcDate } from './date'
 import { pushRouvyWorkout } from './rouvy'
@@ -73,34 +74,36 @@ export async function publishPlannedWorkoutToRouvy(workoutId: string, userId: st
   ).toISOString()
 
   try {
-    const result = await pushRouvyWorkout(
-      integration,
-      plannedAt,
-      zwoContent,
-      buildRouvyFilename(workout.title)
-    )
-    const syncedAt = new Date()
-    const externalId =
-      result && typeof result === 'object' && result.workoutId != null
-        ? String(result.workoutId)
-        : null
+    return await withPrescriptionPublication(userId, workout, async () => {
+      const result = await pushRouvyWorkout(
+        integration,
+        plannedAt,
+        zwoContent,
+        buildRouvyFilename(workout.title)
+      )
+      const syncedAt = new Date()
+      const externalId =
+        result && typeof result === 'object' && result.workoutId != null
+          ? String(result.workoutId)
+          : null
 
-    await plannedWorkoutPublishRepository.upsert(workout.id, 'rouvy', {
-      externalId,
-      status: 'SYNCED',
-      error: null,
-      lastSyncedAt: syncedAt
+      await plannedWorkoutPublishRepository.upsert(workout.id, 'rouvy', {
+        externalId,
+        status: 'SYNCED',
+        error: null,
+        lastSyncedAt: syncedAt
+      })
+
+      const warnings = buildPublishWarnings(settingsStaleness)
+
+      return {
+        success: true,
+        message: appendPublishStalenessWarning('Workout published to ROUVY.', settingsStaleness),
+        result,
+        plannedAt,
+        ...(warnings ? { warnings } : {})
+      }
     })
-
-    const warnings = buildPublishWarnings(settingsStaleness)
-
-    return {
-      success: true,
-      message: appendPublishStalenessWarning('Workout published to ROUVY.', settingsStaleness),
-      result,
-      plannedAt,
-      ...(warnings ? { warnings } : {})
-    }
   } catch (error: any) {
     await plannedWorkoutPublishRepository.upsert(workout.id, 'rouvy', {
       status: 'FAILED',

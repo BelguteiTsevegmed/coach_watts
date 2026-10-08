@@ -1,3 +1,11 @@
+import { retireReplacedPrescriptionExports } from '../server/utils/training-prescription/replacement-sync'
+import { randomUUID } from 'node:crypto'
+import {
+  lockPrescriptionSchedule,
+  validatePrescriptionWrite,
+  withPrescriptionAssessment
+} from '../server/utils/training-prescription/service'
+import { isProtectedPrescriptionSession } from '../server/utils/training-prescription/assessment'
 import { COACHING_EVIDENCE_VERSION } from '../shared/coaching-evidence'
 import {
   readSportVolumeTargets,
@@ -670,7 +678,7 @@ TRAINING AVAILABILITY (when user can train):
 ${availabilitySummary || 'No availability set - assume flexible schedule'}
 
 USER INSTRUCTIONS (HIGHEST PRIORITY):
-${userInstructions ? `"${userInstructions}"\n\nFollow these instructions above everything else. They override standard progression and availability constraints.` : 'No special instructions.'}
+${userInstructions ? `"${userInstructions}"\n\nUse these preferences only within server-owned prescription, injury, progression and availability constraints.` : 'No special instructions.'}
 
 LOCKED/ANCHOR WORKOUTS (DO NOT CHANGE OR REPLACE):
 ${
@@ -995,251 +1003,230 @@ Retain the current block and week focus. Return actual replacement sessions, nev
     }
   }
 
-  const savedPlan = finalCurrentPlan
-    ? await prisma.weeklyTrainingPlan.update({
-        where: { id: finalCurrentPlan.id },
-        data: {
-          ...planData,
-          updatedAt: new Date()
-        }
-      })
-    : await prisma.weeklyTrainingPlan.create({
-        data: planData
-      })
+  if (
+    planDays.some(
+      (d: any) =>
+        d.date < formatDateUTC(alignedWeekStart) || d.date > formatDateUTC(alignedWeekEndUTC)
+    )
+  )
+    throw new Error('Generated prescription contains a date outside the requested week.')
 
-  // Also update the individual planned workouts if this is an active plan
-  if (savedPlan.status === 'ACTIVE') {
-    // First, handle existing workouts
-    const scope = buildWorkoutCleanupQuery({
+  const candidates = planDays
+    .filter((d: any) => !protectedCalendarDays.has(d.date))
+    .map((d: any) => ({
+      id: randomUUID(),
       userId,
-      startDate: alignedWeekStart,
-      endDate: alignedWeekEndUTC,
-      trainingWeekId,
-      anchorWorkoutIds
-    })
-
-    // 1. Unlink User-Managed Workouts (preserve them)
-    await prisma.plannedWorkout.updateMany({
-      where: {
-        ...scope,
-        managedBy: 'USER'
-      },
-      data: { trainingWeekId: null }
-    })
-
-    // 2. Delete AI-Managed Workouts
-    const deleted = await prisma.plannedWorkout.deleteMany({
-      where: {
-        ...scope,
-        managedBy: { not: 'USER' },
-        completed: false
-      }
-    })
-
-    logger.log('Cleaned up existing planned workouts', {
-      deleted: deleted.count,
-      weekStart: alignedWeekStart.toISOString(),
-      weekEnd: alignedWeekEndUTC.toISOString(),
-      preservedAnchors: anchorWorkoutIds?.length || 0
-    })
-
-    // Insert new workouts from the generated plan
-    const daysArray = Array.isArray((plan as any)?.days) ? (plan as any).days : []
-    const workoutsToCreate = daysArray
-      // Filter out any days that match an anchored workout date to avoid duplicates if AI ignored instruction
-      .filter((d: any) => {
-        if (!anchorWorkoutIds?.length && !sportVolumeTargets) return true
-
-        // Check if this generated workout conflicts with an anchor
-        // d.date is YYYY-MM-DD local string
-        // We need to check if any anchor has this same local date
-        const generatedDateStr = d.date
-
-        const hasAnchor = protectedCalendarDays.has(generatedDateStr)
-
-        if (hasAnchor) {
-          logger.log('Skipping generated workout because date is anchored', { date: d.date })
-          return false
-        }
-        return true
+      date: new Date(`${d.date}T00:00:00Z`),
+      title: d.title,
+      description: d.description + (d.reasoningText ? `\n\nReasoning: ${d.reasoningText}` : ''),
+      type: normalizeGeneratedWorkoutType(d.workoutType),
+      durationSec: Math.round((d.durationMinutes || 0) * 60),
+      distanceMeters: d.distanceMeters,
+      tss: d.targetTSS,
+      targetArea: d.targetArea,
+      workIntensity:
+        d.intensity === 'recovery'
+          ? 0.5
+          : d.intensity === 'easy'
+            ? 0.6
+            : d.intensity === 'moderate'
+              ? 0.75
+              : d.intensity === 'hard'
+                ? 0.9
+                : d.intensity === 'very_hard'
+                  ? 1
+                  : null,
+      category: 'WORKOUT',
+      externalId: `ai_gen_${userId}_${d.date}_${randomUUID()}`,
+      syncStatus: 'LOCAL_ONLY',
+      managedBy: 'COACH_WATTS'
+    }))
+  const uploadAfterCommit: any[] = []
+  const savedPlan = await prisma.$transaction(
+    async (tx) => {
+      await lockPrescriptionSchedule(tx, userId)
+      const cleanupScope = buildWorkoutCleanupQuery({
+        userId,
+        startDate: alignedWeekStart,
+        endDate: alignedWeekEndUTC,
+        trainingWeekId,
+        anchorWorkoutIds
       })
-      .map((d: any) => {
-        // Parse date strictly from the AI response
-        // AI returns 'YYYY-MM-DD' which represents the user's local date.
-        // We need to convert this to the UTC timestamp that represents the start of that day in the user's timezone.
-
-        const rawDate = d.date
-        const [y, m, day] = rawDate.split('-').map(Number)
-        // Create a UTC Date directly to represent the calendar day.
-        // This prevents timezone shifting (e.g. Jan 15 becoming Jan 14 in US timezones).
-        const workoutDate = new Date(Date.UTC(y, m - 1, day))
-
-        logger.log('Processing generated workout day', {
-          rawDate: d.date,
-          parsedDate: workoutDate.toISOString(),
-          isValid: !isNaN(workoutDate.getTime()),
-          title: d.title,
-          timezone
-        })
-
-        // Ensure the date is valid
-        if (isNaN(workoutDate.getTime())) {
-          logger.error('Invalid date in generated plan', { date: d.date })
-          return null
-        }
-
-        // Strict validation: Date MUST be within the planned week
-        // We compare timestamps to avoid timezone confusion, but add a buffer
-        const buffer = 12 * 60 * 60 * 1000
-        if (
-          workoutDate.getTime() < alignedWeekStart.getTime() - buffer ||
-          workoutDate.getTime() > alignedWeekEndUTC.getTime() + buffer
-        ) {
-          logger.error('Generated date out of range', {
-            date: d.date,
-            parsed: workoutDate.toISOString(),
-            weekStart: alignedWeekStart.toISOString(),
-            weekEnd: alignedWeekEndUTC.toISOString()
+      const existing = await tx.plannedWorkout.findMany({ where: cleanupScope })
+      const replaceIds = existing
+        .filter((w) => w.managedBy === 'COACH_WATTS' && !isProtectedPrescriptionSession(w))
+        .map((w) => w.id)
+      const assessment = await validatePrescriptionWrite(tx, userId, candidates, {
+        source: 'weekly-generation',
+        replaceIds
+      })
+      const savedPlan = finalCurrentPlan
+        ? await tx.weeklyTrainingPlan.update({
+            where: { id: finalCurrentPlan.id },
+            data: {
+              ...planData,
+              updatedAt: new Date()
+            }
           })
-          // Skipping is safer to avoid pollution
-          return null
-        }
+        : await tx.weeklyTrainingPlan.create({
+            data: planData
+          })
 
-        return {
+      // Also update the individual planned workouts if this is an active plan
+      if (savedPlan.status === 'ACTIVE') {
+        // First, handle existing workouts
+        const scope = buildWorkoutCleanupQuery({
           userId,
-          date: workoutDate, // Stored as UTC start of day for user
-          title: d.title,
-          description: d.description + (d.reasoningText ? `\n\nReasoning: ${d.reasoningText}` : ''),
-          // "Rest" is preserved, "Gym" becomes "WeightTraining"; everything else passes through.
-          type: normalizeGeneratedWorkoutType(d.workoutType),
-          durationSec: (d.durationMinutes || 0) * 60,
-          distanceMeters: d.distanceMeters,
-          tss: d.targetTSS,
-          targetArea: d.targetArea,
-          workIntensity:
-            d.intensity === 'recovery'
-              ? 0.5
-              : d.intensity === 'easy'
-                ? 0.6
-                : d.intensity === 'moderate'
-                  ? 0.75
-                  : d.intensity === 'hard'
-                    ? 0.9
-                    : 1.0,
-          category: 'WORKOUT',
-          externalId: `ai_gen_${userId}_${d.date}_${Date.now()}_${Math.random().toString(36).substring(7)}`, // Generate unique external ID
-          syncStatus: 'LOCAL_ONLY', // Mark as local initially
-          trainingWeekId: undefined, // We'll link this if we have a TrainingWeek record
-          managedBy: 'COACH_WATTS'
-        }
-      })
-      .filter(Boolean) // Remove nulls
-
-    logger.log('Workouts prepared for creation', {
-      count: workoutsToCreate.length,
-      data: workoutsToCreate
-    })
-
-    // Determine the TrainingWeek ID to link to
-    let targetTrainingWeekId: string | undefined = resolvedTrainingWeekId
-    let targetTrainingWeekRange:
-      | {
-          start: Date
-          end: Date
-        }
-      | undefined
-
-    // If explicitly passed, verify it exists and use it
-    if (targetTrainingWeekId) {
-      const verifiedWeek = await prisma.trainingWeek.findUnique({
-        where: { id: targetTrainingWeekId }
-      })
-      if (!verifiedWeek) {
-        logger.warn('Explicitly passed trainingWeekId not found in DB', { trainingWeekId })
-        targetTrainingWeekId = undefined // Fallback to search logic
-      } else {
-        targetTrainingWeekRange = {
-          start: getStartOfDayUTC(timezone, verifiedWeek.startDate),
-          end: getEndOfDayUTC(timezone, verifiedWeek.endDate)
-        }
-        logger.log('Using explicitly passed TrainingWeek ID', { trainingWeekId })
-      }
-    }
-
-    // Only link the week whose budgets were resolved before proposal validation.
-
-    if (workoutsToCreate.length > 0) {
-      if (
-        targetTrainingWeekId &&
-        targetTrainingWeekRange &&
-        alignedWeekStart >= targetTrainingWeekRange.start &&
-        alignedWeekEndUTC <= targetTrainingWeekRange.end
-      ) {
-        logger.log('Linking generated workouts to TrainingWeek', {
-          trainingWeekId: targetTrainingWeekId
-        })
-        workoutsToCreate.forEach((w: any) => {
-          if (w) (w as any).trainingWeekId = targetTrainingWeekId
+          startDate: alignedWeekStart,
+          endDate: alignedWeekEndUTC,
+          trainingWeekId,
+          anchorWorkoutIds
         })
 
-        // Link Anchored Workouts to this week as well
-        if (anchorWorkoutIds?.length && anchoredWorkouts.length > 0) {
-          await prisma.plannedWorkout.updateMany({
-            where: { id: { in: anchorWorkoutIds } },
-            data: { trainingWeekId: targetTrainingWeekId }
-          })
-          logger.log('Linked anchored workouts to TrainingWeek', {
-            count: anchoredWorkouts.length,
-            trainingWeekId: targetTrainingWeekId
-          })
-        }
-      } else {
-        logger.warn(
-          'TrainingWeek range mismatch or missing - leaving generated workouts unlinked',
-          {
-            weekStart: alignedWeekStart.toISOString(),
-            weekEnd: alignedWeekEndUTC.toISOString(),
-            trainingWeekId: targetTrainingWeekId || null
-          }
-        )
-      }
-
-      // Use createMany but we need to match the type exactly.
-      const result = await prisma.plannedWorkout.createMany({
-        data: workoutsToCreate as any
-      })
-      logger.log('Created workouts in DB', { count: result.count })
-
-      const createdExternalIds = workoutsToCreate.map((w: any) => w?.externalId).filter(Boolean)
-      if (createdExternalIds.length > 0) {
-        const createdWorkouts = await prisma.plannedWorkout.findMany({
+        // 1. Unlink User-Managed Workouts (preserve them)
+        await tx.plannedWorkout.updateMany({
           where: {
-            userId,
-            externalId: { in: createdExternalIds }
+            ...scope,
+            managedBy: 'USER'
           },
-          select: {
-            id: true,
-            userId: true,
-            externalId: true,
-            date: true,
-            startTime: true,
-            title: true,
-            description: true,
-            type: true,
-            durationSec: true,
-            tss: true,
-            managedBy: true
-          }
+          data: { trainingWeekId: null }
         })
 
-        for (const workout of createdWorkouts) {
-          await autoUploadPlannedWorkoutToIntervalsIfEnabled(workout)
+        await retireReplacedPrescriptionExports(
+          tx,
+          userId,
+          existing.filter((w) => replaceIds.includes(w.id))
+        )
+        // 2. Delete AI-Managed Workouts
+        const deleted = await tx.plannedWorkout.deleteMany({
+          where: { id: { in: replaceIds }, userId }
+        })
+
+        logger.log('Cleaned up existing planned workouts', {
+          deleted: deleted.count,
+          weekStart: alignedWeekStart.toISOString(),
+          weekEnd: alignedWeekEndUTC.toISOString(),
+          preservedAnchors: anchorWorkoutIds?.length || 0
+        })
+
+        // Insert new workouts from the generated plan
+        const workoutsToCreate = candidates.map((w) => ({
+          ...w,
+          rawJson: withPrescriptionAssessment({}, assessment.id)
+        }))
+
+        logger.log('Workouts prepared for creation', {
+          count: workoutsToCreate.length,
+          data: workoutsToCreate
+        })
+
+        // Determine the TrainingWeek ID to link to
+        let targetTrainingWeekId: string | undefined = resolvedTrainingWeekId
+        let targetTrainingWeekRange:
+          | {
+              start: Date
+              end: Date
+            }
+          | undefined
+
+        // If explicitly passed, verify it exists and use it
+        if (targetTrainingWeekId) {
+          const verifiedWeek = await tx.trainingWeek.findUnique({
+            where: { id: targetTrainingWeekId }
+          })
+          if (!verifiedWeek) {
+            logger.warn('Explicitly passed trainingWeekId not found in DB', { trainingWeekId })
+            targetTrainingWeekId = undefined // Fallback to search logic
+          } else {
+            targetTrainingWeekRange = {
+              start: getStartOfDayUTC(timezone, verifiedWeek.startDate),
+              end: getEndOfDayUTC(timezone, verifiedWeek.endDate)
+            }
+            logger.log('Using explicitly passed TrainingWeek ID', { trainingWeekId })
+          }
+        }
+
+        // Only link the week whose budgets were resolved before proposal validation.
+
+        if (workoutsToCreate.length > 0) {
+          if (
+            targetTrainingWeekId &&
+            targetTrainingWeekRange &&
+            alignedWeekStart >= targetTrainingWeekRange.start &&
+            alignedWeekEndUTC <= targetTrainingWeekRange.end
+          ) {
+            logger.log('Linking generated workouts to TrainingWeek', {
+              trainingWeekId: targetTrainingWeekId
+            })
+            workoutsToCreate.forEach((w: any) => {
+              if (w) (w as any).trainingWeekId = targetTrainingWeekId
+            })
+
+            // Link Anchored Workouts to this week as well
+            if (anchorWorkoutIds?.length && anchoredWorkouts.length > 0) {
+              await tx.plannedWorkout.updateMany({
+                where: { id: { in: anchorWorkoutIds } },
+                data: { trainingWeekId: targetTrainingWeekId }
+              })
+              logger.log('Linked anchored workouts to TrainingWeek', {
+                count: anchoredWorkouts.length,
+                trainingWeekId: targetTrainingWeekId
+              })
+            }
+          } else {
+            logger.warn(
+              'TrainingWeek range mismatch or missing - leaving generated workouts unlinked',
+              {
+                weekStart: alignedWeekStart.toISOString(),
+                weekEnd: alignedWeekEndUTC.toISOString(),
+                trainingWeekId: targetTrainingWeekId || null
+              }
+            )
+          }
+
+          // Use createMany but we need to match the type exactly.
+          const result = await tx.plannedWorkout.createMany({
+            data: workoutsToCreate as any
+          })
+          logger.log('Created workouts in DB', { count: result.count })
+
+          const createdExternalIds = workoutsToCreate.map((w: any) => w?.externalId).filter(Boolean)
+          if (createdExternalIds.length > 0) {
+            const createdWorkouts = await tx.plannedWorkout.findMany({
+              where: {
+                userId,
+                externalId: { in: createdExternalIds }
+              },
+              select: {
+                id: true,
+                userId: true,
+                externalId: true,
+                date: true,
+                startTime: true,
+                title: true,
+                description: true,
+                type: true,
+                durationSec: true,
+                tss: true,
+                managedBy: true
+              }
+            })
+
+            for (const workout of createdWorkouts) {
+              uploadAfterCommit.push(workout)
+            }
+          }
+        } else {
+          logger.warn('No workouts to create found in plan')
         }
       }
-    } else {
-      logger.warn('No workouts to create found in plan')
-    }
-  }
+
+      return savedPlan
+    },
+    { isolationLevel: 'Serializable', timeout: 40000 }
+  )
+  for (const workout of uploadAfterCommit)
+    await autoUploadPlannedWorkoutToIntervalsIfEnabled(workout)
 
   logger.log('Plan saved', { planId: savedPlan.id })
 

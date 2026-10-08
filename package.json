@@ -144,6 +144,7 @@
     "backfill-scores": "tsx scripts/backfill-scores.ts",
     "test": "vitest",
     "test:unit": "vitest run",
+    "test:prescription-integration": "vitest run --config vitest.prescription-integration.config.ts",
     "eval:prescription": "vitest run --config vitest.prescription.config.ts",
     "eval:prescription:typecheck": "tsc -p tests/evaluation/tsconfig.json",
     "test:mcp": "vitest run --config vitest.mcp.config.ts",

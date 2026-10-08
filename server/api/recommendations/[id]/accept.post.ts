@@ -1,3 +1,4 @@
+import { plannedWorkoutRepository } from '../../../utils/repositories/plannedWorkoutRepository'
 import { requireAuth } from '../../../utils/auth-guard'
 import { prisma } from '../../../utils/db'
 import {
@@ -134,37 +135,32 @@ export default defineEventHandler(async (event) => {
   let updatedWorkout
 
   if (targetPlannedWorkoutId) {
-    updatedWorkout = await prisma.plannedWorkout.update({
-      where: { id: targetPlannedWorkoutId },
-      data: {
-        title,
-        type,
-        durationSec,
-        tss: modifications.new_tss,
-        description: newDescription,
-        modifiedLocally: true,
-        syncStatus: nextSyncStatus(targetWorkout?.syncStatus),
-        syncError: null
-      }
+    updatedWorkout = await plannedWorkoutRepository.update(targetPlannedWorkoutId, userId, {
+      title,
+      type,
+      durationSec,
+      tss: modifications.new_tss,
+      description: newDescription,
+      modifiedLocally: true,
+      syncStatus: nextSyncStatus(targetWorkout?.syncStatus),
+      syncError: null
     })
   } else {
-    updatedWorkout = await prisma.plannedWorkout.create({
-      data: {
-        userId,
-        externalId: `recommendation-${id}`,
-        date: recommendation.date,
-        title,
-        description: newDescription,
-        type,
-        durationSec,
-        tss: modifications.new_tss,
-        completed: false,
-        modifiedLocally: true,
-        syncStatus: 'LOCAL_ONLY',
-        syncError: null,
-        rawJson: {},
-        managedBy: 'COACH_WATTS'
-      }
+    updatedWorkout = await plannedWorkoutRepository.create({
+      userId,
+      externalId: `recommendation-${id}`,
+      date: recommendation.date,
+      title,
+      description: newDescription,
+      type,
+      durationSec,
+      tss: modifications.new_tss,
+      completed: false,
+      modifiedLocally: true,
+      syncStatus: 'LOCAL_ONLY',
+      syncError: null,
+      rawJson: {},
+      managedBy: 'COACH_WATTS'
     })
     targetPlannedWorkoutId = updatedWorkout.id
   }
@@ -216,8 +212,10 @@ export default defineEventHandler(async (event) => {
       'UPDATE',
       {
         id: updatedWorkout.id,
+        structureRevision: updatedWorkout.structureRevision,
         externalId: updatedWorkout.externalId,
         date: updatedWorkout.date,
+        startTime: updatedWorkout.startTime,
         title: updatedWorkout.title,
         description: updatedWorkout.description,
         type: updatedWorkout.type,

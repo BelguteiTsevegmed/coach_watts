@@ -1,3 +1,7 @@
+import {
+  lockPrescriptionSchedule,
+  validatePrescriptionWrite
+} from './training-prescription/service'
 import { prisma } from './db'
 import { sportSettingsRepository } from './repositories/sportSettingsRepository'
 import { hasActiveStructureGenerationRun } from './structure-generation-run'
@@ -8,7 +12,7 @@ import {
 } from '../../shared/workout-settings-staleness'
 
 export type PublishPreconditionCode =
-  'not_found' | 'no_structure' | 'generation_in_flight' | 'sync_conflict'
+  'not_found' | 'no_structure' | 'generation_in_flight' | 'sync_conflict' | 'prescription_rejected'
 
 export type PlannedWorkoutPublishContext = {
   workout: {
@@ -76,10 +80,25 @@ export async function loadPlannedWorkoutPublishContext(
   userId: string,
   workoutId: string
 ): Promise<PublishPreconditionSuccess | PublishPreconditionFailure> {
-  const workout = await prisma.plannedWorkout.findUnique({
-    where: { id: workoutId, userId },
-    include: { user: { select: { ftp: true, timezone: true } } }
-  })
+  let workout
+  try {
+    workout = await prisma.$transaction(async (tx) => {
+      await lockPrescriptionSchedule(tx, userId)
+      const current = await tx.plannedWorkout.findUnique({
+        where: { id: workoutId, userId },
+        include: { user: { select: { ftp: true, timezone: true } } }
+      })
+      if (current && hasRenderableStructure(current.structuredWorkout))
+        await validatePrescriptionWrite(tx, userId, [current], {
+          source: 'publish',
+          readOnly: true
+        })
+      return current
+    })
+  } catch (error: any) {
+    if (error.statusCode !== 422 && error.statusCode !== 409) throw error
+    return { ok: false, code: 'prescription_rejected', error: error.message }
+  }
 
   if (!workout) {
     return { ok: false, code: 'not_found', error: 'Planned workout not found' }

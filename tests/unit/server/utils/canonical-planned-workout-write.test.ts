@@ -23,7 +23,7 @@ vi.mock('../../../../server/utils/db', () => ({
     trainingAvailability: { findMany: vi.fn().mockResolvedValue([]) },
     user: { findUnique: vi.fn().mockResolvedValue({ timezone: 'UTC' }) },
     workout: { findMany: vi.fn().mockResolvedValue([]) },
-    $transaction: vi.fn(async (callback: any) => callback(prisma)),
+    $transaction: vi.fn(async (callback: any) => callback({ ...prisma })),
     plannedWorkout: {
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn(),
@@ -205,3 +205,8 @@ it('checks final weekly dose before any structure write', async () => {
   expect(prisma.$queryRaw).toHaveBeenCalled()
   expect(prisma.plannedWorkout.updateMany).not.toHaveBeenCalled()
 })
+
+vi.mock('../../../../server/utils/training-prescription/service', async (importOriginal) => ({
+  ...(await importOriginal<any>()),
+  ...(await import('../../helpers/prescription-boundary-double')).prescriptionBoundaryDouble
+}))

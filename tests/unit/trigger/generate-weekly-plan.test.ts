@@ -12,9 +12,11 @@ vi.mock('@trigger.dev/sdk/v3', async (importOriginal) => {
 
 vi.mock('../../../server/utils/db', () => ({
   prisma: {
+    $transaction: vi.fn(async (callback: any) => callback(prisma)),
     user: { findUnique: vi.fn() },
     userProfile: { findUnique: vi.fn(), findFirst: vi.fn() },
     plannedWorkout: {
+      findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn(),
       deleteMany: vi.fn(),
       createMany: vi.fn(),
@@ -394,3 +396,8 @@ describe('generateWeeklyPlan task', () => {
     })
   })
 })
+
+vi.mock('../../../server/utils/training-prescription/service', async (importOriginal) => ({
+  ...(await importOriginal<any>()),
+  ...(await import('../helpers/prescription-boundary-double')).prescriptionBoundaryDouble
+}))

@@ -73,6 +73,7 @@ export default defineEventHandler(async (event) => {
   try {
     return await updatePlannedWorkoutForUser(userId, workoutId, body)
   } catch (error: any) {
+    if (error.statusCode) throw error
     if (error.statusCode) {
       throw error
     }

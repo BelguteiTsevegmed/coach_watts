@@ -2,10 +2,7 @@ import { z } from 'zod/v3'
 import { requireAuth } from '../../../../utils/auth-guard'
 import { prisma } from '../../../../utils/db'
 import { requireCoachAccessToAthlete } from '../../../../utils/coaching-auth'
-import {
-  createPlannedWorkoutForUser,
-  deletePlannedWorkoutForUser
-} from '../../../../utils/planned-workout-service'
+import { applyPrescriptionTemplate } from '../../../../utils/training-prescription/template-application'
 
 const applyPlanSchema = z.object({
   startDate: z.string(),
@@ -65,24 +62,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const startDate = normalizeStartDate(body.startDate)
-  let deletedCount = 0
-  let createdCount = 0
-
-  if (body.replaceFutureWorkouts) {
-    const futureWorkouts = await prisma.plannedWorkout.findMany({
-      where: {
-        userId: targetUserId,
-        completed: false,
-        date: { gte: startDate }
-      },
-      select: { id: true }
-    })
-
-    for (const workout of futureWorkouts) {
-      await deletePlannedWorkoutForUser(targetUserId, workout.id)
-      deletedCount += 1
-    }
-  }
+  const drafts: any[] = []
 
   for (const block of template.blocks) {
     let weeksBefore = 0
@@ -109,8 +89,8 @@ export default defineEventHandler(async (event) => {
         const workoutDate = new Date(weekStartDate)
         workoutDate.setUTCDate(workoutDate.getUTCDate() + dayOffset)
 
-        await createPlannedWorkoutForUser(targetUserId, {
-          date: workoutDate.toISOString(),
+        drafts.push({
+          date: workoutDate,
           startTime: workout.startTime,
           title: workout.title,
           description: workout.description || '',
@@ -122,13 +102,19 @@ export default defineEventHandler(async (event) => {
           structuredWorkout: workout.structuredWorkout || undefined,
           fuelingStrategy: workout.fuelingStrategy || undefined
         })
-        createdCount += 1
       }
     }
   }
 
+  const { deletedCount, createdCount, assessment } = await applyPrescriptionTemplate(
+    targetUserId,
+    drafts,
+    body.replaceFutureWorkouts ? startDate : undefined
+  )
+
   return {
     success: true,
+    assessment,
     deletedCount,
     createdCount,
     targetUserId

@@ -59,6 +59,7 @@ export default defineEventHandler(async (event) => {
   try {
     return await createPlannedWorkoutForUser(userId, body)
   } catch (error: any) {
+    if (error.statusCode) throw error
     console.error('Error creating planned workout:', error)
     throw createError({
       statusCode: 500,

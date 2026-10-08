@@ -1,3 +1,10 @@
+import { retireReplacedPrescriptionExports } from '../server/utils/training-prescription/replacement-sync'
+import {
+  lockPrescriptionSchedule,
+  validatePrescriptionWrite,
+  withPrescriptionAssessment
+} from '../server/utils/training-prescription/service'
+import { isProtectedPrescriptionSession } from '../server/utils/training-prescription/assessment'
 import {
   readSportVolumeTargets,
   remainingProgressionBudgets,
@@ -629,6 +636,53 @@ Return valid JSON matching the schema provided.`
           return
         }
 
+        await lockPrescriptionSchedule(tx, userId)
+        if (
+          weekSchedules.some(
+            (schedule) =>
+              !result.weeks.some((w: any) => Number(w.weekNumber) === schedule.weekNumber)
+          )
+        )
+          throw new Error('Generated prescription is missing a requested block week.')
+        const proposals = weekSchedules.flatMap((schedule) => {
+          const data = result.weeks.find((w: any) => Number(w.weekNumber) === schedule.weekNumber)
+          return (data?.workouts || []).flatMap((workout: any) => {
+            const date = schedule.validDays.find((d) => d.getUTCDay() === workout.dayOfWeek)
+            if (!date || protectedCalendarDays.has(formatDateUTC(date))) return []
+            return [
+              {
+                userId,
+                date,
+                title: workout.title,
+                type: normalizeGeneratedWorkoutType(workout.type),
+                durationSec: Math.round((workout.durationMinutes || 0) * 60),
+                distanceMeters: workout.distanceMeters,
+                tss: workout.tssEstimate,
+                workIntensity: getIntensityScore(workout.intensity)
+              }
+            ]
+          })
+        })
+        const existingSessions = await tx.plannedWorkout.findMany({
+          where: { userId, trainingWeek: { blockId } }
+        })
+        const replaceIds = existingSessions
+          .filter(
+            (w) =>
+              w.managedBy === 'COACH_WATTS' &&
+              !isProtectedPrescriptionSession(w) &&
+              !anchorWorkoutIds?.includes(w.id)
+          )
+          .map((w) => w.id)
+        const assessment = await validatePrescriptionWrite(tx, userId, proposals, {
+          source: 'block-generation',
+          replaceIds
+        })
+        await retireReplacedPrescriptionExports(
+          tx,
+          userId,
+          existingSessions.filter((w) => replaceIds.includes(w.id))
+        )
         // Clear existing
         const existingWeeks = await tx.trainingWeek.findMany({
           where: { blockId },
@@ -645,17 +699,14 @@ Return valid JSON matching the schema provided.`
           await tx.plannedWorkout.updateMany({
             where: {
               trainingWeekId: { in: weekIds },
-              id: { notIn: anchorWorkoutIds || [] },
-              OR: [{ managedBy: 'USER' }, { completed: true }]
+              id: { notIn: replaceIds }
             },
             data: { trainingWeekId: null }
           })
           await tx.plannedWorkout.deleteMany({
             where: {
               trainingWeekId: { in: weekIds },
-              id: { notIn: anchorWorkoutIds || [] },
-              managedBy: { not: 'USER' },
-              completed: false
+              id: { in: replaceIds }
             }
           })
           await tx.trainingWeek.deleteMany({ where: { blockId } })
@@ -696,10 +747,12 @@ Return valid JSON matching the schema provided.`
                 originalWeek?.volumeTargetMinutes ?? weekData?.volumeTargetMinutes ?? 0,
               sportVolumeTargets: originalWeek?.sportVolumeTargets ?? undefined,
               tssTarget:
-                weekData?.workouts?.reduce(
-                  (acc: number, w: any) => acc + (w.tssEstimate || 0),
-                  0
-                ) || 0,
+                (originalWeek?.tssTarget ??
+                  weekData?.workouts?.reduce(
+                    (acc: number, w: any) => acc + (w.tssEstimate || 0),
+                    0
+                  )) ||
+                0,
               isRecovery:
                 originalWeek?.isRecovery ?? (focusKey === 'RECOVERY' || focusKey === 'TAPER')
             }
@@ -747,7 +800,9 @@ Return valid JSON matching the schema provided.`
                   title: workout.title,
                   description: workout.description,
                   type: normalizeGeneratedWorkoutType(workout.type),
-                  durationSec: (workout.durationMinutes || 0) * 60,
+                  durationSec: Math.round((workout.durationMinutes || 0) * 60),
+                  distanceMeters: workout.distanceMeters,
+                  rawJson: withPrescriptionAssessment({}, assessment.id),
                   tss: workout.tssEstimate,
                   workIntensity: getIntensityScore(workout.intensity),
                   externalId: `ai-gen-${createdWeek.id}-${workout.dayOfWeek}-${index}-${Date.now()}`,
@@ -776,7 +831,7 @@ Return valid JSON matching the schema provided.`
           }
         }
       },
-      { timeout: 40000 }
+      { timeout: 40000, isolationLevel: 'Serializable' }
     )
 
     const structureFailures: Array<{ workoutId: string; error: string }> = []

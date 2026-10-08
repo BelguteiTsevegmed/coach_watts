@@ -177,6 +177,7 @@ model User {
   workoutTemplateFolders             WorkoutTemplateFolder[]
   strengthExerciseLibraryItems       StrengthExerciseLibraryItem[]
   journeyEvents                      AthleteJourneyEvent[]
+  prescriptionAssessments            TrainingPrescriptionAssessment[]
   injuries                           Injury[]
   nutritionSettings                  UserNutritionSettings?
   nutritionRecommendations           NutritionRecommendation[]
@@ -2323,6 +2324,10 @@ model Injury {
   resolvedAt     DateTime?
   /// Sport keys affected: run, ride, swim, strength
   affectedSports String[]  @default([])
+  /// Athlete/clinician recorded loading restriction; null is not medical clearance.
+  loadRestriction String?
+  /// Explicit reported red flags; never inferred from a pain score.
+  redFlags       String[]  @default([])
   notes          String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -2734,4 +2739,20 @@ model FavoriteTrainingPlan {
   @@unique([userId, planId])
   @@index([userId])
   @@index([planId])
+}
+
+/// Versioned schedule-policy assessments, including rejected proposals and untouched imports.
+model TrainingPrescriptionAssessment {
+  id                 String   @id @default(uuid())
+  userId             String
+  source             String
+  ruleVersion        String
+  outcome            String
+  sessionIds         String[]
+  snapshot           Json
+  result             Json
+  createdAt          DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

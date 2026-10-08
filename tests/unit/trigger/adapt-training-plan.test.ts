@@ -451,3 +451,8 @@ describe('safe weekly recalculation', () => {
     expect(runGenerateWeeklyPlan).not.toHaveBeenCalled()
   })
 })
+
+vi.mock('../../../server/utils/training-prescription/service', async (importOriginal) => ({
+  ...(await importOriginal<any>()),
+  ...(await import('../helpers/prescription-boundary-double')).prescriptionBoundaryDouble
+}))
