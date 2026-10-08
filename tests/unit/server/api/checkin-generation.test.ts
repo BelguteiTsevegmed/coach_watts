@@ -48,6 +48,12 @@ describe('Daily check-in dispatch', () => {
     vi.mocked(mainTaskQueue.getWorkers).mockResolvedValue([])
     await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 503 })
   })
+  it('reports an unavailable Redis service without creating a pending check-in', async () => {
+    vi.mocked(mainTaskQueue.getWorkers).mockRejectedValueOnce(new Error('connect ECONNREFUSED'))
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 503 })
+    expect(dailyCheckinRepository.ensurePending).not.toHaveBeenCalled()
+    expect(dispatchTask).not.toHaveBeenCalled()
+  })
   it('returns a durable pending check-in and deduplicates repeated requests', async () => {
     await expect(handler({} as any)).resolves.toMatchObject({ id: 'checkin-1', status: 'PENDING' })
     expect(dispatchTask).toHaveBeenCalledWith(

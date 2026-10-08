@@ -36,6 +36,14 @@ export const MAIN_TASK_JOB_OPTIONS = {
 } as const
 
 function resetQueueInstances() {
+  for (const queue of [
+    webhookQueueInstance,
+    pingQueueInstance,
+    streamsQueueInstance,
+    mainTaskQueueInstance
+  ]) {
+    void queue?.close().catch(() => {})
+  }
   webhookQueueInstance = null
   pingQueueInstance = null
   streamsQueueInstance = null
@@ -44,8 +52,20 @@ function resetQueueInstances() {
 
 function createConnection() {
   const nextConnection = new IORedis(connectionString, {
-    maxRetriesPerRequest: null, // Required by BullMQ
+    // These are producers, not blocking Worker connections. HTTP requests must
+    // reject during an outage; the worker uses its own unlimited-retry client.
+    maxRetriesPerRequest: 1,
+    commandTimeout: 5000,
+    connectTimeout: 5000,
     retryStrategy: (times) => getRedisRetryDelay(times)
+  })
+
+  let hadConnectionError = false
+  nextConnection.on('ready', () => {
+    // BullMQ caches a rejected initialization promise. Recreate queues after
+    // recovery so the next request can succeed without restarting the app.
+    if (hadConnectionError) resetQueueInstances()
+    hadConnectionError = false
   })
 
   nextConnection.on('connect', () => {
@@ -59,8 +79,12 @@ function createConnection() {
   })
 
   nextConnection.on('error', (err) => {
+    hadConnectionError = true
     if (!process.env.NITRO_BUILD) {
-      console.warn('[Queue] Redis connection warning:', err.message)
+      console.warn(
+        '[Queue] Redis connection warning:',
+        err.message || (err as NodeJS.ErrnoException).code || String(err)
+      )
     }
   })
 
@@ -90,6 +114,7 @@ function getWebhookQueueInstance() {
     webhookQueueInstance = new Queue('webhookQueue', {
       connection: activeConnection as any,
       skipVersionCheck: true,
+      skipWaitingForReady: true,
       defaultJobOptions: WEBHOOK_JOB_OPTIONS
     })
   }
@@ -102,6 +127,7 @@ function getPingQueueInstance() {
     pingQueueInstance = new Queue('pingQueue', {
       connection: activeConnection as any,
       skipVersionCheck: true,
+      skipWaitingForReady: true,
       defaultJobOptions: PING_JOB_OPTIONS
     })
   }
@@ -114,6 +140,7 @@ function getStreamsQueueInstance() {
     streamsQueueInstance = new Queue('streamsQueue', {
       connection: activeConnection as any,
       skipVersionCheck: true,
+      skipWaitingForReady: true,
       defaultJobOptions: STREAM_JOB_OPTIONS
     })
   }
@@ -126,6 +153,7 @@ function getMainTaskQueueInstance() {
     mainTaskQueueInstance = new Queue('mainTaskQueue', {
       connection: activeConnection as any,
       skipVersionCheck: true,
+      skipWaitingForReady: true,
       defaultJobOptions: MAIN_TASK_JOB_OPTIONS
     })
   }

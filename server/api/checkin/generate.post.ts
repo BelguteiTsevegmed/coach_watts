@@ -21,11 +21,20 @@ export default defineEventHandler(async (event) => {
 
   if (checkin && !force && !isStuck && checkin.status !== 'FAILED') return checkin
 
-  if (getTaskDriver() === 'redis' && (await mainTaskQueue.getWorkers()).length === 0) {
-    throw createError({
-      statusCode: 503,
-      message: 'The background worker is offline. Start pnpm dev:worker, then try again.'
+  if (getTaskDriver() === 'redis') {
+    const workers = await mainTaskQueue.getWorkers().catch((cause) => {
+      throw createError({
+        statusCode: 503,
+        message: 'The check-in service is temporarily unavailable. Please try again shortly.',
+        cause
+      })
     })
+    if (workers.length === 0) {
+      throw createError({
+        statusCode: 503,
+        message: 'The background worker is offline. Start pnpm dev:worker, then try again.'
+      })
+    }
   }
 
   // Persist before enqueueing so polling can always observe progress or failure.
