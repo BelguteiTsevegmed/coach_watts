@@ -64,7 +64,10 @@ import {
   applyStrengthLibraryDefaultsToWorkout,
   validateStrengthStructuredWorkout
 } from '../server/utils/strength-exercise-matching'
-import { resolveStructureGeneratorModeForWorkout } from '../server/utils/structured-workout-generator'
+import {
+  resolveStructureGeneratorModeForWorkout,
+  readStructuredWorkoutGeneratorModeFromFeatureFlags
+} from '../server/utils/structured-workout-generator'
 import {
   compileWorkoutPlanDraftToStructure,
   workoutPlanDraftSchema
@@ -84,6 +87,12 @@ import {
   looksLikeIntervalWorkout
 } from './utils/structure-generation-prompt'
 import { strengthWorkoutStructureSchema } from './utils/structure-generation-schemas'
+import {
+  generateWorkoutFamily,
+  workoutFamilyFallbackReason
+} from '../server/utils/workout-family-generation'
+import { summarizePlannedStimulus } from '../server/utils/training-stimulus'
+import type { FamilyCompilation } from '../shared/workout-families'
 import { registerTaskHandler } from '../server/utils/task-registry'
 
 const workoutStructureSchema = {
@@ -900,8 +909,21 @@ export async function runGenerateStructuredWorkout(
       isTemplate: entityType === 'WorkoutTemplate'
     })
 
-    const requestedGeneratorMode = resolveStructureGeneratorModeForWorkout(workout.type || '')
-    const generatorMode = payload.generatorOverride ?? requestedGeneratorMode
+    const requestedGeneratorMode = resolveStructureGeneratorModeForWorkout(
+      workout.type || '',
+      workout.user.featureFlags
+    )
+    const selectedGeneratorMode =
+      payload.generatorOverride ??
+      (readStructuredWorkoutGeneratorModeFromFeatureFlags(workout.user.featureFlags) ===
+      'workout_families_v1'
+        ? 'workout_families_v1'
+        : requestedGeneratorMode)
+    const familyFallbackReason =
+      selectedGeneratorMode === 'workout_families_v1' ? workoutFamilyFallbackReason(workout) : null
+    const generatorMode = familyFallbackReason
+      ? resolveStructureGeneratorModeForWorkout(workout.type || '')
+      : selectedGeneratorMode
     console.log(
       `[GenerateStructuredWorkout] Generator mode resolved: entityId=${entityId} entityType=${entityType} workoutType=${workout.type} mode=${generatorMode}`
     )
@@ -986,9 +1008,16 @@ export async function runGenerateStructuredWorkout(
     logStage('loaded-recent-workouts', { count: recentWorkouts.length, contextProfile })
 
     // Resolve Metrics
-    const ftp = sportSettings?.ftp || workout.user.ftp || 250
-    const lthr = sportSettings?.lthr || workout.user.lthr || 160
-    const maxHr = sportSettings?.maxHr || workout.user.maxHr || 190
+    const ftp =
+      sportSettings?.ftp || workout.user.ftp || (generatorMode === 'workout_families_v1' ? 0 : 250)
+    const lthr =
+      sportSettings?.lthr ||
+      workout.user.lthr ||
+      (generatorMode === 'workout_families_v1' ? 0 : 160)
+    const maxHr =
+      sportSettings?.maxHr ||
+      workout.user.maxHr ||
+      (generatorMode === 'workout_families_v1' ? 0 : 190)
     const thresholdPace = sportSettings?.thresholdPace || 0
     const aiContextBlock = formatAiContextForStructureGen({
       aiContext: workout.user.aiContext,
@@ -1129,7 +1158,32 @@ OUTPUT JSON matching the schema.`
     let lastAiOutputForRetry: any = null
     let totals: { distance: number; duration: number; tss: number } | null = null
     const actualModelUsed = 'flash'
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    let familyCompilation: (FamilyCompilation & { context: Record<string, unknown> }) | null = null
+    if (generatorMode === 'workout_families_v1') {
+      familyCompilation = await generateWorkoutFamily({
+        workout,
+        sportSettings,
+        primaryMetric: targetPolicy.primaryMetric,
+        operation: 'generate'
+      })
+      structure = familyCompilation.structure
+      // The compiler owns exact intervals. Legacy target repair must not inject
+      // extra metrics or alter the family target/dose after compilation.
+      const summary = summarizePlannedStimulus(
+        {
+          type: workout.type,
+          structuredWorkout: structure
+        },
+        { ftp, lthr, maxHr, thresholdPace }
+      )
+      totals = {
+        duration: summary.durationSeconds,
+        distance: summary.distanceMeters || 0,
+        tss: summary.tss.value || 0
+      }
+      logStage('workout-family-compiled', { ...familyCompilation.provenance })
+    }
+    for (let attempt = 1; generatorMode !== 'workout_families_v1' && attempt <= 2; attempt++) {
       try {
         const aiStartedAt = Date.now()
         const isRetry = attempt > 1
@@ -1531,7 +1585,7 @@ OUTPUT JSON matching the schema.`
     }
 
     const computedTotals = totals || normalizeAndCalculate(structure.steps || [])
-    if (workout.type === 'Ride' || workout.type === 'VirtualRide') {
+    if (!familyCompilation && (workout.type === 'Ride' || workout.type === 'VirtualRide')) {
       enforceCyclingCadenceVariation(structure)
     }
     const totalDistance = computedTotals.distance
@@ -1603,7 +1657,7 @@ OUTPUT JSON matching the schema.`
     if (renderable && totalDuration <= 0) {
       throw new Error('Generated structured workout has zero total duration')
     }
-    if (renderable && totalTSS <= 0) {
+    if (!familyCompilation && renderable && totalTSS <= 0) {
       throw new Error('Generated structured workout has zero total TSS')
     }
     if (!renderable) {
@@ -1633,6 +1687,19 @@ OUTPUT JSON matching the schema.`
       contextProfile
     })
 
+    const familyContext = familyCompilation
+      ? { family: familyCompilation.context }
+      : familyFallbackReason
+        ? {
+            family: {
+              status: 'fallback',
+              reason: familyFallbackReason,
+              requestedGeneratorMode: selectedGeneratorMode
+            }
+          }
+        : {}
+    Object.assign(generationContext, familyContext)
+
     const canonicalStructure = adaptStructuredWorkout(structure, {
       source: 'AI_GENERATION',
       zoneProfileSnapshot: createZoneProfileSnapshot(sportSettings)
@@ -1652,6 +1719,9 @@ OUTPUT JSON matching the schema.`
         fallbackOrder: targetPolicy.fallbackOrder as Array<'power' | 'heartRate' | 'pace' | 'rpe'>,
         preservePlannedDuration: workout.durationSec,
         extra: {
+          ...(familyCompilation
+            ? { title: familyCompilation.title, description: familyCompilation.description }
+            : {}),
           lastGenerationSettingsSnapshot: settingsSnapshot,
           lastGenerationContext: generationContext,
           ...(!(workout as any).createdFromSettingsSnapshot
@@ -1863,6 +1933,9 @@ OUTPUT JSON matching the schema.`
     } else {
       // WorkoutTemplate - Strictly filter fields
       const templateData = {
+        ...(familyCompilation
+          ? { title: familyCompilation.title, description: familyCompilation.description }
+          : {}),
         structuredWorkout: canonicalStructure as any,
         durationSec: totalDuration > 0 ? totalDuration : null,
         tss: totalTSS > 0 ? Math.round(totalTSS) : null,

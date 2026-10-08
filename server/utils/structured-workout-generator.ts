@@ -1,7 +1,12 @@
 import { prisma } from './db'
+import { resolveFamilySport } from '../../shared/workout-families'
 import { isDraftStructuredWorkoutSupported } from './structured-workout-draft'
 
-export const STRUCTURED_WORKOUT_GENERATOR_MODES = ['legacy_json', 'draft_json_v1'] as const
+export const STRUCTURED_WORKOUT_GENERATOR_MODES = [
+  'legacy_json',
+  'draft_json_v1',
+  'workout_families_v1'
+] as const
 
 export type StructuredWorkoutGeneratorMode = (typeof STRUCTURED_WORKOUT_GENERATOR_MODES)[number]
 
@@ -50,10 +55,16 @@ export async function resolveStructuredWorkoutGeneratorMode(
 
 /**
  * Resolve the generator mode for a specific workout type.
- * Endurance sports (ride/run/swim) always use the compact draft path.
+ * Families are opt-in for running/cycling; other endurance sports keep the draft path.
  */
 export function resolveStructureGeneratorModeForWorkout(
-  workoutType: unknown
+  workoutType: unknown,
+  featureFlags?: unknown
 ): StructuredWorkoutGeneratorMode {
+  if (
+    resolveFamilySport(workoutType) &&
+    readStructuredWorkoutGeneratorModeFromFeatureFlags(featureFlags) === 'workout_families_v1'
+  )
+    return 'workout_families_v1'
   return isDraftStructuredWorkoutSupported(workoutType) ? 'draft_json_v1' : 'legacy_json'
 }

@@ -39,7 +39,10 @@ import {
   applyStrengthLibraryDefaultsToWorkout,
   validateStrengthStructuredWorkout
 } from '../server/utils/strength-exercise-matching'
-import { resolveStructureGeneratorModeForWorkout } from '../server/utils/structured-workout-generator'
+import {
+  resolveStructureGeneratorModeForWorkout,
+  readStructuredWorkoutGeneratorModeFromFeatureFlags
+} from '../server/utils/structured-workout-generator'
 import {
   compileWorkoutPlanDraftToStructure,
   workoutPlanDraftSchema
@@ -79,6 +82,12 @@ import {
   adaptStructuredWorkout,
   createZoneProfileSnapshot
 } from '../shared/structured-workout-contract'
+import {
+  generateWorkoutFamily,
+  workoutFamilyFallbackReason
+} from '../server/utils/workout-family-generation'
+import { summarizePlannedStimulus } from '../server/utils/training-stimulus'
+import type { FamilyCompilation } from '../shared/workout-families'
 import { registerTaskHandler } from '../server/utils/task-registry'
 
 const workoutStructureSchema = {
@@ -773,8 +782,21 @@ export async function runAdjustStructuredWorkout(
       durationSec: workout.durationSec
     })
 
-    const requestedGeneratorMode = resolveStructureGeneratorModeForWorkout(workout.type || '')
-    const generatorMode = payload.generatorOverride ?? requestedGeneratorMode
+    const requestedGeneratorMode = resolveStructureGeneratorModeForWorkout(
+      workout.type || '',
+      workout.user.featureFlags
+    )
+    const selectedGeneratorMode =
+      payload.generatorOverride ??
+      (readStructuredWorkoutGeneratorModeFromFeatureFlags(workout.user.featureFlags) ===
+      'workout_families_v1'
+        ? 'workout_families_v1'
+        : requestedGeneratorMode)
+    const familyFallbackReason =
+      selectedGeneratorMode === 'workout_families_v1' ? workoutFamilyFallbackReason(workout) : null
+    const generatorMode = familyFallbackReason
+      ? resolveStructureGeneratorModeForWorkout(workout.type || '')
+      : selectedGeneratorMode
     console.log('[AdjustStructuredWorkout] Generator mode resolved', {
       entityId,
       entityType,
@@ -786,7 +808,7 @@ export async function runAdjustStructuredWorkout(
     })
     logStage('generator-mode-branch', {
       generatorMode,
-      implementation: generatorMode === 'draft_json_v1' ? 'compact_draft_v1' : 'legacy_json'
+      implementation: generatorMode
     })
 
     if (!payload.quotaCheckedAtEnqueue) {
@@ -855,9 +877,16 @@ export async function runAdjustStructuredWorkout(
     logStage('loaded-recent-workouts', { count: recentWorkouts.length, contextProfile })
 
     // Resolve Metrics
-    const ftp = sportSettings?.ftp || workout.user.ftp || 250
-    const lthr = sportSettings?.lthr || workout.user.lthr || 160
-    const maxHr = sportSettings?.maxHr || workout.user.maxHr || 190
+    const ftp =
+      sportSettings?.ftp || workout.user.ftp || (generatorMode === 'workout_families_v1' ? 0 : 250)
+    const lthr =
+      sportSettings?.lthr ||
+      workout.user.lthr ||
+      (generatorMode === 'workout_families_v1' ? 0 : 160)
+    const maxHr =
+      sportSettings?.maxHr ||
+      workout.user.maxHr ||
+      (generatorMode === 'workout_families_v1' ? 0 : 190)
     const thresholdPace = sportSettings?.thresholdPace || 0
 
     const zoneDefinitions = buildCompactZoneDefinitions({
@@ -958,7 +987,33 @@ OUTPUT JSON matching the schema.`
     let lastAiOutputForRetry: any = null
     let totals: { distance: number; duration: number; tss: number } | null = null
     const actualModelUsed = 'flash'
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    let familyCompilation: (FamilyCompilation & { context: Record<string, unknown> }) | null = null
+    if (generatorMode === 'workout_families_v1') {
+      familyCompilation = await generateWorkoutFamily({
+        workout,
+        sportSettings,
+        primaryMetric: targetPolicy.primaryMetric,
+        operation: 'adjust',
+        adjustments
+      })
+      structure = familyCompilation.structure
+      // The compiler owns exact intervals. Legacy target repair must not inject
+      // extra metrics or alter the family target/dose after compilation.
+      const summary = summarizePlannedStimulus(
+        {
+          type: workout.type,
+          structuredWorkout: structure
+        },
+        { ftp, lthr, maxHr, thresholdPace }
+      )
+      totals = {
+        duration: summary.durationSeconds,
+        distance: summary.distanceMeters || 0,
+        tss: summary.tss.value || 0
+      }
+      logStage('workout-family-compiled', { ...familyCompilation.provenance })
+    }
+    for (let attempt = 1; generatorMode !== 'workout_families_v1' && attempt <= 2; attempt++) {
       try {
         const aiStartedAt = Date.now()
         const isRetry = attempt > 1
@@ -1365,7 +1420,7 @@ OUTPUT JSON matching the schema.`
     }
 
     const computedTotals = totals || normalizeAndCalculate(structure.steps || [])
-    if (workout.type === 'Ride' || workout.type === 'VirtualRide') {
+    if (!familyCompilation && (workout.type === 'Ride' || workout.type === 'VirtualRide')) {
       enforceCyclingCadenceVariation(structure)
     }
     const totalDistance = computedTotals.distance
@@ -1399,7 +1454,7 @@ OUTPUT JSON matching the schema.`
     if (renderable && totalDuration <= 0) {
       throw new Error('Adjusted structured workout has zero total duration')
     }
-    if (renderable && totalTSS <= 0) {
+    if (!familyCompilation && renderable && totalTSS <= 0) {
       throw new Error('Adjusted structured workout has zero total TSS')
     }
     if (!renderable) {
@@ -1433,6 +1488,19 @@ OUTPUT JSON matching the schema.`
       adjustments
     })
 
+    const familyContext = familyCompilation
+      ? { family: familyCompilation.context }
+      : familyFallbackReason
+        ? {
+            family: {
+              status: 'fallback',
+              reason: familyFallbackReason,
+              requestedGeneratorMode: selectedGeneratorMode
+            }
+          }
+        : {}
+    Object.assign(generationContext, familyContext)
+
     const canonicalStructure = adaptStructuredWorkout(structure, {
       source: 'AI_GENERATION',
       zoneProfileSnapshot: createZoneProfileSnapshot(sportSettings)
@@ -1452,7 +1520,10 @@ OUTPUT JSON matching the schema.`
         fallbackOrder: targetPolicy.fallbackOrder as Array<'power' | 'heartRate' | 'pace' | 'rpe'>,
         preservePlannedDuration: workout.durationSec,
         extra: {
-          ...(adjustments.intensity
+          ...(familyCompilation
+            ? { title: familyCompilation.title, description: familyCompilation.description }
+            : {}),
+          ...(!familyCompilation && adjustments.intensity
             ? { workIntensity: getIntensityScore(adjustments.intensity) }
             : {}),
           lastGenerationSettingsSnapshot: settingsSnapshot,
@@ -1555,18 +1626,23 @@ OUTPUT JSON matching the schema.`
       const updatedTemplate = await (prisma as any).workoutTemplate.update({
         where: { id: workoutTemplateId! },
         data: {
+          ...(familyCompilation
+            ? { title: familyCompilation.title, description: familyCompilation.description }
+            : {}),
           structuredWorkout: canonicalStructure as any,
-          durationSec: adjustments.durationMinutes
-            ? adjustments.durationMinutes * 60
-            : totalDuration > 0
-              ? totalDuration
-              : null,
+          durationSec:
+            !familyCompilation && adjustments.durationMinutes
+              ? adjustments.durationMinutes * 60
+              : totalDuration > 0
+                ? totalDuration
+                : null,
           tss: totalTSS > 0 ? Math.round(totalTSS) : null,
-          workIntensity: adjustments.intensity
-            ? getIntensityScore(adjustments.intensity)
-            : totalTSS > 0 && totalDuration > 0
-              ? parseFloat(Math.sqrt((36 * totalTSS) / totalDuration).toFixed(2))
-              : null
+          workIntensity:
+            !familyCompilation && adjustments.intensity
+              ? getIntensityScore(adjustments.intensity)
+              : totalTSS > 0 && totalDuration > 0
+                ? parseFloat(Math.sqrt((36 * totalTSS) / totalDuration).toFixed(2))
+                : null
         }
       })
       logStage('template-updated', {

@@ -1,0 +1,83 @@
+{
+  "version": "endurance-families-v1",
+  "reviewStatus": "engineering-reviewed; coach-review-pending",
+  "cases": [
+    {
+      "name": "run threshold entry",
+      "sport": "run",
+      "family": "threshold",
+      "doseStep": 0,
+      "durationSeconds": 2400,
+      "reps": 3,
+      "workSeconds": 300,
+      "recoverySeconds": 120,
+      "qualitySeconds": 900
+    },
+    {
+      "name": "ride threshold entry",
+      "sport": "ride",
+      "family": "threshold",
+      "doseStep": 0,
+      "durationSeconds": 3600,
+      "reps": 3,
+      "workSeconds": 480,
+      "recoverySeconds": 180,
+      "qualitySeconds": 1440
+    },
+    {
+      "name": "run VO2 progression",
+      "sport": "run",
+      "family": "vo2",
+      "doseStep": 2,
+      "durationSeconds": 3000,
+      "reps": 5,
+      "workSeconds": 180,
+      "recoverySeconds": 180,
+      "qualitySeconds": 900
+    },
+    {
+      "name": "ride VO2 progression",
+      "sport": "ride",
+      "family": "vo2",
+      "doseStep": 1,
+      "durationSeconds": 3000,
+      "reps": 5,
+      "workSeconds": 180,
+      "recoverySeconds": 180,
+      "qualitySeconds": 900
+    },
+    {
+      "name": "relaxed running strides",
+      "sport": "run",
+      "family": "strides",
+      "doseStep": 1,
+      "durationSeconds": 1800,
+      "reps": 6,
+      "workSeconds": 20,
+      "recoverySeconds": 80,
+      "qualitySeconds": 120
+    },
+    {
+      "name": "controlled cycling sprints",
+      "sport": "ride",
+      "family": "sprints",
+      "doseStep": 0,
+      "durationSeconds": 2400,
+      "reps": 4,
+      "workSeconds": 10,
+      "recoverySeconds": 170,
+      "qualitySeconds": 40
+    },
+    {
+      "name": "explicit event rehearsal",
+      "sport": "run",
+      "family": "race_specific",
+      "doseStep": 0,
+      "durationSeconds": 2700,
+      "reps": 2,
+      "workSeconds": 600,
+      "recoverySeconds": 180,
+      "qualitySeconds": 1200
+    }
+  ]
+}
