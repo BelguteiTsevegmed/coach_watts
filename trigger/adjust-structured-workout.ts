@@ -11,8 +11,8 @@ import { checkQuota } from '../server/utils/quotas/engine'
 import { serializeCanonicalForIntervals } from '../server/utils/canonical-workout-serializer'
 import { syncPlannedWorkoutToIntervals } from '../server/utils/intervals-sync'
 import { enforceCyclingCadenceVariation, resolveCyclingCadence } from './utils/cadence'
+import { resolveStructureTargeting } from './utils/structure-generation-targeting'
 import {
-  resolveWorkoutTargeting,
   type WorkoutTargetingOverride,
   formatCompactTargetingBlock,
   STEP_INTENTS,
@@ -833,7 +833,11 @@ export async function runAdjustStructuredWorkout(
       workout.type || ''
     )
     const { targetPolicy, targetFormatPolicy, loadPreference, priorityText } =
-      resolveWorkoutTargeting(sportSettings, payload?.targetingOverride || null)
+      resolveStructureTargeting(
+        sportSettings,
+        workout.type || '',
+        payload?.targetingOverride || null
+      )
     logStage('loaded-sport-settings', {
       hasSettings: Boolean(sportSettings),
       hasHrZones: Boolean((sportSettings?.hrZones as any)?.length),

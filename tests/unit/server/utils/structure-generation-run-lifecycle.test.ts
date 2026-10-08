@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getCurrentTaskExecution } from '../../../../server/utils/task-registry'
 
 import {
   finishStructureGenerationTask,
@@ -21,11 +22,36 @@ vi.mock('../../../../server/utils/structure-generation-run', () => ({
   markStructureGenerationRunStale: vi.fn()
 }))
 
+vi.mock('../../../../server/utils/task-registry', () => ({
+  getCurrentTaskExecution: vi.fn()
+}))
+
 describe('structure generation run lifecycle', () => {
   const payload = { generationRunId: 'run-1', generationRevision: 2 }
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(getCurrentTaskExecution).mockReturnValue(undefined)
+  })
+
+  it('keeps the lifecycle active when the Redis worker will retry the failed attempt', async () => {
+    vi.mocked(getCurrentTaskExecution).mockReturnValue({
+      taskId: 'generate-structured-workout',
+      attemptNumber: 1,
+      maxAttempts: 3
+    })
+    await failStructureGenerationTaskFromPayload(payload, new Error('Temporary timeout'))
+    expect(markStructureGenerationRunFailed).not.toHaveBeenCalled()
+  })
+
+  it('records the failure when the Redis worker has exhausted its attempts', async () => {
+    vi.mocked(getCurrentTaskExecution).mockReturnValue({
+      taskId: 'generate-structured-workout',
+      attemptNumber: 3,
+      maxAttempts: 3
+    })
+    await failStructureGenerationTaskFromPayload(payload, new Error('Generation failed'))
+    expect(markStructureGenerationRunFailed).toHaveBeenCalledWith('run-1', 'Generation failed')
   })
 
   it('marks stale when the run revision is no longer current', async () => {

@@ -177,6 +177,57 @@ describe('Planned workout detail generation state restoration (CW-5)', () => {
     expect(wrapper.text()).toContain('Build Structure')
   })
 
+  it('shows the persisted generation failure after a reload without a live task event', async () => {
+    fetchMock.mockResolvedValueOnce(
+      buildWorkoutResponse({
+        latestStructureGenerationRun: {
+          id: 'generation-1',
+          mode: 'generate',
+          status: 'FAILED',
+          error: 'Final structure exceeds the weekly duration budget.'
+        }
+      })
+    )
+    const wrapper = await mountPage()
+    expect(wrapper.text()).toContain('Final structure exceeds the weekly duration budget.')
+    expect(wrapper.text()).toContain('Build Structure')
+    expect(wrapper.text()).not.toContain('Generating...')
+  })
+
+  it('shows a terminal failure returned by workout polling without a live task event', async () => {
+    let poll: (() => Promise<void>) | undefined
+    const originalSetInterval = globalThis.setInterval
+    const intervalSpy = vi
+      .spyOn(globalThis, 'setInterval')
+      .mockImplementation((callback: any, delay: any, ...args: any[]) => {
+        if (delay === 3000) poll = callback
+        return originalSetInterval(callback, delay, ...args)
+      })
+    try {
+      fetchMock.mockResolvedValueOnce(buildWorkoutResponse({ structureGenerationInFlight: true }))
+      const wrapper = await mountPage()
+      expect(wrapper.text()).toContain('Generating...')
+      fetchMock.mockResolvedValueOnce(
+        buildWorkoutResponse({
+          latestStructureGenerationRun: {
+            id: 'generation-1',
+            status: 'FAILED',
+            mode: 'generate',
+            error: 'Generation timed out.'
+          }
+        })
+      )
+      expect(poll).toBeDefined()
+      await poll!()
+      await flushPromises()
+      expect(wrapper.text()).toContain('Generation timed out.')
+      expect(wrapper.text()).toContain('Build Structure')
+      expect(wrapper.text()).not.toContain('Generating...')
+    } finally {
+      intervalSpy.mockRestore()
+    }
+  })
+
   it('ignores active runs tagged for a different workout', async () => {
     activeRuns.value = [
       {

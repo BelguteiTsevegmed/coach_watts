@@ -29,7 +29,8 @@ import {
   WORKOUT_STRUCTURE_AI_MAX_RETRIES,
   WORKOUT_STRUCTURE_AI_TIMEOUT_MS
 } from '../server/utils/workout-ai-timeouts'
-import { hasValidRepeatBlockRecovery } from '../server/utils/structured-workout-validation'
+import { validateStructuredCoverage } from './utils/structure-generation-coverage'
+import { resolveStructureTargeting } from './utils/structure-generation-targeting'
 import {
   adaptStructuredWorkout,
   createZoneProfileSnapshot,
@@ -37,7 +38,6 @@ import {
 } from '../shared/structured-workout-contract'
 import { enforceCyclingCadenceVariation, resolveCyclingCadence } from './utils/cadence'
 import {
-  resolveWorkoutTargeting,
   type WorkoutTargetingOverride,
   formatCompactTargetingBlock,
   STEP_INTENTS,
@@ -89,8 +89,7 @@ import {
   buildCompactZoneDefinitions,
   buildCorrectiveStructureRetryPrompt,
   buildStructureGoalContextBlock,
-  isStrengthWorkoutType,
-  looksLikeIntervalWorkout
+  isStrengthWorkoutType
 } from './utils/structure-generation-prompt'
 import { strengthWorkoutStructureSchema } from './utils/structure-generation-schemas'
 import {
@@ -645,110 +644,6 @@ function getStepIntensity(
   }
 }
 
-function getCoverageThreshold(plannedDurationSec: number) {
-  if (plannedDurationSec <= 30 * 60) return 0.8
-  if (plannedDurationSec <= 60 * 60) return 0.85
-  return 0.9
-}
-
-function countWorkBlocks(steps: any[]): number {
-  let count = 0
-  const visit = (nodes: any[]) => {
-    for (const step of nodes || []) {
-      if (Array.isArray(step?.steps) && step.steps.length > 0) {
-        visit(step.steps)
-        continue
-      }
-      if (step?.type === 'Active') count += 1
-    }
-  }
-  visit(steps)
-  return count
-}
-
-function hasRepeatBlock(steps: any[]): boolean {
-  return (steps || []).some(
-    (step: any) =>
-      (Number(step?.reps) || Number(step?.repeat) || Number(step?.intervals) || 0) > 1 ||
-      (Array.isArray(step?.steps) && hasRepeatBlock(step.steps))
-  )
-}
-
-function getCoverageBounds(workout: any, plannedDurationSec: number, preserveStructure?: boolean) {
-  if (preserveStructure) {
-    return { minCoverage: 0.95, maxCoverage: 1.05 }
-  }
-
-  const workoutType = String(workout?.type || '').toLowerCase()
-  if (workoutType.includes('gym') || workoutType.includes('weight')) {
-    const absoluteToleranceRatio = plannedDurationSec > 0 ? 600 / plannedDurationSec : 0
-    return {
-      minCoverage: 0.7,
-      maxCoverage: Math.min(1.35, 1 + Math.max(0.15, absoluteToleranceRatio))
-    }
-  }
-
-  if (workoutType.includes('swim')) {
-    return { minCoverage: 0.7, maxCoverage: 1.2 }
-  }
-
-  return {
-    minCoverage: getCoverageThreshold(plannedDurationSec),
-    maxCoverage: 1.1
-  }
-}
-
-function validateStructuredCoverage(params: {
-  plannedDurationSec: number
-  actualDurationSec: number
-  steps: any[]
-  workout: any
-  preserveStructure?: boolean
-}) {
-  const { plannedDurationSec, actualDurationSec, steps, workout, preserveStructure } = params
-
-  const repeatRecoveryCheck = hasValidRepeatBlockRecovery(steps)
-  if (!repeatRecoveryCheck.valid) {
-    return repeatRecoveryCheck
-  }
-
-  if (plannedDurationSec <= 0) {
-    return { valid: actualDurationSec > 0, reason: actualDurationSec > 0 ? null : 'zero_duration' }
-  }
-
-  const coverage = actualDurationSec / plannedDurationSec
-  const { minCoverage, maxCoverage } = getCoverageBounds(
-    workout,
-    plannedDurationSec,
-    preserveStructure
-  )
-  if (coverage < minCoverage) {
-    return {
-      valid: false,
-      reason: `duration coverage too low (${Math.round(coverage * 100)}% < ${Math.round(minCoverage * 100)}%)`
-    }
-  }
-  if (coverage > maxCoverage) {
-    return {
-      valid: false,
-      reason: `duration overshoot too high (${Math.round(coverage * 100)}% > ${Math.round(maxCoverage * 100)}%)`
-    }
-  }
-
-  if (looksLikeIntervalWorkout(workout)) {
-    const workBlocks = countWorkBlocks(steps)
-    const repeated = hasRepeatBlock(steps)
-    if (!repeated && workBlocks < 3) {
-      return {
-        valid: false,
-        reason: 'interval workout is missing enough repeated/main-set work blocks'
-      }
-    }
-  }
-
-  return { valid: true, reason: null }
-}
-
 function summarizeStructuredWorkoutForPrompt(structuredWorkout: any): string {
   if (!structuredWorkout || typeof structuredWorkout !== 'object') return 'None.'
 
@@ -974,7 +869,11 @@ export async function runGenerateStructuredWorkout(
       workout.type || ''
     )
     const { targetPolicy, targetFormatPolicy, loadPreference, priorityText } =
-      resolveWorkoutTargeting(sportSettings, payload?.targetingOverride || null)
+      resolveStructureTargeting(
+        sportSettings,
+        workout.type || '',
+        payload?.targetingOverride || null
+      )
     logStage('loaded-sport-settings', {
       hasSettings: Boolean(sportSettings),
       hasHrZones: Boolean((sportSettings?.hrZones as any)?.length),
@@ -1109,6 +1008,7 @@ export async function runGenerateStructuredWorkout(
     })
     const sharedWorkoutHeader = `TITLE: ${workout.title}
 DURATION: ${durationMinutes} minutes
+${workout.trainingWeekId ? `HARD TIME LIMIT: ${workout.durationSec} seconds including all repetitions and recovery. Stay within this allocated session time; do not increase the weekly training dose.` : ''}
 INTENSITY: ${workout.workIntensity || 'Moderate'}
 DESCRIPTION: ${workout.description || 'No specific description'}
 USER FTP: ${ftp}W
@@ -1373,14 +1273,19 @@ OUTPUT JSON matching the schema.`
       })
 
       totals = normalizeAndCalculate(structure.steps || [])
-      const strengthExercisesForMetrics = Array.isArray(structure?.blocks)
-        ? structure.blocks.flatMap((b: any) => (Array.isArray(b?.steps) ? b.steps : []))
-        : structure.exercises
-      const validationStrengthMetrics =
-        Array.isArray(strengthExercisesForMetrics) && strengthExercisesForMetrics.length > 0
-          ? computeStrengthExerciseMetrics(strengthExercisesForMetrics)
-          : { durationSec: 0, tss: 0, workIntensity: null }
-      const validationDurationSec = totals.duration + validationStrengthMetrics.durationSec
+      // Validate the same canonical duration that persistence will budget. This
+      // includes repeated steps and strength sets rather than a separate estimate.
+      const validationDurationSec = summarizePlannedStimulus(
+        {
+          type: workout.type,
+          durationSec: workout.durationSec,
+          structuredWorkout: adaptStructuredWorkout(structure, {
+            source: 'AI_GENERATION',
+            zoneProfileSnapshot: createZoneProfileSnapshot(sportSettings)
+          })
+        },
+        { ftp, lthr, maxHr, thresholdPace }
+      ).durationSeconds
       const coverageValidation = validateStructuredCoverage({
         plannedDurationSec: Number(workout.durationSec || 0),
         actualDurationSec: validationDurationSec,
@@ -1407,7 +1312,14 @@ OUTPUT JSON matching the schema.`
         reason: coverageValidation.reason ?? 'Coverage validation failed',
         previousDraft: lastAiOutputForRetry,
         generatorMode,
-        extraInstructions: swimCoverageFeedback
+        extraInstructions: [
+          swimCoverageFeedback,
+          workout.trainingWeekId
+            ? `Total session time must not exceed ${workout.durationSec} seconds including all repetitions and recovery. Reduce repeats or distances while preserving the session purpose.`
+            : undefined
+        ]
+          .filter(Boolean)
+          .join('\n')
       })
       logStage('ai-structure-retry-requested', {
         attempt,

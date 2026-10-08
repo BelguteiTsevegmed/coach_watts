@@ -344,6 +344,10 @@
           <div id="session-plan" class="space-y-4 scroll-mt-24">
             <h2 class="text-xl font-semibold">How to train</h2>
 
+            <p v-if="structureGenerationError" role="alert" class="text-sm text-error">
+              {{ structureGenerationError }}
+            </p>
+
             <component
               :is="getWorkoutComponent(workout.type)"
               v-if="workout.structuredWorkout"
@@ -1449,6 +1453,7 @@
   const sportSettings = ref<any>(null)
   const settingsStaleness = ref<any>(null)
   const structureGenerationInFlight = ref(false)
+  const structureGenerationError = ref<string | null>(null)
   const workoutHasRenderableStructure = ref(true)
 
   const publishBlockedReason = computed(() => {
@@ -1603,6 +1608,8 @@
       if (Date.now() - structurePollStartedAt > STRUCTURE_POLL_TIMEOUT_MS) {
         generating.value = false
         adjusting.value = false
+        structureGenerationError.value =
+          'Structure generation is taking longer than expected. Refresh this page to check its progress or try again.'
         stopStructurePolling()
         return
       }
@@ -1662,6 +1669,7 @@
     status?: string
     error?: any
   }) {
+    structureGenerationError.value = extractStructureRunErrorMessage(run)
     if (run.taskIdentifier === 'adjust-structured-workout') {
       adjusting.value = false
       toast.add({
@@ -2605,6 +2613,16 @@
       sportSettings.value = data.sportSettings
       settingsStaleness.value = data.settingsStaleness
       structureGenerationInFlight.value = Boolean(data.structureGenerationInFlight)
+      const generationRun = data.latestStructureGenerationRun
+      if (!structureGenerationInFlight.value && generationRun?.status === 'FAILED') {
+        structureGenerationError.value =
+          generationRun.error || 'Structure generation failed. Try again.'
+        generating.value = false
+        adjusting.value = false
+        stopStructurePolling()
+      } else if (structureGenerationInFlight.value || generationRun?.status === 'COMPLETED') {
+        structureGenerationError.value = null
+      }
       workoutHasRenderableStructure.value = data.hasRenderableStructure !== false
 
       // Fetch nutrition for the workout date
@@ -2953,6 +2971,7 @@
   async function runGenerateStructure() {
     pendingStructureAction.value = 'generate'
     generating.value = true
+    structureGenerationError.value = null
     try {
       await ($fetch as any)(`/api/workouts/planned/${route.params.id}/generate-structure`, {
         method: 'POST'
@@ -2968,6 +2987,7 @@
       })
     } catch (error: any) {
       generating.value = false
+      structureGenerationError.value = error.data?.message || 'Failed to generate structure'
       console.error('Error generating workout structure:', error)
 
       if (
@@ -2994,6 +3014,7 @@
   async function runSubmitAdjustment() {
     pendingStructureAction.value = 'adjust'
     adjusting.value = true
+    structureGenerationError.value = null
     try {
       await ($fetch as any)(`/api/workouts/planned/${route.params.id}/adjust`, {
         method: 'POST',
