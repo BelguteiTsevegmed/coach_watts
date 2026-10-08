@@ -1,3 +1,4 @@
+import { formatMacroWeekForPrompt } from '../server/utils/plans/macro-policy'
 import { retireReplacedPrescriptionExports } from '../server/utils/training-prescription/replacement-sync'
 import {
   lockPrescriptionSchedule,
@@ -292,6 +293,14 @@ ${profile.planning_context?.opportunities?.length ? `Opportunities: ${profile.pl
 
   // 2. Prepare Context Data
   // Map existing weeks to get volume targets before we delete them
+  const macroPolicyContext = block.weeks
+    .map((w) => {
+      const start = new Date(block.startDate)
+      start.setUTCDate(start.getUTCDate() + (w.weekNumber - 1) * 7)
+      return formatMacroWeekForPrompt(block.plan.progressionContext, start)
+    })
+    .filter(Boolean)
+    .join('\n')
   const volumeTargets = block.weeks
     .map(
       (w) =>
@@ -334,6 +343,9 @@ ${profile.planning_context?.opportunities?.length ? `Opportunities: ${profile.pl
     // Always use strict 7-day weeks to match initialization logic
     const weekEnd = new Date(weekStart)
     weekEnd.setUTCDate(weekEnd.getUTCDate() + 6)
+    if (macroPolicyContext && block.plan.targetDate && weekEnd > block.plan.targetDate) {
+      weekEnd.setTime(block.plan.targetDate.getTime())
+    }
 
     // Generate valid days
     const validDays = []
@@ -342,7 +354,7 @@ ${profile.planning_context?.opportunities?.length ? `Opportunities: ${profile.pl
     const todayStr = formatUserDate(userLocalToday, timezone)
 
     // Iterate through exactly 7 days
-    for (let d = 0; d < 7; d++) {
+    for (let d = 0; d < 7 && loopDate <= weekEnd; d++) {
       const dateStr = formatDateUTC(loopDate)
       if (dateStr >= todayStr) {
         validDays.push(new Date(loopDate))
@@ -467,7 +479,13 @@ CURRENT BLOCK CONTEXT:
 - Global Timeline: Weeks ${globalWeekStart}-${globalWeekEnd} of ${totalPlanWeeks}
 - Start Date: ${formatUserDate(block.startDate, timezone)}
 - Progression Logic: ${block.progressionLogic || 'Standard linear progression'}
-- Recovery Week: Week ${block.recoveryWeekIndex || block.plan.recoveryRhythm} is a recovery week.
+- Recovery weeks (already reduced): ${
+    block.weeks
+      .filter((w) => w.isRecovery)
+      .map((w) => w.weekNumber)
+      .join(', ') || 'None'
+  }. Do not restart the cadence within this block.
+${macroPolicyContext}
 
 VOLUME TARGETS (Baseline from Plan Wizard):
 ${volumeTargets}
@@ -495,7 +513,7 @@ ${
 
 INSTRUCTIONS:
 Generate a detailed daily training plan for each week in this block (${block.durationWeeks} weeks).
-- **TRAINING RHYTHM**: The athlete is on a ${block.plan.recoveryRhythm === 3 ? '2:1' : '3:1'} rhythm. 
+- **TRAINING RHYTHM**: ${rhythmLabel}. Follow the persisted recovery flags and event/capacity policy.
   - For LOADING weeks: Focus on progressive overload, increasing difficulty slightly each week.
   - For RECOVERY weeks: Focus on shedding fatigue with significantly reduced volume and low intensity.
 - **LOAD PROGRESSION CAPS**:
@@ -506,7 +524,7 @@ Generate a detailed daily training plan for each week in this block (${block.dur
 - **RESPECT AVAILABILITY**: Do not schedule sessions on days marked as rest day or outside declared slots, unless athlete custom instructions explicitly override this.
 - **B-RACE HANDLING**: If the block focus includes "_WITH_RACE", implement a "Mini-Taper" on the 2 days prior to the race date while maintaining the overall block goal.
 - ONLY use the "Allowed Workout Types" listed above, UNLESS the athlete's custom instructions explicitly request otherwise (Custom Instructions take precedence).
-- Ensure progressive overload from week 1 to ${block.durationWeeks - 1}.
+- Progress only during permitted loading weeks. Taper, race, recovery and transition weeks never advance the ramp; their reduced targets are already calculated.
 - Ensure the recovery week (if applicable) has clearly reduced volume and intensity versus prior loading weeks.
 - Quantify recovery intent in your rationale (what was reduced and why).
 - Provide realistic TSS estimates for every workout based on duration and intensity (for runs, use HR/pace-based load).

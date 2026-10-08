@@ -253,7 +253,7 @@
         </div>
 
         <div v-if="generatedPlan" class="space-y-6">
-          <!-- AI Rationale -->
+          <!-- Plan rationale -->
           <div
             v-if="generatedPlan.description"
             class="bg-primary/5 p-4 rounded-lg flex items-start gap-3 border border-primary/10"
@@ -265,8 +265,9 @@
           </div>
 
           <p class="text-sm text-muted">
-            Based on your starting point ({{ startingPhase }}) and timeline, we've designed this
-            schedule.
+            Based on your resolved starting point ({{
+              generatedPlan.progressionContext?.macroPlan?.resolvedPhase || startingPhase
+            }}) and timeline, we've designed this schedule.
           </p>
 
           <div class="space-y-4">
@@ -485,7 +486,7 @@
         </div>
 
         <div v-if="generatedPlan" class="space-y-6">
-          <!-- AI Rationale -->
+          <!-- Plan rationale -->
           <div
             v-if="generatedPlan.description"
             class="bg-primary/5 p-4 rounded-lg flex items-start gap-3 border border-primary/10"
