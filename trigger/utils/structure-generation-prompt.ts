@@ -207,7 +207,9 @@ export function isStrengthWorkoutType(workoutType: unknown): boolean {
   const normalized = String(workoutType || '')
     .trim()
     .toLowerCase()
-  return normalized.includes('gym') || normalized.includes('weight')
+  return ['gym', 'weight', 'strength', 'crossfit', 'lift'].some((token) =>
+    normalized.includes(token)
+  )
 }
 
 export function buildLegacyStructureJsonRules(workoutType: unknown): string {

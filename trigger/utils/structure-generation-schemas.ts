@@ -106,5 +106,5 @@ export const strengthWorkoutStructureSchema = {
     },
     blocks: strengthBlocksSchema
   },
-  required: ['coachInstructions', 'blocks']
+  required: ['coachInstructions', 'sRPE_target', 'blocks']
 }

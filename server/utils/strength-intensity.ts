@@ -8,6 +8,7 @@ export type StrengthHistorySet = {
   rpe?: number | null
   performedAt?: Date | string | null
   setOrder?: number | null
+  sessionId?: string | null
 }
 
 export type StrengthIntensityReference = {
@@ -74,99 +75,106 @@ export function estimateE1rmRange(
   }
 }
 
-function progressionFromRpe(rpe: number | null) {
-  if (rpe === null || !Number.isFinite(rpe)) {
-    return { estimatedRir: null, progressionAdjustment: 0 }
-  }
-
-  const estimatedRir = round(Math.max(0, Math.min(10, 10 - rpe)), 1)
-  if (estimatedRir >= 3) return { estimatedRir, progressionAdjustment: 0.025 }
-  if (estimatedRir <= 0.5) return { estimatedRir, progressionAdjustment: -0.025 }
-  return { estimatedRir, progressionAdjustment: 0 }
-}
-
+/** A proposal only: repeated comparable sessions are required for an increase. */
 export function buildStrengthIntensityReferences(
-  history: StrengthHistorySet[]
+  history: StrengthHistorySet[],
+  asOf?: Date
 ): StrengthIntensityReference[] {
   const grouped = new Map<
     string,
-    {
-      exerciseName: string
-      bestRange: { minKg: number; maxKg: number }
-      bestMidpoint: number
-      sampleCount: number
-      latestRpe: number | null
-      latestTimestamp: number
-      latestSetOrder: number
-    }
+    Array<{
+      set: StrengthHistorySet
+      range: { minKg: number; maxKg: number }
+      weightKg: number
+      timestamp: number
+      rpe: number | null
+      sessionKey: string
+    }>
   >()
-
-  history.forEach((set, index) => {
+  for (const set of history) {
     const key = normalizeExerciseName(set.exerciseName)
     const weightKg = weightToKg(set.weight, set.weightUnit)
-    const reps = Number(set.reps)
-    if (!key || weightKg === null) return
-
-    const range = estimateE1rmRange(weightKg, reps)
-    if (!range) return
-
-    const midpoint = (range.minKg + range.maxKg) / 2
-    const parsedTimestamp = set.performedAt ? new Date(set.performedAt).getTime() : index
-    const timestamp = Number.isFinite(parsedTimestamp) ? parsedTimestamp : index
-    const rpe = Number(set.rpe)
-    const validRpe = Number.isFinite(rpe) && rpe >= 1 && rpe <= 10 ? rpe : null
-    const parsedSetOrder = Number(set.setOrder)
-    const setOrder = Number.isFinite(parsedSetOrder) ? parsedSetOrder : -1
-    const current = grouped.get(key)
-
-    if (!current) {
-      grouped.set(key, {
-        exerciseName: String(set.exerciseName).trim(),
-        bestRange: range,
-        bestMidpoint: midpoint,
-        sampleCount: 1,
-        latestRpe: validRpe,
-        latestTimestamp: timestamp,
-        latestSetOrder: setOrder
-      })
-      return
-    }
-
-    current.sampleCount += 1
-    if (midpoint > current.bestMidpoint) {
-      current.bestRange = range
-      current.bestMidpoint = midpoint
-    }
-    if (
-      timestamp > current.latestTimestamp ||
-      (timestamp === current.latestTimestamp && setOrder > current.latestSetOrder)
-    ) {
-      current.latestTimestamp = timestamp
-      current.latestSetOrder = setOrder
-      current.latestRpe = validRpe
-    }
-  })
+    if (!key || weightKg === null) continue
+    const range = estimateE1rmRange(weightKg, Number(set.reps))
+    if (!range) continue
+    const timestamp = set.performedAt ? +new Date(set.performedAt) : 0
+    if (!Number.isFinite(timestamp)) continue
+    if (asOf && (!timestamp || timestamp >= +asOf || timestamp < +asOf - 42 * 86_400_000)) continue
+    const rpe = set.rpe == null ? null : Number(set.rpe)
+    const validRpe = rpe !== null && Number.isFinite(rpe) && rpe >= 1 && rpe <= 10 ? rpe : null
+    const rows = grouped.get(key) || []
+    rows.push({
+      set,
+      range,
+      weightKg,
+      timestamp,
+      rpe: validRpe,
+      sessionKey: set.sessionId || String(timestamp)
+    })
+    grouped.set(key, rows)
+  }
 
   return [...grouped.values()]
-    .map((group) => ({
-      exerciseName: group.exerciseName,
-      e1rmKg: group.bestRange,
-      sampleCount: group.sampleCount,
-      latestRpe: group.latestRpe,
-      ...progressionFromRpe(group.latestRpe)
-    }))
+    .map((rows) => {
+      rows.sort(
+        (a, b) => b.timestamp - a.timestamp || (b.set.setOrder ?? -1) - (a.set.setOrder ?? -1)
+      )
+      const latest = rows[0]!
+      const sessionRows = rows.filter((row) => row.sessionKey === latest.sessionKey)
+      // Highest effort in the latest session prevents an easy final set from hiding failure.
+      const latestRpe = sessionRows.every((row) => row.rpe !== null)
+        ? Math.max(...sessionRows.map((row) => row.rpe!))
+        : null
+      const previous = rows.find((row) => row.sessionKey !== latest.sessionKey)
+      const priorRows = previous ? rows.filter((row) => row.sessionKey === previous.sessionKey) : []
+      const comparable =
+        previous &&
+        latest.timestamp > previous.timestamp &&
+        latest.timestamp - previous.timestamp <= 14 * 86_400_000 &&
+        [...sessionRows, ...priorRows].every(
+          (row) =>
+            row.rpe !== null &&
+            row.rpe <= 7 &&
+            row.set.reps === latest.set.reps &&
+            Math.abs(row.weightKg - latest.weightKg) / latest.weightKg <= 0.05
+        )
+      // Missing set/form/completion evidence never authorizes an automatic increase;
+      // this adjustment is a conditional proposal consumed with programme gates.
+      const progressionAdjustment =
+        latestRpe !== null && latestRpe >= 9.5 ? -0.025 : comparable ? 0.025 : 0
+      const conservativeRange = sessionRows.reduce(
+        (best, row) => (row.range.minKg < best.minKg ? row.range : best),
+        latest.range
+      )
+      return {
+        exerciseName: String(latest.set.exerciseName).trim(),
+        e1rmKg: conservativeRange,
+        sampleCount: rows.length,
+        latestRpe,
+        estimatedRir: latestRpe === null ? null : round(10 - latestRpe, 1),
+        progressionAdjustment
+      }
+    })
     .sort((a, b) => a.exerciseName.localeCompare(b.exerciseName))
 }
 
 export async function loadStrengthIntensityReferences(
   client: any,
-  userId: string
+  userId: string,
+  asOf = new Date()
 ): Promise<StrengthIntensityReference[]> {
   const sets = await client.workoutSet.findMany({
     where: {
       reps: { gte: 1, lte: 8 },
       weight: { gt: 0 },
-      workoutExercise: { workout: { userId } }
+      type: 'NORMAL',
+      workoutExercise: {
+        workout: {
+          userId,
+          isDuplicate: false,
+          date: { gte: new Date(+asOf - 42 * 86_400_000), lt: asOf }
+        }
+      }
     },
     select: {
       reps: true,
@@ -177,7 +185,7 @@ export async function loadStrengthIntensityReferences(
       workoutExercise: {
         select: {
           exercise: { select: { title: true } },
-          workout: { select: { date: true } }
+          workout: { select: { id: true, date: true } }
         }
       }
     },
@@ -193,8 +201,10 @@ export async function loadStrengthIntensityReferences(
       weightUnit: set.weightUnit,
       rpe: set.rpe,
       performedAt: set.workoutExercise?.workout?.date,
-      setOrder: set.order
-    }))
+      setOrder: set.order,
+      sessionId: set.workoutExercise?.workout?.id
+    })),
+    asOf
   )
 }
 
@@ -208,7 +218,7 @@ export function formatStrengthIntensityReferences(references: StrengthIntensityR
         : `latest RPE ${reference.latestRpe} (estimated RIR ${reference.estimatedRir})`
     const progression =
       reference.progressionAdjustment > 0
-        ? 'progress target +2.5%'
+        ? 'propose +2.5% only after confirming completion, form and next-day response'
         : reference.progressionAdjustment < 0
           ? 'reduce target -2.5%'
           : 'hold target'
@@ -238,9 +248,19 @@ function formatLoad(value: number) {
 export function applyStrengthIntensityTargets(
   structuredWorkout: any,
   references: StrengthIntensityReference[],
-  preferredWeightUnits: unknown
+  preferredWeightUnits: unknown,
+  options: {
+    allowLoadIncrease?: boolean
+    targetRir?: number
+    fillMissingLoads?: boolean
+    onlyConcreteLoads?: boolean
+  } = {}
 ) {
-  if (!Array.isArray(structuredWorkout?.blocks) || references.length === 0) {
+  if (
+    options.fillMissingLoads === false ||
+    !Array.isArray(structuredWorkout?.blocks) ||
+    references.length === 0
+  ) {
     return structuredWorkout
   }
 
@@ -259,6 +279,7 @@ export function applyStrengthIntensityTargets(
         Boolean(String(row?.loadValue || '').trim())
       )
       const hasConcreteUnit = existingLoadMode === 'weight_kg' || existingLoadMode === 'weight_lb'
+      if (options.onlyConcreteLoads && !hasConcreteUnit) continue
       if (hasExplicitLoads && !hasConcreteUnit) continue
       const stepUsesPounds = hasConcreteUnit ? existingLoadMode === 'weight_lb' : usePounds
 
@@ -268,11 +289,16 @@ export function applyStrengthIntensityTargets(
         const reps = parsePlannedReps(row?.value)
         if (reps === null) continue
 
-        // Invert Epley against the conservative lower edge of the formula range,
-        // then apply a small progression adjustment from the latest logged RPE/RIR.
-        const repPercentage = 1 / (1 + reps / 30)
+        // Invert Epley against the current conservative range with an explicit RIR
+        // allowance. Programme generation gates any proposed increase.
+        const repPercentage = 1 / (1 + (reps + Math.max(0, options.targetRir ?? 0)) / 30)
         const targetKg =
-          reference.e1rmKg.minKg * repPercentage * (1 + reference.progressionAdjustment)
+          reference.e1rmKg.minKg *
+          repPercentage *
+          (1 +
+            (options.allowLoadIncrease === false
+              ? Math.min(0, reference.progressionAdjustment)
+              : reference.progressionAdjustment))
         const target = stepUsesPounds
           ? roundToIncrement(targetKg / KG_PER_LB, 5)
           : roundToIncrement(targetKg, 2.5)
