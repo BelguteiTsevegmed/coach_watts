@@ -1,3 +1,4 @@
+import { PHYSIOLOGY_METRICS, positiveReference } from '../../../shared/physiology-references'
 import { prisma as globalPrisma } from '../db'
 import { toPrismaInputJsonValue } from '../prisma-json'
 import { normalizeTargetPolicy, toLegacyLoadPreference } from '../workout-target-policy'
@@ -145,14 +146,40 @@ export const sportSettingsRepository = {
   async getForActivityType(userId: string, activityType: string, prismaOverride?: any) {
     const allSettings = await this.getByUserId(userId, prismaOverride)
 
+    const selectProfile = (matches: any[]) => {
+      matches.sort((a, b) => {
+        const aHasData = Boolean(a.ftp || a.lthr)
+        const bHasData = Boolean(b.ftp || b.lthr)
+        return Number(bHasData) - Number(aHasData) || String(a.id).localeCompare(String(b.id))
+      })
+      const selected = matches[0]
+      return {
+        ...selected,
+        referenceConflicts: Object.fromEntries(
+          PHYSIOLOGY_METRICS.map((metric) => [
+            metric,
+            [
+              ...new Set(
+                matches
+                  .slice(1)
+                  .map((profile) => positiveReference(profile[metric]))
+                  .filter(
+                    (value) => value !== null && value !== positiveReference(selected[metric])
+                  )
+              )
+            ]
+          ])
+        )
+      }
+    }
+
     // 1. Exact match in types array (Prioritize profiles with actual data)
     const specificMatches = allSettings.filter(
       (s: any) => !s.isDefault && s.types && s.types.includes(activityType)
     )
     if (specificMatches.length > 0) {
       // Prefer profile with FTP or LTHR data
-      const withData = specificMatches.find((s: any) => s.ftp !== null || s.lthr !== null)
-      return withData || specificMatches[0]
+      return selectProfile(specificMatches)
     }
 
     // 2. Partial match (e.g. "Ride" matches "VirtualRide")?
@@ -160,8 +187,7 @@ export const sportSettingsRepository = {
       (s: any) => !s.isDefault && s.types && s.types.some((t: string) => activityType.includes(t))
     )
     if (partialMatches.length > 0) {
-      const withData = partialMatches.find((s: any) => s.ftp !== null || s.lthr !== null)
-      return withData || partialMatches[0]
+      return selectProfile(partialMatches)
     }
 
     // 3. Fallback to Default

@@ -1,3 +1,4 @@
+import { resolvePhysiologyReferences } from '../../shared/physiology-references'
 import type { Prisma } from '@prisma/client'
 import { createError } from 'h3'
 import { prisma } from './db'
@@ -33,6 +34,7 @@ export type CanonicalWriteOptions = {
   syncStatus?: string | null
   zoneProfileSnapshot?: ZoneProfileSnapshot
   refs?: { ftp: number; lthr: number; maxHr: number; thresholdPace: number }
+  workoutType?: string | null
   fallbackOrder?: Array<'power' | 'heartRate' | 'pace' | 'rpe'>
   preservePlannedDuration?: number | null
   extra?: Record<string, unknown>
@@ -50,12 +52,11 @@ function mapEditSource(source: WriteSource) {
 function resolveSportTargetingRefs(sportSettings?: any, userFtp?: number | null) {
   const { targetPolicy } = resolveWorkoutTargeting(sportSettings || {})
   return {
-    refs: {
-      ftp: Number(sportSettings?.ftp || userFtp || 250),
-      lthr: Number(sportSettings?.lthr || 0),
-      maxHr: Number(sportSettings?.maxHr || 0),
-      thresholdPace: Number(sportSettings?.thresholdPace || 0)
-    },
+    refs: resolvePhysiologyReferences({
+      sportSettings,
+      workoutType: sportSettings?.types?.[0],
+      user: { ftp: userFtp }
+    }).refs,
     fallbackOrder: targetPolicy.fallbackOrder as Array<'power' | 'heartRate' | 'pace' | 'rpe'>
   }
 }
@@ -81,17 +82,19 @@ export function buildCanonicalPlannedWorkoutWriteData(options: CanonicalWriteOpt
     throw createError({ statusCode: 422, message: issues[0]!.message, data: { issues } })
   }
   const metrics = computeStructuredWorkoutMetrics(canonical, {
-    refs: options.refs || { ftp: 0, lthr: 0, maxHr: 0, thresholdPace: 0 },
-    fallbackOrder: options.fallbackOrder || ['power', 'heartRate', 'pace', 'rpe']
+    refs: canonical.physiology?.refs ||
+      options.refs || { ftp: 0, lthr: 0, maxHr: 0, thresholdPace: 0 },
+    fallbackOrder: options.fallbackOrder || ['power', 'heartRate', 'pace', 'rpe'],
+    workoutType: options.workoutType || canonical.physiology?.sport
   })
   const editSource = mapEditSource(options.source)
   const data: Record<string, unknown> = {
     ...buildStructureEditFields(canonical, editSource),
     ...(options.incrementRevision !== false ? { structureRevision: { increment: 1 } } : {}),
     durationSec: options.preservePlannedDuration || metrics.durationSec || undefined,
-    distanceMeters: metrics.distanceMeters || undefined,
-    tss: metrics.tss > 0 ? metrics.tss : null,
-    workIntensity: metrics.workIntensity || undefined,
+    distanceMeters: metrics.distanceMeters || null,
+    tss: metrics.tss !== null && metrics.tss > 0 ? metrics.tss : null,
+    workIntensity: metrics.workIntensity || null,
     syncStatus:
       options.source === 'INTERVALS_IMPORT' ? 'SYNCED' : getPendingSyncStatus(options.syncStatus),
     syncError: null,

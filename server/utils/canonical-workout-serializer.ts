@@ -119,7 +119,7 @@ export function serializeCanonicalForProvider(
   }
 
   const exportContext = resolveWorkoutExportContext({
-    workout: options.workout,
+    workout: { ...options.workout, structuredWorkout: canonical },
     liveSportSettings: options.liveSportSettings,
     liveUserFtp: options.liveUserFtp,
     explicitFtp: options.ftp

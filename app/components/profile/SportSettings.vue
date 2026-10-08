@@ -1675,6 +1675,7 @@
   import { useTranslate } from '@tolgee/vue'
   import { profileSettingsCardUi } from '~/utils/mobile-surface-ui'
   import { WORKOUT_ICONS } from '~/utils/activity-types'
+  import { normalizeWorkoutSport } from '../../../shared/workout-support-matrix'
 
   const { t } = useTranslate('profile')
 
@@ -2573,6 +2574,29 @@
         updated.thresholdPace = detections.thresholdPace.newValue
         appliedAny = true
       }
+
+      const physiologyReferences = { ...(updated.zoneConfiguration as any)?.physiologyReferences }
+      for (const metric of ['ftp', 'lthr', 'maxHr', 'thresholdPace'] as const) {
+        const detection = detections[metric]
+        if (
+          workoutDetectApply.value[metric] &&
+          detection?.detected &&
+          detection.evidenceQualified
+        ) {
+          physiologyReferences[metric] = {
+            value: detection.newValue,
+            status: 'estimated',
+            source: 'accepted_workout_benchmark',
+            sport: normalizeWorkoutSport(detection.source?.workoutType),
+            measuredAt: detection.source?.workoutDate || null,
+            confidence: 'medium',
+            confidenceScore: detection.confidence ?? null,
+            evidenceQualified: true,
+            workoutId: detection.source?.workoutId || null
+          }
+        }
+      }
+      updated.zoneConfiguration = { ...updated.zoneConfiguration, physiologyReferences }
 
       if (workoutDetectApply.value.recalculatePowerZones && updated.ftp) {
         updated.powerZones = buildPowerZonesFromFtp(updated.ftp)

@@ -16,25 +16,27 @@ export function resolveWorkoutChartSportSettings(workout: any, sportSettings?: a
     rootWorkout?.lastGenerationSettingsSnapshot ||
     rootWorkout?.generationSettingsSnapshot ||
     rootWorkout?.createdFromSettingsSnapshot ||
-    null
+    (structure?.physiology ? { thresholds: structure.physiology.refs } : null)
 
   const merged = {
     ...(sportSettings || {}),
     ...(snapshot || {})
   }
+  const reference = (metric: string) => {
+    if (snapshot?.thresholds && metric in snapshot.thresholds)
+      return Number(snapshot.thresholds[metric]) || 0
+    return Number(snapshot?.[metric] || sportSettings?.[metric] || 0)
+  }
 
   return {
     ...merged,
-    ftp: Number(snapshot?.thresholds?.ftp || snapshot?.ftp || sportSettings?.ftp || 0),
-    lthr: Number(snapshot?.thresholds?.lthr || snapshot?.lthr || sportSettings?.lthr || 0),
-    maxHr: Number(snapshot?.thresholds?.maxHr || snapshot?.maxHr || sportSettings?.maxHr || 0),
-    thresholdPace: Number(
-      zoneSnapshot?.pace?.thresholdMps ||
-        snapshot?.thresholds?.thresholdPace ||
-        snapshot?.thresholdPace ||
-        sportSettings?.thresholdPace ||
-        0
-    ),
+    ftp: reference('ftp'),
+    lthr: reference('lthr'),
+    maxHr: reference('maxHr'),
+    thresholdPace:
+      snapshot?.thresholds && 'thresholdPace' in snapshot.thresholds
+        ? reference('thresholdPace')
+        : Number(zoneSnapshot?.pace?.thresholdMps || reference('thresholdPace')),
     hrZones: Array.isArray(zoneSnapshot?.heartRate?.ranges)
       ? zoneSnapshot.heartRate.ranges
       : Array.isArray(snapshot?.zones?.heartRate)

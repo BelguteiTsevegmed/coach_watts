@@ -1,3 +1,4 @@
+import { applyAvailableReferenceTargets } from '../../shared/physiology-references'
 import {
   applyRunTargetPolicyToStep,
   applyTargetFormatPolicyToStep,
@@ -483,7 +484,8 @@ export function normalizeStructuredWorkoutForPersistence(
     if (primaryTarget) step.primaryTarget = primaryTarget
 
     if (isRun) {
-      applyRunTargetPolicyToStep(step, context.targetPolicy)
+      applyAvailableReferenceTargets(step, context.refs)
+      if (step.primaryTarget !== 'rpe') applyRunTargetPolicyToStep(step, context.targetPolicy)
     }
 
     applyTargetFormatPolicyToStep(step, context.targetFormatPolicy, {
@@ -500,6 +502,8 @@ export function normalizeStructuredWorkoutForPersistence(
       lthr: context.refs.lthr,
       thresholdPace: context.refs.thresholdPace
     })
+
+    applyAvailableReferenceTargets(step, context.refs)
 
     for (const metric of ['power', 'heartRate', 'pace'] as const) {
       const target = step?.[metric]
@@ -692,10 +696,20 @@ export function computeStructuredWorkoutMetrics(
     workoutType?: string | null
   }
 ) {
-  const walk = (steps: any[]): { duration: number; tss: number; distance: number } => {
+  const walk = (
+    steps: any[]
+  ): {
+    duration: number
+    tss: number
+    distance: number
+    unknownStress: boolean
+    unknownDistance: boolean
+  } => {
     let duration = 0
     let tss = 0
     let distance = 0
+    let unknownStress = false
+    let unknownDistance = false
 
     for (const step of steps || []) {
       const reps = toPositiveInt(step?.reps) || 1
@@ -708,11 +722,25 @@ export function computeStructuredWorkoutMetrics(
         stepDuration = nested.duration
         stepTss = nested.tss
         stepDistance = nested.distance
+        unknownStress ||= nested.unknownStress
+        unknownDistance ||= nested.unknownDistance
       } else {
         stepDuration = estimateStepDurationSeconds(step, context)
         stepDistance = estimateStepDistanceMeters(step, context)
 
-        const intensity = selectStepIntensity(step, context.refs, context.fallbackOrder)
+        const physiologicalMetrics = context.fallbackOrder.filter((metric) => metric !== 'rpe')
+        const hasReference = physiologicalMetrics.some((metric) => {
+          if (!step[metric]) return false
+          if (metric === 'power') return context.refs.ftp > 0
+          if (metric === 'pace') return context.refs.thresholdPace > 0
+          const units = String(step.heartRate?.units || 'LTHR').toLowerCase()
+          return units === 'hr' || units.includes('max')
+            ? context.refs.maxHr > 0
+            : context.refs.lthr > 0
+        })
+        unknownStress ||= stepDuration > 0 && !hasReference
+        unknownDistance ||= stepDuration > 0 && !(stepDistance > 0)
+        const intensity = selectStepIntensity(step, context.refs, physiologicalMetrics)
         stepTss = stepDuration > 0 ? ((stepDuration * intensity * intensity) / 3600) * 100 : 0
       }
 
@@ -721,7 +749,7 @@ export function computeStructuredWorkoutMetrics(
       distance += stepDistance * reps
     }
 
-    return { duration, tss, distance }
+    return { duration, tss, distance, unknownStress, unknownDistance }
   }
 
   const totals = walk(structuredWorkout?.steps || [])
@@ -729,11 +757,23 @@ export function computeStructuredWorkoutMetrics(
     collectStrengthExercises(structuredWorkout)
   )
   const durationSec = Math.round(totals.duration + strengthMetrics.durationSec)
-  const tss = Math.round(totals.tss + strengthMetrics.tss)
+  const tss = totals.unknownStress ? null : Math.round(totals.tss + strengthMetrics.tss)
   const workIntensity =
-    durationSec > 0 && tss > 0 ? Number(Math.sqrt((36 * tss) / durationSec).toFixed(2)) : null
-  const distanceMeters = Math.round(totals.distance)
-  return { durationSec, distanceMeters, tss, workIntensity }
+    durationSec > 0 && tss !== null && tss > 0
+      ? Number(Math.sqrt((36 * tss) / durationSec).toFixed(2))
+      : null
+  const distanceMeters =
+    totals.unknownDistance || totals.distance <= 0 ? null : Math.round(totals.distance)
+  return {
+    durationSec,
+    distanceMeters,
+    tss,
+    workIntensity,
+    metricEstimates: {
+      stress: tss === null ? 'unavailable' : 'estimated',
+      distance: distanceMeters === null ? 'unavailable' : 'estimated'
+    }
+  }
 }
 
 export function computeStructuredWorkoutDurationSec(structuredWorkout: any) {

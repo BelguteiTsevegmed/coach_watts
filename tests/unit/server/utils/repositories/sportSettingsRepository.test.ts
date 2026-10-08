@@ -73,6 +73,20 @@ describe('sportSettingsRepository', () => {
     })
   })
 
+  it('selects conflicting sport profiles consistently regardless of database order', async () => {
+    const profiles = [
+      { id: 'default', isDefault: true },
+      { id: 'b', types: ['Ride'], ftp: 270, isDefault: false },
+      { id: 'a', types: ['Ride'], ftp: 285, isDefault: false }
+    ]
+    for (const values of [profiles, [...profiles].reverse()]) {
+      vi.mocked(prisma.sportSettings.findMany).mockResolvedValue(values as any)
+      const selected = await sportSettingsRepository.getForActivityType(userId, 'Ride')
+      expect(selected.id).toBe('a')
+      expect(selected.referenceConflicts.ftp).toEqual([270])
+    }
+  })
+
   describe('upsertSettings', () => {
     it('should sync Default profile updates back to legacy User fields', async () => {
       const settingsPayload = [

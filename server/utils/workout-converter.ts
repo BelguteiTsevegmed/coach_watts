@@ -4,6 +4,7 @@ import { normalizeTargetPolicy } from './workout-target-policy'
 
 interface WorkoutStep {
   type: 'Warmup' | 'Active' | 'Rest' | 'Cooldown'
+  primaryTarget?: 'power' | 'heartRate' | 'pace' | 'rpe'
   durationSeconds?: number
   duration?: number
   distance?: number
@@ -28,6 +29,7 @@ interface WorkoutStep {
   rpe?: number
   cadence?: number
   name?: string
+  description?: string
   steps?: WorkoutStep[]
   reps?: number
 }
@@ -91,13 +93,18 @@ export const WorkoutConverter = {
       .ele('workout')
 
     workout.steps.forEach((step) => {
-      // Safely access power
-      const power = step.power || { value: 0 }
       const duration = step.durationSeconds || step.duration || 0
+      if (!step.power) {
+        const cue = [step.name, step.rpe ? `RPE ${step.rpe}/10` : '', step.description]
+          .filter(Boolean)
+          .join('. ')
+        const el = root.ele('FreeRide').att('Duration', String(duration))
+        if (cue) el.ele('textevent').att('timeoffset', '0').att('message', cue).up()
+        el.up()
+        return
+      }
+      const power = step.power
       const isRamp = power.ramp === true
-
-      // If we only have Heart Rate, ZWO is not the best format but we can try to approximate or just use 0 power
-      // Zwift is primarily power-based.
 
       // ZWO uses percentage of FTP (0.0 - 1.0+)
       if (power.range) {
@@ -186,7 +193,7 @@ export const WorkoutConverter = {
       let customTargetValueHigh = 0
 
       // Check if HR based
-      if (!power.value && !power.range && step.heartRate) {
+      if (!power.value && !power.range) {
         // targetType = 'heart_rate'; // 1
 
         // HR values are typically BPM in FIT files, or % max HR?
@@ -199,8 +206,8 @@ export const WorkoutConverter = {
         // We'll skip complex HR export logic for FIT for now or use open targets.
         targetType = 'open' // 2
       } else {
-        // Let's calculate ABSOLUTE WATTS if FTP is provided, otherwise fallback to a default 250W.
-        const ftp = workout.ftp || 250
+        const ftp = workout.ftp || 0
+        if (!(ftp > 0)) throw new Error('A known FTP is required for FIT power targets')
 
         if (isRamp && power.range) {
           customTargetValueLow = Math.round((power.range.start ?? 0) * ftp)
@@ -217,6 +224,9 @@ export const WorkoutConverter = {
       fitWriter.writeMessage('workout_step', {
         message_index: { value: index },
         wkt_step_name: step.name ? step.name.substring(0, 15) : undefined,
+        notes:
+          [step.rpe ? `RPE ${step.rpe}/10` : '', step.description].filter(Boolean).join('. ') ||
+          undefined,
         duration_type: 'time', // 0
         duration_value: (step.durationSeconds || step.duration || 0) * 1000, // ms
         target_type: targetType,
@@ -286,7 +296,8 @@ export const WorkoutConverter = {
 
   toERG(workout: WorkoutData): string {
     const lines: string[] = []
-    const ftp = workout.ftp || 250 // Fallback FTP
+    const ftp = workout.ftp || 0
+    if (!(ftp > 0)) throw new Error('A known FTP is required for ERG power targets')
 
     lines.push('[COURSE HEADER]')
     lines.push('VERSION = 2')
@@ -923,7 +934,18 @@ export const WorkoutConverter = {
           (primaryExportMetric === 'pace' && !pace) ||
           (primaryExportMetric === 'rpe' && typeof step.rpe !== 'number')
 
-        if (hasExplicitTargetPolicy && normalizedPolicy.strictPrimary && missingPrimaryTarget) {
+        const effortOnly =
+          typeof step.rpe === 'number' &&
+          !power &&
+          !heartRate &&
+          !pace &&
+          (!isSwim || Boolean((snapshotPolicySource as any)?.physiology))
+        if (
+          !effortOnly &&
+          hasExplicitTargetPolicy &&
+          normalizedPolicy.strictPrimary &&
+          missingPrimaryTarget
+        ) {
           const value = defaultTargetValue(step.type, primaryExportMetric)
           if (primaryExportMetric === 'power') power = { value, units: '%' }
           if (primaryExportMetric === 'heartRate') heartRate = { value, units: 'LTHR' }
@@ -940,7 +962,7 @@ export const WorkoutConverter = {
         const getPaceStr = () => formatMetric(pace, 'pace')
         const getRpeStr = () =>
           typeof step.rpe === 'number' && Number.isFinite(step.rpe) ? `RPE ${step.rpe}` : ''
-        const metrics = metricPriority
+        const metrics = effortOnly ? ['rpe'] : metricPriority
         const shouldExportSinglePrimaryMetric =
           normalizedPolicy.strictPrimary || !normalizedPolicy.allowMixedTargetsPerStep
         const prefersRunDualMetricExport =

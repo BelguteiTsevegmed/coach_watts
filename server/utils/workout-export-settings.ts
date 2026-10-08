@@ -1,3 +1,4 @@
+import { positiveReference } from '../../shared/physiology-references'
 import { createZoneProfileSnapshot } from '../../shared/structured-workout-contract'
 
 export type PlannedWorkoutExportSource = {
@@ -20,7 +21,24 @@ function asSnapshot(value: unknown): Record<string, unknown> | null {
 }
 
 function snapshotFromZoneProfile(structure: unknown): Record<string, unknown> | null {
+  const physiology = (structure as any)?.physiology
   const zoneProfileSnapshot = (structure as any)?.zoneProfileSnapshot
+  const zones = {
+    pace: zoneProfileSnapshot?.pace?.ranges || [],
+    heartRate: zoneProfileSnapshot?.heartRate?.ranges || [],
+    power: zoneProfileSnapshot?.power?.ranges || []
+  }
+  if (physiology)
+    return {
+      physiology,
+      zones,
+      thresholds: {
+        ftp: physiology.refs.ftp || null,
+        lthr: physiology.refs.lthr || null,
+        maxHr: physiology.refs.maxHr || null,
+        thresholdPace: physiology.refs.thresholdPace || null
+      }
+    }
   if (!zoneProfileSnapshot || typeof zoneProfileSnapshot !== 'object') return null
   return {
     thresholds: {
@@ -29,11 +47,7 @@ function snapshotFromZoneProfile(structure: unknown): Record<string, unknown> | 
       ftp: null,
       maxHr: null
     },
-    zones: {
-      pace: zoneProfileSnapshot.pace?.ranges || [],
-      heartRate: zoneProfileSnapshot.heartRate?.ranges || [],
-      power: zoneProfileSnapshot.power?.ranges || []
-    }
+    zones
   }
 }
 
@@ -44,19 +58,20 @@ export function resolveWorkoutExportContext(input: {
   liveUserFtp?: number | null
   explicitFtp?: number | null
 }): WorkoutExportContext {
-  const snapshot =
+  const frozenSnapshot =
     asSnapshot(input.workout?.lastGenerationSettingsSnapshot) ||
-    asSnapshot(input.workout?.createdFromSettingsSnapshot) ||
-    snapshotFromZoneProfile(input.workout?.structuredWorkout)
+    asSnapshot(input.workout?.createdFromSettingsSnapshot)
+  const snapshot = frozenSnapshot || snapshotFromZoneProfile(input.workout?.structuredWorkout)
 
   const thresholds = (snapshot?.thresholds as Record<string, unknown> | undefined) || {}
   const ftp =
-    Number(thresholds.ftp) ||
-    Number(input.explicitFtp) ||
-    Number(input.liveSportSettings?.ftp) ||
-    Number(input.workout?.user?.ftp) ||
-    Number(input.liveUserFtp) ||
-    250
+    frozenSnapshot || snapshot?.physiology
+      ? positiveReference(thresholds.ftp) || 0
+      : positiveReference(input.explicitFtp) ||
+        positiveReference(input.liveSportSettings?.ftp) ||
+        positiveReference(input.workout?.user?.ftp) ||
+        positiveReference(input.liveUserFtp) ||
+        0
 
   const sportSettings = snapshot
     ? {
@@ -64,6 +79,7 @@ export function resolveWorkoutExportContext(input: {
         targetPolicy: snapshot.targetPolicy ?? null,
         intervalsHrRangeTolerancePct: (snapshot as any).intervalsHrRangeTolerancePct ?? null,
         lthr: thresholds.lthr ?? null,
+        maxHr: thresholds.maxHr ?? null,
         thresholdPace: thresholds.thresholdPace ?? null,
         hrZones: (snapshot.zones as any)?.heartRate || [],
         paceZones: (snapshot.zones as any)?.pace || []
@@ -75,6 +91,7 @@ export function resolveWorkoutExportContext(input: {
           intervalsHrRangeTolerancePct:
             input.liveSportSettings.intervalsHrRangeTolerancePct ?? null,
           lthr: input.liveSportSettings.lthr ?? null,
+          maxHr: input.liveSportSettings.maxHr ?? null,
           thresholdPace: input.liveSportSettings.thresholdPace ?? null,
           hrZones: input.liveSportSettings.hrZones || [],
           paceZones: input.liveSportSettings.paceZones || []
@@ -82,7 +99,7 @@ export function resolveWorkoutExportContext(input: {
       : null
 
   return {
-    ftp: Number.isFinite(ftp) && ftp > 0 ? ftp : 250,
+    ftp,
     generationSettingsSnapshot: snapshot,
     sportSettings
   }

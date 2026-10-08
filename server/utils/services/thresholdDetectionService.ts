@@ -9,6 +9,7 @@ import { formatPromptPace } from '../ai-prompt-format'
 import { calculateHrZones, calculatePaceZones, calculatePowerZones } from '../zones'
 import { getHrStats, getPlausibleHrPeak } from '../workout-analysis-facts'
 import { calculateAge } from '../date'
+import { resolvePhysiologyReferences } from '../../../shared/physiology-references'
 
 /**
  * Threshold pace is taken directly off the best sustained 40 minute effort (no
@@ -362,10 +363,22 @@ export const thresholdDetectionService = {
     )
 
     const sportName = sportSettings?.name?.trim() || null
-    const currentLthr = sportSettings?.lthr || workout.user?.lthr
-    const currentFtp = sportSettings?.ftp || workout.user?.ftp
-    const currentMaxHr = sportSettings?.maxHr || (workout.user as any)?.maxHr
-    const currentThresholdPace = sportSettings?.thresholdPace
+    const references = resolvePhysiologyReferences({
+      workoutType: workout.type,
+      sportSettings,
+      user: workout.user
+    }).refs
+    const currentLthr = references.lthr
+    const currentFtp = references.ftp
+    const currentMaxHr = references.maxHr
+    const storedThresholdPace = references.thresholdPace
+    // Repository profiles use m/s; older records and recommendation histories use s/km.
+    const currentThresholdPace =
+      storedThresholdPace && storedThresholdPace > 0
+        ? storedThresholdPace > 20
+          ? storedThresholdPace
+          : 1000 / storedThresholdPace
+        : null
 
     // 2. Heart Rate Threshold & Max HR Detection
     if (

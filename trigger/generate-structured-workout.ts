@@ -1,4 +1,9 @@
 import './init'
+import {
+  resolvePhysiologyReferences,
+  formatPhysiologyReferencePrompt,
+  applyAvailableReferenceTargets
+} from '../shared/physiology-references'
 import { logger, task } from '@trigger.dev/sdk/v3'
 import { generateStructuredAnalysis, buildConciseWorkoutSummary } from '../server/utils/gemini'
 import { prisma } from '../server/utils/db'
@@ -15,6 +20,7 @@ import {
   estimateStepDurationSeconds,
   normalizeStructuredWorkoutForPersistence,
   selectStepIntensity,
+  computeStructuredWorkoutMetrics,
   computeStrengthExerciseMetrics
 } from '../server/utils/structured-workout-persistence'
 import {
@@ -575,7 +581,7 @@ function toIntensityFactorFromTarget(
   if (kind === 'power') {
     if (units === 'w' || units === 'watts') {
       if (refs.ftp > 0) return clamp(value / refs.ftp)
-      return clamp(value > 3 ? value / 250 : value)
+      return value > 3 ? null : clamp(value)
     }
     if (units === 'power_zone' || units.includes('zone') || units.startsWith('z')) {
       return zoneToFactor(value)
@@ -941,12 +947,24 @@ export async function runGenerateStructuredWorkout(
     logStage('quota-check-passed')
 
     // Fetch Sport Specific Settings
-    const sportSettings = await sportSettingsRepository.getForActivityType(
+    let sportSettings = await sportSettingsRepository.getForActivityType(
       workout.userId,
       workout.type || ''
     )
+    const physiology = resolvePhysiologyReferences({
+      workoutType: workout.type,
+      sportSettings,
+      user: workout.user
+    })
+    sportSettings = {
+      ...sportSettings,
+      ...physiology.refs,
+      powerZones: physiology.refs.ftp > 0 ? sportSettings?.powerZones : [],
+      hrZones: physiology.refs.lthr > 0 || physiology.refs.maxHr > 0 ? sportSettings?.hrZones : [],
+      paceZones: physiology.refs.thresholdPace > 0 ? sportSettings?.paceZones : []
+    }
     const { targetPolicy, targetFormatPolicy, loadPreference, priorityText } =
-      resolveWorkoutTargeting(sportSettings, payload?.targetingOverride || null)
+      resolveWorkoutTargeting(sportSettings, payload?.targetingOverride || null, physiology)
     logStage('loaded-sport-settings', {
       hasSettings: Boolean(sportSettings),
       hasHrZones: Boolean((sportSettings?.hrZones as any)?.length),
@@ -986,10 +1004,7 @@ export async function runGenerateStructuredWorkout(
     logStage('loaded-recent-workouts', { count: recentWorkouts.length, contextProfile })
 
     // Resolve Metrics
-    const ftp = sportSettings?.ftp || workout.user.ftp || 250
-    const lthr = sportSettings?.lthr || workout.user.lthr || 160
-    const maxHr = sportSettings?.maxHr || workout.user.maxHr || 190
-    const thresholdPace = sportSettings?.thresholdPace || 0
+    const { ftp, lthr, maxHr, thresholdPace } = physiology.refs
     const aiContextBlock = formatAiContextForStructureGen({
       aiContext: workout.user.aiContext,
       workoutDescription: workout.description,
@@ -1055,8 +1070,7 @@ export async function runGenerateStructuredWorkout(
 DURATION: ${durationMinutes} minutes
 INTENSITY: ${workout.workIntensity || 'Moderate'}
 DESCRIPTION: ${workout.description || 'No specific description'}
-USER FTP: ${ftp}W
-USER LTHR: ${lthr} bpm
+${formatPhysiologyReferencePrompt(physiology)}
 TYPE: ${workout.type}
 PREFERRED LANGUAGE: ${language} (all text fields must use this language)
 
@@ -1403,6 +1417,7 @@ OUTPUT JSON matching the schema.`
           if (step.heartRate && !step.heartRate.units) step.heartRate.units = 'LTHR'
           if (step.pace && !step.pace.units) step.pace.units = 'Pace'
           if (step.power && !step.power.units) step.power.units = inferPowerUnits(step.power)
+          applyAvailableReferenceTargets(step, physiology.refs)
           applyTargetPolicyToStep(step, targetPolicy)
           applyTargetFormatPolicyToStep(step, targetFormatPolicy, {
             ftp,
@@ -1416,7 +1431,7 @@ OUTPUT JSON matching the schema.`
           applyStepIntentGuard(step, {
             ftp,
             lthr,
-            thresholdPace: Number(sportSettings?.thresholdPace || 0)
+            thresholdPace
           })
           if (step.distance) step.distance = Number(step.distance)
         } else {
@@ -1444,9 +1459,11 @@ OUTPUT JSON matching the schema.`
           applyStepIntentGuard(step, {
             ftp,
             lthr,
-            thresholdPace: Number(sportSettings?.thresholdPace || 0)
+            thresholdPace
           })
         }
+
+        applyAvailableReferenceTargets(step, physiology.refs)
 
         // 3. Structural Fixes
         if (step.durationSeconds === undefined && step.duration !== undefined) {
@@ -1472,7 +1489,7 @@ OUTPUT JSON matching the schema.`
               ftp,
               lthr,
               maxHr,
-              thresholdPace: Number(sportSettings?.thresholdPace || 0)
+              thresholdPace
             },
             fallbackOrder: targetPolicy.fallbackOrder as Array<
               'power' | 'heartRate' | 'pace' | 'rpe'
@@ -1489,7 +1506,7 @@ OUTPUT JSON matching the schema.`
                 ftp,
                 lthr,
                 maxHr,
-                thresholdPace: Number(sportSettings?.thresholdPace || 0)
+                thresholdPace
               },
               fallbackOrder: targetPolicy.fallbackOrder as Array<
                 'power' | 'heartRate' | 'pace' | 'rpe'
@@ -1603,19 +1620,25 @@ OUTPUT JSON matching the schema.`
     if (renderable && totalDuration <= 0) {
       throw new Error('Generated structured workout has zero total duration')
     }
-    if (renderable && totalTSS <= 0) {
-      throw new Error('Generated structured workout has zero total TSS')
-    }
     if (!renderable) {
       throw new Error('Generated structured workout has no renderable steps, exercises, or blocks')
     }
 
-    const settingsSnapshot = buildPlannedWorkoutSettingsSnapshot(
-      sportSettings,
-      { ftp, lthr, maxHr },
-      targetPolicy,
-      targetFormatPolicy
-    )
+    const finalMetrics = computeStructuredWorkoutMetrics(structure, {
+      refs: physiology.refs,
+      fallbackOrder: targetPolicy.fallbackOrder,
+      workoutType: workout.type
+    })
+    const settingsSnapshot = {
+      ...buildPlannedWorkoutSettingsSnapshot(
+        sportSettings,
+        { ftp, lthr, maxHr },
+        targetPolicy,
+        targetFormatPolicy,
+        physiology
+      ),
+      metricEstimates: finalMetrics.metricEstimates
+    }
     const generationContext = buildPlannedWorkoutGenerationContext({
       operation: 'generate',
       generatorMode,
@@ -1640,6 +1663,8 @@ OUTPUT JSON matching the schema.`
     if (!canonicalStructure || canonicalStructure.diagnostics?.length) {
       throw new Error('Generated workout contains unresolved target units')
     }
+    canonicalStructure.physiology = physiology
+    canonicalStructure.metricEstimates = finalMetrics.metricEstimates
     if (entityType === 'PlannedWorkout') {
       const write = await writeCanonicalPlannedWorkoutStructure({
         plannedWorkoutId: plannedWorkoutId!,
@@ -1863,11 +1888,8 @@ OUTPUT JSON matching the schema.`
       const templateData = {
         structuredWorkout: canonicalStructure as any,
         durationSec: totalDuration > 0 ? totalDuration : null,
-        tss: totalTSS > 0 ? Math.round(totalTSS) : null,
-        workIntensity:
-          totalTSS > 0 && totalDuration > 0
-            ? parseFloat(Math.sqrt((36 * totalTSS) / totalDuration).toFixed(2))
-            : null
+        tss: finalMetrics.tss,
+        workIntensity: finalMetrics.workIntensity
       }
 
       const updatedTemplate = await (prisma as any).workoutTemplate.update({

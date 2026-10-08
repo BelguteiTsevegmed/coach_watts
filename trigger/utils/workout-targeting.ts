@@ -1,3 +1,4 @@
+import { positiveReference, type PhysiologyResolution } from '../../shared/physiology-references'
 import {
   formatSteadyTargetStyleInstruction,
   normalizeTargetPolicy,
@@ -297,6 +298,8 @@ export function applyStepIntentGuard(
   step: any,
   refs: { ftp: number; lthr: number; thresholdPace: number }
 ) {
+  if (step?.primaryTarget === 'rpe' || (step?.rpe && !step.power && !step.heartRate && !step.pace))
+    return
   const explicitIntent = normalizeIntent(step?.intent)
   const intent = explicitIntent || defaultIntentForStepType(step?.type)
   step.intent = intent
@@ -401,7 +404,8 @@ export function applyStepIntentGuard(
 
 export function resolveWorkoutTargeting(
   sportSettings: any,
-  override?: WorkoutTargetingOverride | null
+  override?: WorkoutTargetingOverride | null,
+  physiology?: PhysiologyResolution
 ) {
   const mergedTargetPolicy = {
     ...(sportSettings?.targetPolicy || {}),
@@ -432,6 +436,19 @@ export function resolveWorkoutTargeting(
     override?.loadPreference || sportSettings?.loadPreference
   )
   const targetFormatPolicy = normalizeTargetFormatPolicy(mergedTargetFormatPolicy)
+  if (physiology) {
+    const available = {
+      power: physiology.refs.ftp > 0,
+      heartRate: physiology.refs.lthr > 0 || physiology.refs.maxHr > 0,
+      pace: physiology.refs.thresholdPace > 0,
+      rpe: true
+    }
+    targetPolicy.fallbackOrder = targetPolicy.fallbackOrder.filter((metric) => available[metric])
+    if (!available[targetPolicy.primaryMetric])
+      targetPolicy.primaryMetric = targetPolicy.fallbackOrder[0] || 'rpe'
+    if (!(physiology.refs.lthr > 0) && physiology.refs.maxHr > 0)
+      targetFormatPolicy.heartRate.mode = 'percentMaxHr'
+  }
 
   // Keep explicit single-value targeting authoritative across save/regenerate flows.
   if (targetPolicy.defaultTargetStyle === 'value') {
@@ -611,8 +628,17 @@ function normalizeHeartRateTarget(
   if (!original) return
   const target = { ...original }
   const mode = targetFormatPolicy.heartRate.mode
-  const lthr = refs.lthr > 0 ? refs.lthr : 160
-  const maxHr = refs.maxHr > 0 ? refs.maxHr : 190
+  const lthr = refs.lthr
+  const maxHr = refs.maxHr
+  const units = String(original.units || 'LTHR').toLowerCase()
+  const sourceKnown =
+    units === 'bpm' || (units === 'hr' || units === 'maxhr' ? maxHr > 0 : lthr > 0)
+  if (
+    !sourceKnown ||
+    (mode === 'percentMaxHr' && !(maxHr > 0)) ||
+    ((mode === 'percentLthr' || mode === 'zone') && !(lthr > 0))
+  )
+    return
 
   const toBpm = (value: number, units?: string) => {
     const normalizedUnits = String(units || '').toLowerCase()
@@ -691,7 +717,8 @@ function normalizePowerTarget(
   const original = toTargetObject(step.power)
   if (!original) return
   const target = { ...original }
-  const ftp = refs.ftp > 0 ? refs.ftp : 250
+  const ftp = refs.ftp
+  if (!(ftp > 0)) return
   const mode = targetFormatPolicy.power.mode
   const originalUnits = String(original.units || '')
     .trim()
@@ -938,10 +965,12 @@ export function buildPlannedWorkoutSettingsSnapshot(
   sportSettings: any,
   resolvedMetrics: { ftp: number; lthr: number; maxHr: number },
   targetPolicy: TargetPolicy,
-  targetFormatPolicy: TargetFormatPolicy
+  targetFormatPolicy: TargetFormatPolicy,
+  physiology?: PhysiologyResolution
 ) {
   return {
-    version: 1,
+    version: 2,
+    physiology: physiology || null,
     capturedAt: new Date().toISOString(),
     profile: {
       id: sportSettings?.id || null,
@@ -952,11 +981,13 @@ export function buildPlannedWorkoutSettingsSnapshot(
       isDefault: Boolean(sportSettings?.isDefault)
     },
     thresholds: {
-      ftp: resolvedMetrics.ftp || null,
-      lthr: resolvedMetrics.lthr || null,
-      maxHr: resolvedMetrics.maxHr || null,
+      ftp: positiveReference(resolvedMetrics.ftp),
+      lthr: positiveReference(resolvedMetrics.lthr),
+      maxHr: positiveReference(resolvedMetrics.maxHr),
       restingHr: sportSettings?.restingHr || null,
-      thresholdPace: sportSettings?.thresholdPace || null
+      thresholdPace: physiology
+        ? positiveReference(physiology.refs.thresholdPace)
+        : positiveReference(sportSettings?.thresholdPace)
     },
     defaults: {
       warmupTime: sportSettings?.warmupTime || null,

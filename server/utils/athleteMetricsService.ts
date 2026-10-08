@@ -1,3 +1,4 @@
+import { normalizeWorkoutSport } from '../../shared/workout-support-matrix'
 import { prisma } from './db'
 import { userRepository } from './repositories/userRepository'
 import { sportSettingsRepository } from './repositories/sportSettingsRepository'
@@ -234,6 +235,7 @@ export const athleteMetricsService = {
           newValue?: unknown
           workoutId?: unknown
           sportName?: unknown
+          workoutDate?: unknown
         }
       | null
       | undefined
@@ -248,7 +250,7 @@ export const athleteMetricsService = {
       typeof history?.workoutId === 'string'
         ? prisma.workout.findUnique({
             where: { id: history.workoutId },
-            select: { type: true }
+            select: { type: true, date: true }
           })
         : null
     ])
@@ -271,8 +273,9 @@ export const athleteMetricsService = {
       sportUpdateData.maxHr = Math.round(newValue)
       sportUpdateData.hrZones = calculateHrZones(user.lthr, Math.round(newValue))
     } else if (metric === 'THRESHOLD_PACE') {
-      sportUpdateData.thresholdPace = newValue
-      sportUpdateData.paceZones = calculatePaceZones(newValue)
+      // Detection recommendations use s/km; accepted sport settings use m/s.
+      sportUpdateData.thresholdPace = 1000 / newValue
+      sportUpdateData.paceZones = calculatePaceZones(sportUpdateData.thresholdPace)
     }
 
     if (Object.keys(userUpdateData).length > 0) {
@@ -304,10 +307,45 @@ export const athleteMetricsService = {
       for (const profile of sportProfiles) profilesToUpdate.set(profile.id, profile)
     }
 
+    const key =
+      metric === 'FTP'
+        ? 'ftp'
+        : metric === 'LTHR'
+          ? 'lthr'
+          : metric === 'MAX_HR'
+            ? 'maxHr'
+            : 'thresholdPace'
+    const evidenceDate = workout?.date || history?.workoutDate
+    const measuredAt =
+      evidenceDate && Number.isFinite(new Date(evidenceDate as string).getTime())
+        ? new Date(evidenceDate as string).toISOString()
+        : null
     for (const profile of profilesToUpdate.values()) {
+      const configuration =
+        profile.zoneConfiguration && typeof profile.zoneConfiguration === 'object'
+          ? profile.zoneConfiguration
+          : {}
       await prisma.sportSettings.update({
         where: { id: profile.id },
-        data: sportUpdateData
+        data: {
+          ...sportUpdateData,
+          zoneConfiguration: {
+            ...configuration,
+            physiologyReferences: {
+              ...configuration.physiologyReferences,
+              [key]: {
+                value: sportUpdateData[key],
+                status: 'estimated',
+                source: 'accepted_threshold_detection',
+                sport: normalizeWorkoutSport(workout?.type),
+                measuredAt,
+                confidence: 'medium',
+                evidenceQualified: true,
+                workoutId: history?.workoutId || null
+              }
+            }
+          }
+        }
       })
     }
 
