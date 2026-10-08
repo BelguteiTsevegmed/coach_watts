@@ -12,7 +12,7 @@ export const DEFAULT_WEEKLY_VOLUME_MINUTES = 450
 export const LOW_WEEKLY_VOLUME_MINUTES = 240
 export const HIGH_WEEKLY_VOLUME_MINUTES = 600
 export const RECOVERY_WEEK_FACTOR = 0.6
-/** Heuristic TSS per hour used for week targets across the app. */
+/** Coarse fallback TSS/hour when no sport-specific observed dose is available. */
 export const TSS_PER_HOUR = 50
 
 /**
@@ -58,6 +58,8 @@ export interface WeekTargetOptions {
   /** When set, caps the loading volume by ramp allowance before recovery/taper factors. */
   rampBaseMinutes?: number | null
   /** 1-based count of loading weeks up to and including this week's position. */
+  /** Observed sport-specific planning estimate when the caller has adequate history. */
+  tssPerHour?: number | null
   loadingWeekOrdinal?: number
 }
 
@@ -124,6 +126,13 @@ export function calculateWeekTargets(options: WeekTargetOptions): {
 
   return {
     volumeTargetMinutes: targetMinutes,
-    tssTarget: Math.round((targetMinutes / 60) * TSS_PER_HOUR)
+    tssTarget: Math.round(
+      (targetMinutes / 60) *
+        (typeof options.tssPerHour === 'number' &&
+        Number.isFinite(options.tssPerHour) &&
+        options.tssPerHour >= 0
+          ? options.tssPerHour
+          : TSS_PER_HOUR)
+    )
   }
 }

@@ -14,6 +14,10 @@ import {
 import { prisma } from '../../../../server/utils/db'
 import { sportSettingsRepository } from '../../../../server/utils/repositories/sportSettingsRepository'
 
+vi.mock('../../../../server/utils/repositories/workoutStreamRepository', () => ({
+  attachStreamsToWorkouts: vi.fn(async (workouts: any[]) => workouts)
+}))
+
 // Mock prisma
 vi.mock('../../../../server/utils/db', () => ({
   prisma: {
@@ -247,19 +251,26 @@ describe('Training Metrics Utils', () => {
   })
 
   describe('calculateIntensityDistribution', () => {
-    it('should categorize based on intensity factor', async () => {
+    it('categorizes interval targets independently of whole-session intensity', async () => {
       // recovery < 0.7
       // endurance 0.7 - 0.85
       // tempo 0.85 - 0.95
       // threshold 0.95 - 1.05
       // vo2max > 1.05
 
+      vi.mocked(sportSettingsRepository.getForActivityType).mockResolvedValue({ ftp: 300 } as any)
       vi.mocked(prisma.workout.findMany).mockResolvedValue([
-        { intensity: 0.6, durationSec: 1000 }, // recovery
-        { intensity: 0.8, durationSec: 1000 }, // endurance
-        { intensity: 0.9, durationSec: 1000 }, // tempo
-        { intensity: 1.0, durationSec: 1000 }, // threshold
-        { intensity: 1.1, durationSec: 1000 } // vo2max
+        {
+          type: 'Ride',
+          intensity: 0.6,
+          durationSec: 5000,
+          rawJson: {
+            icu_intervals: [180, 240, 270, 300, 330].map((watts) => ({
+              moving_time: 1000,
+              average_watts: watts
+            }))
+          }
+        }
       ] as any)
 
       const result = await calculateIntensityDistribution('user1', new Date(), new Date())
@@ -271,7 +282,7 @@ describe('Training Metrics Utils', () => {
       expect(result.vo2max).toBe(20)
     })
 
-    it('should calculate intensity from TSS if missing', async () => {
+    it('retains unknown time instead of inferring intensity from aggregate TSS', async () => {
       // IF = sqrt((TSS * 3600) / (Duration * 100))
       // Let TSS = 100, Duration = 3600. IF = sqrt(360000 / 360000) = 1.0 -> Threshold
       vi.mocked(prisma.workout.findMany).mockResolvedValue([
@@ -280,7 +291,9 @@ describe('Training Metrics Utils', () => {
 
       const result = await calculateIntensityDistribution('user1', new Date(), new Date())
 
-      expect(result.threshold).toBe(100)
+      expect(result.threshold).toBe(0)
+      expect(result.unknown).toBe(100)
+      expect(result.coverage).toBe(0)
     })
   })
 

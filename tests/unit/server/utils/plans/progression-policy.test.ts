@@ -113,3 +113,18 @@ it('subtracts preserved sessions from their own sport and the total remaining bu
     ])
   ).toEqual({ volumeTargetMinutes: 170, sportVolumeTargets: { run: 42, ride: 128 } })
 })
+
+it('uses sport-specific observed TSS/hour only with adequate samples and coverage', () => {
+  const rows = history.map((w) => ({ ...w, tss: 80 }))
+  const context = build(rows)
+  expect(context.sports.run?.tssEstimate).toMatchObject({
+    perHour: 80,
+    source: 'sport_history',
+    sampleCount: 4,
+    coverage: 1
+  })
+  expect(targets(context).tssTarget).toBe(96)
+  const sparse = build(history.map((w, index) => ({ ...w, tss: index === 0 ? 80 : null })))
+  expect(sparse.sports.run?.tssEstimate?.source).toBe('coarse_default')
+  expect(targets(sparse).tssTarget).toBe(60)
+})

@@ -1,3 +1,10 @@
+import { attachStreamsToWorkouts } from './repositories/workoutStreamRepository'
+import {
+  aggregateStimulus,
+  summarizeCompletedStimulus,
+  type TrainingStimulus,
+  type IntensityBand
+} from './training-stimulus'
 import { prisma } from './db'
 import { formatUserDate, formatDateUTC, getUserLocalDate } from './date'
 import { sportSettingsRepository } from './repositories/sportSettingsRepository'
@@ -94,12 +101,15 @@ interface TrainingContext {
   activityBreakdown: ActivityBreakdown[]
   hrZoneDistribution?: ZoneDistribution
   powerZoneDistribution?: ZoneDistribution
+  stimulus?: ReturnType<typeof aggregateStimulus>
   intensityDistribution: {
     recovery: number // < 0.70 IF
     endurance: number // 0.70-0.85 IF
     tempo: number // 0.85-0.95 IF
     threshold: number // 0.95-1.05 IF
     vo2max: number // > 1.05 IF
+    unknown?: number // retained in the total-time denominator
+    coverage?: number
   }
 }
 
@@ -403,15 +413,13 @@ export async function calculateActivityBreakdown(
   return Array.from(breakdown.values()).sort((a, b) => b.totalTSS - a.totalTSS)
 }
 
-/**
- * Calculate intensity distribution based on Intensity Factor (IF)
- */
-export async function calculateIntensityDistribution(
+/** Resolve completed exposure per sport using streams/intervals, never whole-session IF. */
+export async function calculateTrainingStimulus(
   userId: string,
   startDate: Date,
   endDate: Date,
   prismaClient: typeof prisma = prisma
-): Promise<TrainingContext['intensityDistribution']> {
+): Promise<TrainingStimulus[]> {
   const workouts = await prismaClient.workout.findMany({
     where: {
       userId,
@@ -422,74 +430,53 @@ export async function calculateIntensityDistribution(
     select: {
       id: true,
       type: true,
-      intensity: true,
-      tss: true,
       durationSec: true,
-      date: true
+      distanceMeters: true,
+      tss: true,
+      rawJson: true,
+      exercises: { select: { sets: { select: { reps: true, durationSec: true } } } },
+      aiAnalysisJson: true
     }
   })
+  const profiles = new Map<string, any>()
+  for (const type of new Set(workouts.map((w) => w.type || ''))) {
+    profiles.set(type, await sportSettingsRepository.getForActivityType(userId, type))
+  }
+  const withStreams = await attachStreamsToWorkouts(workouts, { baselineOnly: true })
+  return withStreams.map((w) => summarizeCompletedStimulus(w, profiles.get(w.type || '') || {}))
+}
 
-  const distribution = {
+export function stimulusIntensityDistribution(
+  summaries: TrainingStimulus[]
+): TrainingContext['intensityDistribution'] {
+  const distribution: Record<IntensityBand, number> = {
     recovery: 0,
     endurance: 0,
     tempo: 0,
     threshold: 0,
-    vo2max: 0
+    vo2max: 0,
+    unknown: 0
   }
+  const totalTime = summaries.reduce((sum, s) => sum + s.durationSeconds, 0)
+  for (const summary of summaries)
+    for (const band of Object.keys(distribution) as IntensityBand[])
+      distribution[band] += summary.intensitySeconds[band]
+  const coverage = totalTime > 0 ? 1 - distribution.unknown / totalTime : 0
+  if (totalTime > 0)
+    for (const band of Object.keys(distribution) as IntensityBand[])
+      distribution[band] = (distribution[band] / totalTime) * 100
+  return { ...distribution, coverage }
+}
 
-  let totalTime = 0
-
-  for (const workout of workouts) {
-    let intensity = workout.intensity
-    const duration = workout.durationSec
-
-    // Fallback: Calculate IF from TSS if missing
-    // IF = sqrt( (TSS * 3600) / (Duration * 100) )
-    if ((intensity === null || intensity === undefined) && workout.tss && duration > 0) {
-      intensity = Math.sqrt((workout.tss * 3600) / (duration * 100))
-    }
-
-    if (intensity === null || intensity === undefined) {
-      // Still no intensity, skip
-      continue
-    }
-
-    // Normalize intensity
-    if (intensity > 2.0) {
-      if (intensity <= 10) {
-        intensity = intensity / 100
-      } else if (intensity <= 200) {
-        intensity = intensity / 100
-      } else {
-        continue
-      }
-    }
-
-    totalTime += duration
-
-    if (intensity < 0.7) {
-      distribution.recovery += duration
-    } else if (intensity < 0.85) {
-      distribution.endurance += duration
-    } else if (intensity < 0.95) {
-      distribution.tempo += duration
-    } else if (intensity <= 1.05) {
-      distribution.threshold += duration
-    } else {
-      distribution.vo2max += duration
-    }
-  }
-
-  // Convert to percentages
-  if (totalTime > 0) {
-    distribution.recovery = (distribution.recovery / totalTime) * 100
-    distribution.endurance = (distribution.endurance / totalTime) * 100
-    distribution.tempo = (distribution.tempo / totalTime) * 100
-    distribution.threshold = (distribution.threshold / totalTime) * 100
-    distribution.vo2max = (distribution.vo2max / totalTime) * 100
-  }
-
-  return distribution
+export async function calculateIntensityDistribution(
+  userId: string,
+  startDate: Date,
+  endDate: Date,
+  prismaClient: typeof prisma = prisma
+): Promise<TrainingContext['intensityDistribution']> {
+  return stimulusIntensityDistribution(
+    await calculateTrainingStimulus(userId, startDate, endDate, prismaClient)
+  )
 }
 
 /**
@@ -709,12 +696,10 @@ export async function generateTrainingContext(
   )
 
   // Get intensity distribution
-  const intensityDistribution = await calculateIntensityDistribution(
-    userId,
-    startDate,
-    endDate,
-    prismaClient
-  )
+  const stimulusSessions = await calculateTrainingStimulus(userId, startDate, endDate, prismaClient)
+
+  const intensityDistribution = stimulusIntensityDistribution(stimulusSessions)
+  const stimulus = aggregateStimulus(stimulusSessions)
 
   // Optionally get zone distribution (expensive operation)
   let hrZoneDistribution: ZoneDistribution | undefined
@@ -739,7 +724,8 @@ export async function generateTrainingContext(
     activityBreakdown,
     hrZoneDistribution,
     powerZoneDistribution,
-    intensityDistribution
+    intensityDistribution,
+    stimulus
   }
 }
 
@@ -808,15 +794,36 @@ export function formatTrainingContextForPrompt(context: TrainingContext): string
   }
 
   // Intensity Distribution
-  lines.push('### Intensity Distribution (by time)')
+  lines.push('### Threshold-relative intensity exposure (by time; not physiological domains)')
   if (context.intensityDistribution) {
     lines.push(`- Recovery (<70% IF): ${context.intensityDistribution.recovery.toFixed(1)}%`)
     lines.push(`- Endurance (70-85% IF): ${context.intensityDistribution.endurance.toFixed(1)}%`)
     lines.push(`- Tempo (85-95% IF): ${context.intensityDistribution.tempo.toFixed(1)}%`)
     lines.push(`- Threshold (95-105% IF): ${context.intensityDistribution.threshold.toFixed(1)}%`)
-    lines.push(`- VO2 Max (>105% IF): ${context.intensityDistribution.vo2max.toFixed(1)}%`)
+    lines.push(`- Above threshold (>105% IF): ${context.intensityDistribution.vo2max.toFixed(1)}%`)
+    lines.push(`- Unknown intensity: ${(context.intensityDistribution.unknown ?? 0).toFixed(1)}%`)
   }
   lines.push('')
+
+  if (context.stimulus) {
+    lines.push('### Sport-specific stimulus (explicit zone-domain mappings only)')
+    for (const [sport, dose] of Object.entries(context.stimulus.sports)) {
+      if (!dose) continue
+      lines.push(
+        `- ${sport}: ${dose.minutes.toFixed(1)} minutes, ${(dose.distanceMeters / 1000).toFixed(1)} km (${dose.distanceKnownSessions} sessions with distance), easy/moderate/hard/unknown ${Object.values(
+          dose.domainMinutes
+        )
+          .map((m) => m.toFixed(1))
+          .join(
+            '/'
+          )} minutes; ${dose.hardSessions} hard sessions (${dose.unknownHardSessions} unknown), ${dose.strengthSets} strength sets.`
+      )
+    }
+    lines.push(
+      'Total TSS describes aggregate fatigue; cycling TSS is not running mechanical exposure. Unknown domain time must not be described as easy training.'
+    )
+    lines.push('')
+  }
 
   // Power Zone Distribution
   if (context.powerZoneDistribution) {

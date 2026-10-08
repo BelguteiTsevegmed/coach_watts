@@ -36,6 +36,12 @@ export type PlanProgression = {
         lastWorkoutAt: string | null
         daysSinceLastWorkout: number | null
         status: 'ACTIVE' | 'RETURNING' | 'INACTIVE' | 'UNKNOWN_HISTORY'
+        tssEstimate?: {
+          perHour: number
+          source: 'sport_history' | 'coarse_default'
+          sampleCount: number
+          coverage: number
+        }
         rampBaseMinutes: number
       }
     >
@@ -51,6 +57,7 @@ export function buildPlanProgression(input: {
     type: string | null
     durationSec: number
     isDuplicate: boolean
+    tss?: number | null
   }>
   activityTypes: string[]
   requestedVolumeMinutes: number
@@ -111,7 +118,23 @@ export function buildPlanProgression(input: {
     let rampBase = average > 0 ? average * policy.initialMultiplier : policy.starterMinutes[sport]
     if (!complete) rampBase = Math.min(rampBase, average || policy.starterMinutes[sport])
     if (returning) rampBase *= policy.returningMultiplier
+    const tssRows = rows.filter(
+      (w) => typeof w.tss === 'number' && Number.isFinite(w.tss) && w.tss >= 0
+    )
+    const totalSeconds = rows.reduce((sum, w) => sum + w.durationSec, 0)
+    const knownSeconds = tssRows.reduce((sum, w) => sum + w.durationSec, 0)
+    const coverage = totalSeconds > 0 ? knownSeconds / totalSeconds : 0
+    const useHistory = tssRows.length >= 3 && knownSeconds >= 3600 && coverage >= 0.5
+    const perHour = useHistory
+      ? tssRows.reduce((sum, w) => sum + w.tss!, 0) / (knownSeconds / 3600)
+      : TSS_PER_HOUR
     result.sports[sport] = {
+      tssEstimate: {
+        perHour,
+        source: useHistory ? 'sport_history' : 'coarse_default',
+        sampleCount: tssRows.length,
+        coverage
+      },
       recentWeeklyAvgMinutes: average,
       lastWorkoutAt: last?.toISOString() ?? null,
       daysSinceLastWorkout: days,
@@ -218,7 +241,15 @@ export function calculateProgressionWeekTargets(
   )
   return {
     volumeTargetMinutes,
-    tssTarget: Math.round((volumeTargetMinutes / 60) * TSS_PER_HOUR),
+    tssTarget: Math.round(
+      Object.entries(sportVolumeTargets).reduce(
+        (sum, [sport, minutes]) =>
+          sum +
+          (minutes / 60) *
+            (context.sports[sport as SportFamily]?.tssEstimate?.perHour ?? TSS_PER_HOUR),
+        0
+      )
+    ),
     sportVolumeTargets
   }
 }

@@ -82,11 +82,12 @@ export async function createPlannedWorkoutForUser(userId: string, body: any) {
   const structureWrite = body.structuredWorkout
     ? buildCanonicalPlannedWorkoutWriteData({
         source: 'MANUAL_EDIT',
+        workoutType: body.type || 'Ride',
         structure: body.structuredWorkout,
         zoneProfileSnapshot: createZoneProfileSnapshot(structureSettings),
         syncStatus: 'LOCAL_ONLY',
         refs: {
-          ftp: Number(structureSettings?.ftp || 250),
+          ftp: Number(structureSettings?.ftp || 0),
           lthr: Number(structureSettings?.lthr || 0),
           maxHr: Number(structureSettings?.maxHr || 0),
           thresholdPace: Number(structureSettings?.thresholdPace || 0)
@@ -197,7 +198,7 @@ export async function updatePlannedWorkoutForUser(userId: string, workoutId: str
       : null
   const { targetPolicy } = resolveWorkoutTargeting(structureSettings || {})
   const refs = {
-    ftp: Number(structureSettings?.ftp || 250),
+    ftp: Number(structureSettings?.ftp || 0),
     lthr: Number(structureSettings?.lthr || 0),
     maxHr: Number(structureSettings?.maxHr || 0),
     thresholdPace: Number(structureSettings?.thresholdPace || 0)
@@ -207,6 +208,7 @@ export async function updatePlannedWorkoutForUser(userId: string, workoutId: str
     await writeCanonicalPlannedWorkoutStructure({
       plannedWorkoutId: workoutId,
       source: 'MANUAL_EDIT',
+      workoutType: body.type || existing.type,
       structure: body.structuredWorkout,
       zoneProfileSnapshot:
         (existing.structuredWorkout as any)?.zoneProfileSnapshot ||

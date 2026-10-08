@@ -6,10 +6,7 @@ import {
   buildStructureEditFields,
   computeStructuredWorkoutHash
 } from './planned-workout-structure-sync'
-import {
-  computeStructuredWorkoutMetrics,
-  getPendingSyncStatus
-} from './structured-workout-persistence'
+import { getPendingSyncStatus } from './structured-workout-persistence'
 import { resolveWorkoutTargeting } from '../../trigger/utils/workout-targeting'
 import {
   adaptStructuredWorkout,
@@ -19,6 +16,8 @@ import {
   type ZoneProfileSnapshot
 } from '../../shared/structured-workout-contract'
 import { validateCanonicalSemantics } from '../../shared/workout-canonical-validation'
+import { summarizePlannedStimulus } from './training-stimulus'
+import { validateFinalStructureDose } from './plans/structure-dose'
 import { supersedeActiveStructureGenerationRuns } from './structure-generation-run'
 
 type WriteSource = Extract<
@@ -35,6 +34,7 @@ export type CanonicalWriteOptions = {
   refs?: { ftp: number; lthr: number; maxHr: number; thresholdPace: number }
   fallbackOrder?: Array<'power' | 'heartRate' | 'pace' | 'rpe'>
   preservePlannedDuration?: number | null
+  workoutType?: string | null
   extra?: Record<string, unknown>
   /** Skip diagnostics rejection for message-only or partial envelope updates. */
   allowDiagnostics?: boolean
@@ -51,7 +51,7 @@ function resolveSportTargetingRefs(sportSettings?: any, userFtp?: number | null)
   const { targetPolicy } = resolveWorkoutTargeting(sportSettings || {})
   return {
     refs: {
-      ftp: Number(sportSettings?.ftp || userFtp || 250),
+      ftp: Number(sportSettings?.ftp || userFtp || 0),
       lthr: Number(sportSettings?.lthr || 0),
       maxHr: Number(sportSettings?.maxHr || 0),
       thresholdPace: Number(sportSettings?.thresholdPace || 0)
@@ -80,24 +80,46 @@ export function buildCanonicalPlannedWorkoutWriteData(options: CanonicalWriteOpt
   if (issues.length) {
     throw createError({ statusCode: 422, message: issues[0]!.message, data: { issues } })
   }
-  const metrics = computeStructuredWorkoutMetrics(canonical, {
-    refs: options.refs || { ftp: 0, lthr: 0, maxHr: 0, thresholdPace: 0 },
-    fallbackOrder: options.fallbackOrder || ['power', 'heartRate', 'pace', 'rpe']
-  })
+  const stimulus = summarizePlannedStimulus(
+    {
+      type: options.workoutType,
+      durationSec: options.preservePlannedDuration,
+      structuredWorkout: canonical
+    },
+    options.refs
+  )
+  const finalDuration = stimulus.durationSeconds || options.preservePlannedDuration || 0
   const editSource = mapEditSource(options.source)
   const data: Record<string, unknown> = {
+    ...(options.extra || {}),
     ...buildStructureEditFields(canonical, editSource),
     ...(options.incrementRevision !== false ? { structureRevision: { increment: 1 } } : {}),
-    durationSec: options.preservePlannedDuration || metrics.durationSec || undefined,
-    distanceMeters: metrics.distanceMeters || undefined,
-    tss: metrics.tss > 0 ? metrics.tss : null,
-    workIntensity: metrics.workIntensity || undefined,
+    durationSec:
+      options.source === 'INTERVALS_IMPORT'
+        ? options.preservePlannedDuration || finalDuration || undefined
+        : finalDuration || options.preservePlannedDuration || undefined,
+    distanceMeters: stimulus.distanceMeters,
+    tss: stimulus.tss.value,
+    workIntensity:
+      stimulus.tss.value !== null && finalDuration > 0
+        ? Number(Math.sqrt((36 * stimulus.tss.value) / finalDuration).toFixed(2))
+        : null,
     syncStatus:
       options.source === 'INTERVALS_IMPORT' ? 'SYNCED' : getPendingSyncStatus(options.syncStatus),
     syncError: null,
-    ...(options.extra || {})
+    stimulusSummary: stimulus
   }
-  return { canonical, metrics, data }
+  return {
+    canonical,
+    metrics: {
+      durationSec: data.durationSec,
+      distanceMeters: data.distanceMeters,
+      tss: data.tss,
+      workIntensity: data.workIntensity,
+      stimulus
+    },
+    data
+  }
 }
 
 /** Canonical fields for accepted Intervals import create/update paths. */
@@ -105,6 +127,7 @@ export function buildRemoteImportAcceptedWriteData(options: {
   structure: unknown
   zoneProfileSnapshot?: ZoneProfileSnapshot
   sportSettings?: any
+  workoutType?: string | null
   preservePlannedDuration?: number | null
   seenAt?: Date
   allowDiagnostics?: boolean
@@ -117,6 +140,7 @@ export function buildRemoteImportAcceptedWriteData(options: {
     structure: options.structure,
     zoneProfileSnapshot: options.zoneProfileSnapshot,
     refs,
+    workoutType: options.workoutType,
     fallbackOrder,
     preservePlannedDuration: options.preservePlannedDuration,
     allowDiagnostics: options.allowDiagnostics ?? true,
@@ -137,6 +161,7 @@ export function buildRemoteImportAcceptedWriteData(options: {
 export function buildTemplateStructureWriteData(options: {
   structure: unknown
   sportSettings?: any
+  workoutType?: string | null
   preservePlannedDuration?: number | null
   allowDiagnostics?: boolean
   syncStatus?: string | null
@@ -147,6 +172,7 @@ export function buildTemplateStructureWriteData(options: {
     structure: options.structure,
     zoneProfileSnapshot: createZoneProfileSnapshot(options.sportSettings || {}),
     refs,
+    workoutType: options.workoutType,
     fallbackOrder,
     preservePlannedDuration: options.preservePlannedDuration,
     allowDiagnostics: options.allowDiagnostics ?? true,
@@ -157,11 +183,13 @@ export function buildTemplateStructureWriteData(options: {
 
 /** Canonical fields for legacy data restore imports. */
 export function buildLegacyAdapterWriteData(options: {
+  workoutType?: string | null
   structure: unknown
   preservePlannedDuration?: number | null
 }) {
   return buildCanonicalPlannedWorkoutWriteData({
     source: 'LEGACY_ADAPTER',
+    workoutType: options.workoutType,
     structure: options.structure,
     allowDiagnostics: true,
     incrementRevision: false,
@@ -175,6 +203,7 @@ function stripDerivedMetricsForLocalConflict(updateData: Record<string, unknown>
   delete updateData.distanceMeters
   delete updateData.tss
   delete updateData.workIntensity
+  delete updateData.stimulusSummary
 }
 
 /** Merge remote import payloads with local conflict rules and canonical accepted writes. */
@@ -196,10 +225,14 @@ export function buildIntervalsImportPersistenceFields(options: {
           structure: newStruct,
           zoneProfileSnapshot: (newStruct as any).zoneProfileSnapshot,
           sportSettings,
+          workoutType: normalizedPlanned.type,
           preservePlannedDuration: normalizedPlanned.durationSec ?? existingRecord.durationSec,
           seenAt
         })
         Object.assign(updateData, accepted.data)
+        // Preserve the external provider's reported totals; the structure estimate is separate.
+        for (const key of ['tss', 'distanceMeters'] as const)
+          if (normalizedPlanned[key] != null) updateData[key] = normalizedPlanned[key]
       } else {
         if (!('structuredWorkout' in remoteMerge.fields)) {
           delete updateData.structuredWorkout
@@ -224,11 +257,14 @@ export function buildIntervalsImportPersistenceFields(options: {
       structure: newStruct,
       zoneProfileSnapshot: (newStruct as any).zoneProfileSnapshot,
       sportSettings,
+      workoutType: normalizedPlanned.type,
       preservePlannedDuration: normalizedPlanned.durationSec,
       seenAt,
       incrementRevision: false
     })
     Object.assign(createData, accepted.data)
+    for (const key of ['tss', 'distanceMeters'] as const)
+      if (normalizedPlanned[key] != null) createData[key] = normalizedPlanned[key]
   }
   return createData
 }
@@ -297,28 +333,52 @@ export async function writeCanonicalPlannedWorkoutStructure(
     tx?: DbClient
   }
 ) {
-  const { canonical, metrics, data } = buildCanonicalPlannedWorkoutWriteData(options)
-  const client = options.tx || prisma
-
-  if (options.source === 'MANUAL_EDIT' && options.incrementRevision !== false) {
-    await supersedeActiveStructureGenerationRuns(options.plannedWorkoutId, options.tx)
-    ;(data as any).generationRevision = { increment: 1 }
-  }
-
-  if (options.expectedGenerationRevision !== undefined) {
-    const result = await client.plannedWorkout.updateMany({
-      where: {
-        id: options.plannedWorkoutId,
-        generationRevision: options.expectedGenerationRevision
-      },
+  const persist = async (client: DbClient) => {
+    const existing = await client.plannedWorkout.findUnique({
+      where: { id: options.plannedWorkoutId }
+    })
+    if (
+      options.expectedGenerationRevision !== undefined &&
+      existing &&
+      existing.generationRevision !== options.expectedGenerationRevision
+    ) {
+      return { ...buildCanonicalPlannedWorkoutWriteData(options), stale: true }
+    }
+    const { canonical, metrics, data } = buildCanonicalPlannedWorkoutWriteData({
+      ...options,
+      workoutType: options.workoutType ?? existing?.type,
+      preservePlannedDuration: options.preservePlannedDuration ?? existing?.durationSec
+    })
+    if (existing && options.source !== 'INTERVALS_IMPORT' && options.source !== 'LEGACY_ADAPTER')
+      await validateFinalStructureDose(
+        client,
+        existing,
+        Number(data.durationSec || 0),
+        options.workoutType ?? existing.type,
+        typeof data.tss === 'number' ? data.tss : null
+      )
+    if (options.source === 'MANUAL_EDIT' && options.incrementRevision !== false) {
+      await supersedeActiveStructureGenerationRuns(options.plannedWorkoutId, client)
+      ;(data as any).generationRevision = { increment: 1 }
+    }
+    if (options.expectedGenerationRevision !== undefined) {
+      const result = await client.plannedWorkout.updateMany({
+        where: {
+          id: options.plannedWorkoutId,
+          generationRevision: options.expectedGenerationRevision
+        },
+        data
+      })
+      return { canonical, metrics, stale: result.count === 0 }
+    }
+    const workout = await client.plannedWorkout.update({
+      where: { id: options.plannedWorkoutId },
       data
     })
-    return { canonical, metrics, stale: result.count === 0 }
+    return { canonical, metrics, stale: false, workout }
   }
-
-  const workout = await client.plannedWorkout.update({
-    where: { id: options.plannedWorkoutId },
-    data
-  })
-  return { canonical, metrics, stale: false, workout }
+  // A single transaction owns the dose check and structure/metric write.
+  return options.tx
+    ? persist(options.tx)
+    : prisma.$transaction(persist, { isolationLevel: 'Serializable' })
 }

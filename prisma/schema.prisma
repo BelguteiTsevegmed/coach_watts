@@ -1005,6 +1005,7 @@ model PlannedWorkout {
   shareToken        String?                  @unique
   completionStatus  String                   @default("PENDING")
   structuredWorkout Json?
+  stimulusSummary   Json? // Versioned interval-derived dose; null until structure resolution
   trainingWeekId    String?
   targetArea        String?
   managedBy         String                   @default("USER")

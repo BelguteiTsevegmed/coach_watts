@@ -1,3 +1,5 @@
+import { attachPlanStimulus } from '../../utils/plans/stimulus-summary'
+import { getUserTimezone } from '../../utils/date'
 import { requireAuth } from '../../utils/auth-guard'
 import { trainingPlanRepository } from '../../utils/repositories/trainingPlanRepository'
 
@@ -25,5 +27,8 @@ export default defineEventHandler(async (event) => {
     }
   })
 
-  return { plan, userFtp: user.ftp }
+  return {
+    plan: plan ? await attachPlanStimulus(plan, user.id, await getUserTimezone(user.id)) : null,
+    userFtp: user.ftp
+  }
 })

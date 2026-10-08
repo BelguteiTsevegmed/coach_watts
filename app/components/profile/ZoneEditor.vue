@@ -91,6 +91,17 @@
                 "
               />
             </div>
+            <div class="col-span-11 col-start-2 flex items-center gap-2">
+              <span class="text-xs text-gray-500">Physiological domain</span>
+              <USelect
+                :model-value="zone.domain || 'unknown'"
+                :items="domainOptions"
+                :aria-label="`${zone.name || 'Zone'} physiological domain`"
+                size="xs"
+                class="flex-1"
+                @update:model-value="setDomain(index, $event)"
+              />
+            </div>
           </div>
         </template>
       </draggable>
@@ -99,6 +110,10 @@
         No zones defined. Click "Add Zone" or "Calculate" to start.
       </div>
     </div>
+    <p class="text-xs text-gray-500">
+      Map zones using your physiological thresholds. Leave unclassified when unsure; zone numbers
+      alone do not determine easy, moderate, or hard intensity.
+    </p>
   </div>
 </template>
 
@@ -117,6 +132,21 @@
   }>()
 
   const emit = defineEmits(['update:modelValue'])
+  const domainOptions = [
+    { label: 'Unclassified', value: 'unknown' },
+    { label: 'Easy — below first threshold', value: 'easy' },
+    { label: 'Moderate — between thresholds', value: 'moderate' },
+    { label: 'Hard — above second threshold', value: 'hard' }
+  ]
+
+  function setDomain(index: number, domain: string) {
+    const nextZones = [...zones.value]
+    const zone = { ...nextZones[index] }
+    if (domain === 'unknown') delete zone.domain
+    else zone.domain = domain
+    nextZones[index] = zone
+    emit('update:modelValue', nextZones)
+  }
 
   const zones = computed({
     get: () => props.modelValue || [],

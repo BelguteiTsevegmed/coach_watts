@@ -168,3 +168,31 @@ export function identifyZone(value: number, zones: Zone[]): Zone | undefined {
   // treats `value > lastZone.max` as the last zone).
   return match ?? zones[zones.length - 1]
 }
+
+/** Elapsed sample exposure. Gaps over five seconds stay unknown instead of being filled. */
+export function computeSampleExposure(
+  samples: unknown,
+  time: unknown,
+  durationSeconds: number,
+  options: { allowZero?: boolean; maxGapSeconds?: number } = {}
+): Array<{ value: number; seconds: number }> {
+  if (!Array.isArray(samples)) return []
+  const timestamps = Array.isArray(time) ? time : null
+  const exposure: Array<{ value: number; seconds: number }> = []
+  let cursor = 0
+  for (let index = 0; index < samples.length; index++) {
+    const value = samples[index]
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) continue
+    if (!options.allowZero && value === 0) continue
+    const start = timestamps ? timestamps[index] : index
+    const end = timestamps
+      ? (timestamps[index + 1] ?? (index === samples.length - 1 ? start + 1 : null))
+      : index + 1
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < cursor || start < 0) continue
+    if (end <= start) continue
+    const seconds = Math.min(end, durationSeconds) - start
+    cursor = end
+    if (seconds > 0 && seconds <= (options.maxGapSeconds ?? 5)) exposure.push({ value, seconds })
+  }
+  return exposure
+}

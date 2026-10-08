@@ -66,6 +66,7 @@ vi.mock('../../../server/utils/repositories/wellnessRepository', () => ({
 }))
 
 vi.mock('../../../server/utils/training-metrics', () => ({
+  formatTrainingContextForPrompt: vi.fn().mockReturnValue('Resolved sport-specific stimulus'),
   generateTrainingContext: vi
     .fn()
     .mockResolvedValue({ summaryText: '', loadTrend: { weeklyTSSAvg: 200 } })
@@ -187,6 +188,7 @@ describe('generateWeeklyPlan task', () => {
       expect(generateStructuredAnalysis).toHaveBeenCalledTimes(2)
       const retryPrompt = vi.mocked(generateStructuredAnalysis).mock.calls[1]![0] as string
       expect(retryPrompt).toContain('REJECTED')
+      expect(retryPrompt).toContain('Resolved sport-specific stimulus')
       // The compliant retry result is the one persisted
       const createArg = vi.mocked(prisma.plannedWorkout.createMany).mock.calls[0]![0] as any
       expect(createArg.data).toHaveLength(2)

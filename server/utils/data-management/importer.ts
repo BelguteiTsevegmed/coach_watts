@@ -339,6 +339,7 @@ export class UserUniverseImporter {
         if (pwData.structuredWorkout) {
           const legacyWrite = buildLegacyAdapterWriteData({
             structure: pwData.structuredWorkout,
+            workoutType: pwData.type,
             preservePlannedDuration: pwData.durationSec
           })
           Object.assign(pwData, legacyWrite.data)
