@@ -177,6 +177,13 @@ describe('generateWeeklyPlan task', () => {
       })
 
       expect(result.success).toBe(true)
+      expect(prisma.weeklyTrainingPlan.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            planJson: expect.objectContaining({ coachingEvidenceVersion: 'coaching-evidence-v1' })
+          })
+        })
+      )
       expect(generateStructuredAnalysis).toHaveBeenCalledTimes(2)
       const retryPrompt = vi.mocked(generateStructuredAnalysis).mock.calls[1]![0] as string
       expect(retryPrompt).toContain('REJECTED')

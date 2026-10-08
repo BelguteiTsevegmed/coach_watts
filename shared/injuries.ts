@@ -73,8 +73,9 @@ export const INJURY_PAIN_MAX = 10
 
 /**
  * Pain at or above this level on an active injury means a session that loads
- * the area must be modified, replaced or skipped (pain-monitoring model: up to
- * 3/10 that settles by the next morning is acceptable).
+ * the area must be modified, replaced or skipped as a product default.
+ * This is not a validated safety boundary: low pain does not clear training,
+ * and red flags or clinician restrictions take precedence at any pain score.
  */
 export const INJURY_MODIFY_PAIN_THRESHOLD = 4
 

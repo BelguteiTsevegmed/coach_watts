@@ -122,7 +122,9 @@ describe('applyRecommendationConsistency', () => {
     })
     expect(result.recommendation).toBe('modify')
     expect(result.reasoning.startsWith('Your left achilles is logged at 5/10')).toBe(true)
-    expect(result.reasoning).toContain('You are fresh — enjoy it.')
+    expect(result.reasoning).not.toContain('You are fresh — enjoy it.')
+    expect(result.reasoning).toContain('Low pain alone does not clear a return')
+    expect(result.reasoning).toContain('clinician restrictions')
     expect((result as any).injury_guard).toMatchObject({ overridden: 'proceed' })
   })
 

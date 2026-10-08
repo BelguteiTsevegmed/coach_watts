@@ -76,12 +76,21 @@ describe('Training Stress Utils', () => {
     })
 
     it('getFormStatus should return correct status based on TSB', () => {
-      expect(getFormStatus(30)).toMatchObject({ status: 'No Fitness', color: 'gray' })
-      expect(getFormStatus(10)).toMatchObject({ status: 'Performance', color: 'green' })
-      expect(getFormStatus(0)).toMatchObject({ status: 'Maintenance', color: 'yellow' })
-      expect(getFormStatus(-15)).toMatchObject({ status: 'Productive', color: 'blue' })
-      expect(getFormStatus(-30)).toMatchObject({ status: 'Cautionary', color: 'orange' })
-      expect(getFormStatus(-50)).toMatchObject({ status: 'Overreaching', color: 'red' })
+      expect(getFormStatus(30)).toMatchObject({ status: 'Very fresh', color: 'gray' })
+      expect(getFormStatus(10)).toMatchObject({ status: 'Fresh', color: 'green' })
+      expect(getFormStatus(0)).toMatchObject({ status: 'Balanced load', color: 'yellow' })
+      expect(getFormStatus(-15)).toMatchObject({ status: 'Accumulating load', color: 'blue' })
+      expect(getFormStatus(-30)).toMatchObject({ status: 'High recent load', color: 'orange' })
+      expect(getFormStatus(-50)).toMatchObject({ status: 'Very high recent load', color: 'red' })
+    })
+
+    it('does not turn TSB bands into injury, diagnosis or race-clearance claims', () => {
+      for (const tsb of [30, 10, 0, -15, -30, -50]) {
+        expect(getFormStatus(tsb).description).toContain('load')
+        expect(getFormStatus(tsb).description).not.toMatch(
+          /injury risk|ready to race|peak form|optimal|immediately/i
+        )
+      }
     })
 
     it('getTSBColorClass should return correct color class', () => {

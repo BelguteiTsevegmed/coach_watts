@@ -66,10 +66,10 @@ export function formatInjuryLine(injury: InjuryPromptInput, today: Date): string
   return `- ${parts.join(' | ')}`
 }
 
-export const INJURY_RULES_PROMPT = `Injury rules (pain-monitoring model):
-- An ACTIVE injury with pain >= ${INJURY_MODIFY_PAIN_THRESHOLD}/10 that affects a session's sport: do NOT prescribe that session as-is. Modify it (shorter/easier/lower impact), replace it with cross-training that doesn't load the area, or rest — and say why, naming the injury.
-- Pain <= 3/10 that settles by next morning: training can continue, monitored. RECOVERING: progress gradually, keep within the pain rules.
-- Red flags (sharp/worsening pain, swelling, night pain, limping, suspected bone stress) → advise seeing a physio/doctor. Never diagnose.`
+export const INJURY_RULES_PROMPT = `Injury rules (condition-specific; product modification threshold):
+- Red flags override pain scores and ACTIVE/RECOVERING status: suspected bone stress, focal bone tenderness, night/rest pain, sharp/worsening pain, swelling, altered gait or numbness → stop loading the area and seek clinical assessment. Never diagnose.
+- An ACTIVE injury with pain >= ${INJURY_MODIFY_PAIN_THRESHOLD}/10 affecting a session's sport: do NOT prescribe as-is. Modify, replace with activity that does not load the area, or rest; name the injury. This threshold is a product default, not a validated universal safety boundary.
+- Low pain is not clearance. Pain-monitoring evidence comes from specific rehabilitation conditions, including treated Achilles tendinopathy; it does not clear suspected bone stress or other red flags. Follow clinician restrictions, symptoms, function and next-morning response. RECOVERING: return gradually with condition-specific guidance.`
 
 /**
  * Prompt block for the athlete's open injuries. Always returns a block (even when
@@ -145,7 +145,7 @@ export function formatInjuryConflictsForPrompt(conflicts: InjuryConflict[]): str
   )
   return `INJURY CONFLICT — MUST ACT:
 ${lines.join('\n')}
-- Your recommendation for these sessions MUST be "modify", "reduce_intensity" or "rest" — never "proceed" as planned. Offer cross-training that doesn't load the area, a reduced version within the pain rules, or rest, and explain why in one sentence naming the injury.`
+- Your recommendation for these sessions MUST be "modify", "reduce_intensity" or "rest" — never "proceed" as planned. Offer cross-training that doesn't load the area, a reduced version only if symptoms and clinician restrictions allow, or rest, and explain why in one sentence naming the injury.`
 }
 
 /**
