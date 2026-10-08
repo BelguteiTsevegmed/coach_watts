@@ -1,3 +1,4 @@
+import { buildReadinessContext } from '../server/utils/services/readinessContextService'
 import { plannedWorkoutRepository } from '../server/utils/repositories/plannedWorkoutRepository'
 import './init'
 import { logger, task } from '@trigger.dev/sdk/v3'
@@ -8,9 +9,13 @@ import {
 } from '../server/utils/workout-ai-timeouts'
 import { prisma } from '../server/utils/db'
 import { workoutRepository } from '../server/utils/repositories/workoutRepository'
-import { wellnessRepository } from '../server/utils/repositories/wellnessRepository'
 import { sportSettingsRepository } from '../server/utils/repositories/sportSettingsRepository'
-import { getUserTimezone, getStartOfDaysAgoUTC, formatUserDate } from '../server/utils/date'
+import {
+  getUserTimezone,
+  getUserLocalDate,
+  getStartOfDaysAgoUTC,
+  formatUserDate
+} from '../server/utils/date'
 import { filterGoalsForContext } from '../server/utils/goal-context'
 import { enqueuePlannedWorkoutStructureGeneration } from '../server/utils/planned-workout-structure-trigger'
 import { autoUploadPlannedWorkoutToIntervalsIfEnabled } from '../server/utils/intervals-sync'
@@ -29,7 +34,7 @@ const adHocWorkoutSchema = {
   properties: {
     title: { type: 'string' },
     description: { type: 'string' },
-    type: { type: 'string', enum: ['Ride', 'Run'] }, // Simplified for now
+    type: { type: 'string', enum: ['Ride', 'Run', 'Rest'] }, // Simplified for now
     durationMinutes: { type: 'integer' },
     targetTss: { type: 'integer' },
     intensity: {
@@ -61,7 +66,7 @@ const adHocWorkoutSchema = {
 interface AdHocWorkoutSuggestion {
   title: string
   description: string
-  type: 'Ride' | 'Run'
+  type: 'Ride' | 'Run' | 'Rest'
   durationMinutes: number
   targetTss: number
   intensity: 'Recovery' | 'Endurance' | 'Tempo' | 'Threshold' | 'VO2Max' | 'Anaerobic'
@@ -99,49 +104,47 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
   const defaultType = getDefaultWorkoutType(primarySport)
 
   // Fetch Data
-  const [todayMetric, recentWorkouts, user, athleteProfile, rawActiveGoals, sportSettings] =
-    await Promise.all([
-      wellnessRepository.getByDate(userId, today),
-      workoutRepository.getForUser(userId, {
-        startDate: getStartOfDaysAgoUTC(timezone, 7),
-        limit: 10,
-        orderBy: { date: 'desc' },
-        includeDuplicates: false
-      }),
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { ftp: true, weight: true, maxHr: true, aiPersona: true, distanceUnits: true }
-      }),
-      prisma.report.findFirst({
-        where: { userId, type: 'ATHLETE_PROFILE', status: 'COMPLETED' },
-        orderBy: { createdAt: 'desc' },
-        select: { analysisJson: true }
-      }),
-      prisma.goal.findMany({
-        where: {
-          userId,
-          status: 'ACTIVE'
-        },
-        orderBy: { priority: 'desc' },
-        select: {
-          title: true,
-          type: true,
-          description: true,
-          targetDate: true,
-          eventDate: true,
-          priority: true
-        }
-      }),
-      // Fetch settings for requested type or the athlete's own sport
-      sportSettingsRepository.getForActivityType(userId, preferences?.type || defaultType)
-    ])
+  const [recentWorkouts, user, athleteProfile, rawActiveGoals, sportSettings] = await Promise.all([
+    workoutRepository.getForUser(userId, {
+      startDate: getStartOfDaysAgoUTC(timezone, 7),
+      limit: 10,
+      orderBy: { date: 'desc' },
+      includeDuplicates: false
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { ftp: true, weight: true, maxHr: true, aiPersona: true, distanceUnits: true }
+    }),
+    prisma.report.findFirst({
+      where: { userId, type: 'ATHLETE_PROFILE', status: 'COMPLETED' },
+      orderBy: { createdAt: 'desc' },
+      select: { analysisJson: true }
+    }),
+    prisma.goal.findMany({
+      where: {
+        userId,
+        status: 'ACTIVE'
+      },
+      orderBy: { priority: 'desc' },
+      select: {
+        title: true,
+        type: true,
+        description: true,
+        targetDate: true,
+        eventDate: true,
+        priority: true
+      }
+    }),
+    // Fetch settings for requested type or the athlete's own sport
+    sportSettingsRepository.getForActivityType(userId, preferences?.type || defaultType)
+  ])
   const activeGoals = filterGoalsForContext(rawActiveGoals, timezone, today)
+
+  const readiness = await buildReadinessContext(userId, getUserLocalDate(timezone), timezone)
 
   // Build Context
   let context = `Athlete: primary sport ${getSportLabel(primarySport)}${user?.ftp ? `, FTP ${user.ftp}W` : ''}. Persona: ${user?.aiPersona || 'Supportive'}.`
-  if (todayMetric) {
-    context += `\nRecovery: ${todayMetric.recoveryScore || 'Unknown'}%. Sleep: ${todayMetric.sleepHours || 0}h.`
-  }
+  context += `\n${readiness.prompt}`
   context += `\nRecent Workouts: ${recentWorkouts.length > 0 ? buildWorkoutSummary(recentWorkouts, undefined, user?.distanceUnits) : 'None'}.`
 
   if (sportSettings) {
@@ -192,8 +195,8 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
       Create a workout matching these constraints while optimizing for the athlete's context.`
   } else {
     goalPrompt += `
-      - If recovery is low (<33%), prescribe Active Recovery or Rest (but since the user ASKED for a workout, give a very easy Recovery spin/jog).
-      - If recovery is good, prescribe a workout that fits the current focus or maintains fitness.`
+      - Use the resolved personal readiness context; a requested workout does not override illness, symptoms or poor athlete-reported readiness.
+      - Propose Rest with zero dose when indicated, and explain why.`
   }
 
   const prompt = `${buildCoachRoleIntro({
@@ -226,7 +229,7 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
     ${buildCoachingPrinciples(primarySport)}
     
     OUTPUT:
-    JSON with title, description, type (Ride/Run), durationMinutes, targetTss, intensity, objective, executionCues, and reasoning.`
+    JSON with title, description, type (Ride/Run/Rest; Rest has durationMinutes=0 and targetTss=0), durationMinutes, targetTss, intensity, objective, executionCues, and reasoning.`
 
   const suggestion = await generateStructuredAnalysis<AdHocWorkoutSuggestion>(
     prompt,
@@ -254,6 +257,10 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
     type: suggestion.type,
     durationSec: suggestion.durationMinutes * 60,
     tss: suggestion.targetTss,
+    rawJson: {
+      readinessContext: readiness.context,
+      prescriptionEffort: ['Recovery', 'Endurance'].includes(suggestion.intensity) ? 'easy' : 'hard'
+    },
     syncStatus: 'LOCAL_ONLY', // Mark as local initially
     externalId: `adhoc-${userId}-${Date.now()}`, // Generate unique external ID
     managedBy: 'COACH_WATTS'
@@ -274,6 +281,8 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
     tss: plannedWorkout.tss,
     managedBy: plannedWorkout.managedBy
   })
+
+  if (plannedWorkout.type === 'Rest') return { success: true, plannedWorkoutId: plannedWorkout.id }
 
   // Trigger Structure Generation. The revision prevents any older job from
   // replacing this newly requested structure.

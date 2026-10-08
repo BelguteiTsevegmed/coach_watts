@@ -1,5 +1,5 @@
 import { prisma } from '../db'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { publishActivityEvent } from '../activity-realtime'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
@@ -66,13 +66,39 @@ export const plannedWorkoutRepository = {
    * Update a planned workout
    * Enforces userId check if provided
    */
-  async update(id: string, userId: string, data: Prisma.PlannedWorkoutUpdateInput) {
+  async update(
+    id: string,
+    userId: string,
+    data: Prisma.PlannedWorkoutUpdateInput,
+    options: { expectedUpdatedAt?: Date } = {}
+  ) {
+    if (data.type === 'Rest') {
+      data = {
+        ...data,
+        durationSec: 0,
+        distanceMeters: 0,
+        tss: 0,
+        workIntensity: 0,
+        structuredWorkout: Prisma.DbNull,
+        stimulusSummary: Prisma.DbNull,
+        structureRevision: { increment: 1 },
+        generationRevision: { increment: 1 }
+      }
+    }
     const updated = await prisma.$transaction(
       async (tx) => {
         await lockPrescriptionSchedule(tx, userId)
         if (!hasPrescriptionMutation(data as Record<string, unknown>))
           return tx.plannedWorkout.update({ where: { id, userId }, data })
         const existing = await tx.plannedWorkout.findUniqueOrThrow({ where: { id, userId } })
+        if (
+          options.expectedUpdatedAt &&
+          existing.updatedAt.getTime() !== options.expectedUpdatedAt.getTime()
+        )
+          throw createError({
+            statusCode: 409,
+            message: 'This session changed after the recommendation. Refresh before applying it.'
+          })
         if (
           existing.structuredWorkout &&
           !data.structuredWorkout &&

@@ -44,7 +44,8 @@ Coaching evidence/policy: ${COACHING_EVIDENCE_VERSION} (reviewed ${COACHING_EVID
 
 /** Product score bands are decision prompts, never clearance or diagnoses. */
 export const READINESS_DECISION_PROMPT = `Combine recent sport-specific load, symptoms, athlete feedback, sleep and personal sensor trends. TSB/ATL/CTL are descriptive context, not the primary decision or a race-readiness test.
-- Recovery score bands are product heuristics: <33% suggests rest/easy work; 33-50% suggests less intensity; 50-67% prompts review of hard work. Higher scores do not automatically clear the planned session or justify adding intensity.
+- Use the shared RESOLVED PERSONAL READINESS facts, comparable personal baselines and athlete reports. Recovery scores are source-specific observations; no universal score band changes a session. Higher scores do not automatically clear the planned session or justify adding intensity.
+- An isolated sensor anomaly alone never triggers an automatic hard-session change. Persistent trends require subjective context; poor athlete reports can justify a reduction even with usual sensors.
 - A score or sensor trend never overrides illness red flags, injury restrictions or clinician advice. Missing recovery data remains unknown; don't infer clearance from TSB.
 - Review future load and event demands with recent exposure and individual response; fixed TSB numbers cannot diagnose overtraining or promise injury prevention.`
 

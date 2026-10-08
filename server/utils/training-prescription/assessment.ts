@@ -1,10 +1,11 @@
+import { READINESS_POLICY, type ResolvedReadiness } from '../../../shared/readiness'
 import { classifySportFamily } from '../coaching/sport'
 import { getEffectiveAffectedSports, INJURY_MODIFY_PAIN_THRESHOLD } from '../../../shared/injuries'
 import { DEFAULT_PROGRESSION_POLICY, type SportVolumeTargets } from '../plans/progression-policy'
 
 /** Product heuristics; passing these rules is not medical clearance. */
 export const PRESCRIPTION_POLICY = {
-  version: 'training-prescription-v1',
+  version: 'training-prescription-v2',
   historyDays: 28,
   runExposureDays: 30,
   minimumHardDayGap: 2,
@@ -56,6 +57,7 @@ export type PrescriptionSnapshot = {
   weeks: PrescriptionWeek[]
   availability: PrescriptionAvailability[]
   injuries: PrescriptionInjury[]
+  readiness?: ResolvedReadiness
 }
 export type PrescriptionViolation = {
   rule: string
@@ -182,6 +184,27 @@ export function assessTrainingPrescription(
       continue
     }
     if (isRest(proposal)) continue
+    const readiness = snapshot.readiness
+    // Current feedback expires: do not project today's symptoms through the whole plan.
+    if (
+      readiness &&
+      readiness.asOf === snapshot.today &&
+      proposal.date >= snapshot.today &&
+      proposal.date <= readiness.application.horizonThrough
+    ) {
+      if (
+        readiness.decision === 'rest' ||
+        (readiness.decision === 'reduce' &&
+          (proposal.hard !== false ||
+            (proposal.durationSec || 0) > READINESS_POLICY.reducedSessionMinutes * 60))
+      )
+        hit(
+          'personal_readiness',
+          readiness.reasons.join(' ') +
+            ' Propose rest or confirmed easy work and reassess before applying.',
+          proposal
+        )
+    }
     for (const injury of snapshot.injuries) {
       if (
         !['ACTIVE', 'RECOVERING'].includes(injury.status) ||
@@ -446,6 +469,7 @@ export function assessTrainingPrescription(
     violations,
     adjustments,
     proposals,
+    readiness: snapshot.readiness ?? null,
     imported: !!options.imported
   }
 }

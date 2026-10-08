@@ -210,6 +210,56 @@ describe('wellnessRepository', () => {
       )
     })
 
+    it('keeps origins of untouched metrics when another provider updates the row', async () => {
+      vi.mocked(prisma.wellness.findUnique).mockResolvedValue({
+        id: '1',
+        userId,
+        date,
+        hrv: 60,
+        rawJson: {
+          _readinessProvenance: { hrv: { source: 'whoop', device: 'band-1', method: 'overnight' } }
+        },
+        history: []
+      } as any)
+      await wellnessRepository.upsert(
+        userId,
+        date,
+        { userId, date } as any,
+        { fatigue: 8, rawJson: { note: 'check-in' } } as any,
+        'manual',
+        { replaceRawJson: true }
+      )
+      const update = vi.mocked(prisma.wellness.upsert).mock.calls[0]![0].update
+      expect(update.rawJson).toMatchObject({
+        note: 'check-in',
+        _readinessProvenance: {
+          hrv: { source: 'whoop', device: 'band-1', method: 'overnight' },
+          fatigue: { source: 'manual' }
+        }
+      })
+    })
+    it('updates field attribution even when a new device reports the same value', async () => {
+      vi.mocked(prisma.wellness.findUnique).mockResolvedValue({
+        id: '1',
+        userId,
+        date,
+        hrv: 60,
+        history: []
+      } as any)
+      await wellnessRepository.upsert(
+        userId,
+        date,
+        { userId, date } as any,
+        { hrv: 60, rawJson: { deviceId: 'new-band', measurementMethod: 'morning' } } as any,
+        'oura'
+      )
+      const update = vi.mocked(prisma.wellness.upsert).mock.calls[0]![0].update
+      expect(update.rawJson).toMatchObject({
+        _readinessProvenance: { hrv: { source: 'oura', device: 'new-band', method: 'morning' } }
+      })
+      expect(update).not.toHaveProperty('history')
+    })
+
     it('should replace rawJson when configured for full-snapshot providers', async () => {
       vi.mocked(prisma.wellness.findUnique).mockResolvedValue({
         id: '1',

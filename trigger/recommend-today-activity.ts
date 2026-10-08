@@ -1,3 +1,5 @@
+import { applyReadinessAdvice } from '../server/utils/coaching/readiness-advice'
+import { buildReadinessContext } from '../server/utils/services/readinessContextService'
 import './init'
 import { logger, task } from '@trigger.dev/sdk/v3'
 import { generateStructuredAnalysis, buildWorkoutSummary } from '../server/utils/gemini'
@@ -725,6 +727,8 @@ ${projectedMetrics
       }
     }
 
+    const readiness = await buildReadinessContext(userId, today, userTimezone)
+
     // Build Wellness Analysis Context
     let wellnessAnalysisContext = ''
     if (enrichedTodayMetric?.aiAnalysisJson) {
@@ -752,7 +756,7 @@ ${analysis.recommendations ? 'Recommendations:\n' + analysis.recommendations.map
     })
 
     const fitbitRecoveryAlertContext = `
-FITBIT RECOVERY ALERT CHECK:
+LEGACY FITBIT OBSERVATION (not a session-change trigger):
 - ${fitbitRecoveryAlert.summary}
 `
 
@@ -927,6 +931,8 @@ ${enrichedTodayMetric.spO2 ? `- SpO2: ${enrichedTodayMetric.spO2}%` : ''}
 
 ${wellnessAnalysisContext}
 ${wellnessEventsContext}
+${readiness.prompt}
+
 ${fitbitRecoveryAlertContext}
 ${subjectiveDataIntegrityContext}
 ${mealTargetContextText}
@@ -953,7 +959,7 @@ CRITICAL INSTRUCTIONS:
 3. IGNORE any conflicting TSB/CTL values found in the "ATHLETE PROFILE" section if they differ from the Source of Truth, as they may be stale summaries.
 4. Refer to the "PROJECTED FITNESS TRENDS" for future state, but combine current recorded load with symptoms, feedback and personal recovery trends. TSB alone cannot clear training.
 5. RESPECT TRAINING AVAILABILITY: do not recommend sessions outside declared availability windows unless user feedback explicitly asks to override.
-6. If Fitbit recovery alert is triggered, bias strongly toward 'rest' or 'reduce_intensity' unless user feedback explicitly requests otherwise.
+6. Fitbit scores/alerts are device observations only; use the resolved readiness policy for session changes.
 7. Never invent subjective scores. If stress, fatigue, soreness, mood, or motivation are missing, explicitly describe them as "not reported today" instead of assigning a value.
 8. If a synced wellness event overlaps today or the recent biometrics downturn, explicitly call out that correlation in your reasoning and adjust the recommendation accordingly.
 9. Treat future goals, athlete-profile themes, and event categories as planning context only. They do NOT make a workout scheduled unless that intensity appears in the planned workouts list.
@@ -1107,7 +1113,10 @@ Maintain your **${aiSettings.aiPersona}** persona throughout.`
         injuryGuard: (consistentAnalysis as any).injury_guard
       })
     }
-    Object.assign(analysis, consistentAnalysis)
+    Object.assign(
+      analysis,
+      applyReadinessAdvice(consistentAnalysis, readiness.context, primaryPlannedWorkout)
+    )
 
     // Update or create the recommendation
     let recommendation

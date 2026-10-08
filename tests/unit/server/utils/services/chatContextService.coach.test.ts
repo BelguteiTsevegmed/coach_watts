@@ -76,6 +76,7 @@ describe('chat coach persona & body status', () => {
     for (const phrase of CYCLING_SLANG) {
       expect(systemInstruction).not.toContain(phrase)
     }
+    expect(context).toContain('RESOLVED PERSONAL READINESS: fixture context')
     expect(context).toContain('**Primary Sport** (from recent training): running')
   })
 
@@ -138,3 +139,16 @@ describe('chat coach persona & body status', () => {
     expect(context).toContain('- None logged.')
   })
 })
+
+vi.mock('../../../../../server/utils/services/readinessContextService', () => ({
+  buildReadinessContext: vi.fn().mockResolvedValue({
+    context: {
+      version: 'readiness-v1',
+      asOf: '2026-03-10',
+      decision: 'unknown',
+      reasons: [],
+      conflicts: []
+    },
+    prompt: 'RESOLVED PERSONAL READINESS: fixture context'
+  })
+}))

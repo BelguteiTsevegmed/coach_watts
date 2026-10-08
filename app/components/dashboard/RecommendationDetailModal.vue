@@ -101,7 +101,12 @@
             </p>
             <p class="text-sm text-muted mb-2">
               {{ recommendation.analysisJson.suggested_modifications.new_duration_min }} min •
-              {{ recommendation.analysisJson.suggested_modifications.new_tss }} TSS
+              <template
+                v-if="Number.isFinite(recommendation.analysisJson.suggested_modifications.new_tss)"
+              >
+                {{ recommendation.analysisJson.suggested_modifications.new_tss }} TSS
+              </template>
+              <template v-else>TSS unknown</template>
             </p>
             <p class="text-sm">
               {{ recommendation.analysisJson.suggested_modifications.description }}

@@ -1,3 +1,5 @@
+import { applyReadinessAdvice } from '../server/utils/coaching/readiness-advice'
+import { buildReadinessContext } from '../server/utils/services/readinessContextService'
 import './init'
 import { logger, task } from '@trigger.dev/sdk/v3'
 import { generateStructuredAnalysis } from '../server/utils/gemini'
@@ -203,6 +205,8 @@ export const dailyCoachTask = task({
       return { success: true, skipped: true, reason: 'AUTO_ANALYZE_DISABLED' }
     }
 
+    const readiness = await buildReadinessContext(userId, todayDateOnly, timezone)
+
     // Generate comprehensive training context (Last 30 Days)
     const thirtyDaysAgo = getStartOfDaysAgoUTC(timezone, 30)
     const trainingContext = await generateTrainingContext(userId, thirtyDaysAgo, todayEnd, {
@@ -280,6 +284,8 @@ ${aiSettings.aiContext ? `USER PROVIDED CONTEXT / ABOUT ME / SPECIAL INSTRUCTION
 
 ${formattedContext}
 
+${readiness.prompt}
+
 YESTERDAY'S TRAINING:
 ${
   yesterdayWorkout
@@ -299,7 +305,7 @@ ${todayMetric.spO2 ? `- SpO2: ${todayMetric.spO2}%` : ''}`
     : 'No recovery data available'
 }
 
-FITBIT RECOVERY ALERT CHECK:
+LEGACY FITBIT OBSERVATION (not a session-change trigger):
 - ${fitbitRecoveryAlert.summary}
 
 ${formatInjuriesForPrompt(openInjuries, { today: todayDateOnly })}
@@ -310,9 +316,9 @@ ${READINESS_DECISION_PROMPT}
 Also consider:
 - Yesterday's TSS was ${yesterdayWorkout?.tss || 0}
 - Multiple high-load days increase fatigue risk
-- Low HRV combined with high HR indicates stress
-- Poor sleep (<7h) reduces training capacity
-- If Fitbit recovery alert is triggered, prefer 'rest' or 'reduce_intensity' unless user explicitly overrides with strong justification
+- Review personal trends together with symptoms and feedback; sensors do not diagnose stress.
+- Review short sleep with personal trends and subjective reports.
+- Fitbit scores/alerts are device observations only; use the resolved readiness policy for session changes.
 ${activeGoals.length > 0 ? `- Consider how today's recommendation impacts progress toward active goals` : ''}
 
 CRITICAL: Use current load alongside symptoms, feedback and recovery trends. If Recovery Score is "Unknown", state that uncertainty; do not treat TSB as clearance.
@@ -330,18 +336,38 @@ ${buildCoachingPrinciples(primarySport)}`
 
     logger.log(`Generating suggestion with Gemini (${aiSettings.aiModelPreference})`)
 
-    const suggestion = await generateStructuredAnalysis(
-      prompt,
-      suggestionSchema,
-      aiSettings.aiModelPreference,
-      {
-        userId,
-        operation: 'daily_coach_suggestion',
-        entityType: 'Report',
-        entityId: undefined
-      }
-    )
+    const generated = await generateStructuredAnalysis<{
+      action: string
+      reason: string
+      confidence: number
+      modification?: string
+    }>(prompt, suggestionSchema, aiSettings.aiModelPreference, {
+      userId,
+      operation: 'daily_coach_suggestion',
+      entityType: 'Report',
+      entityId: undefined
+    })
 
+    const resolvedAdvice = applyReadinessAdvice(
+      { recommendation: generated.action, reasoning: generated.reason },
+      readiness.context,
+      null
+    )
+    const suggestion = {
+      ...generated,
+      action: resolvedAdvice.recommendation,
+      reason: resolvedAdvice.reasoning,
+      ...(readiness.context.decision === 'rest' || readiness.context.decision === 'reduce'
+        ? {
+            modification:
+              resolvedAdvice.recommendation === 'rest'
+                ? 'Rest and reassess; calendar unchanged.'
+                : 'Replace key intensity with easy work or rest; reassess and validate before applying.'
+          }
+        : {}),
+      readiness_context: readiness.context,
+      application_status: 'advice_only'
+    }
     logger.log('Suggestion generated', { suggestion })
 
     // Save suggestion as report
