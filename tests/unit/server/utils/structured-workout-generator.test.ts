@@ -57,4 +57,15 @@ describe('structured workout generator resolver', () => {
     expect(resolveStructureGeneratorModeForWorkout('Run')).toBe('draft_json_v1')
     expect(resolveStructureGeneratorModeForWorkout('WeightTraining')).toBe('legacy_json')
   })
+  it('opts into versioned families only for supported sports', () => {
+    const flags = { structuredWorkout: { generator: 'workout_families_v1' } }
+    expect(readStructuredWorkoutGeneratorModeFromFeatureFlags(flags)).toBe('workout_families_v1')
+    expect(resolveStructureGeneratorModeForWorkout('Run', flags)).toBe('workout_families_v1')
+    expect(resolveStructureGeneratorModeForWorkout('VirtualRide', flags)).toBe(
+      'workout_families_v1'
+    )
+    expect(resolveStructureGeneratorModeForWorkout('Swim', flags)).toBe('draft_json_v1')
+    expect(resolveStructureGeneratorModeForWorkout('Gym', flags)).toBe('legacy_json')
+    expect(resolveStructureGeneratorModeForWorkout('Run')).toBe('draft_json_v1')
+  })
 })

@@ -44,6 +44,7 @@ export type CanonicalStructuredWorkout = {
   exercises?: any[]
   blocks?: any[]
   messages?: any[]
+  workoutFamily?: Record<string, unknown>
   diagnostics?: WorkoutContractIssue[]
 }
 
@@ -322,6 +323,9 @@ export function adaptStructuredWorkout(
     ...(Array.isArray(input.exercises) ? { exercises: input.exercises } : {}),
     ...(Array.isArray(input.blocks) ? { blocks: input.blocks } : {}),
     ...(Array.isArray(input.messages) ? { messages: input.messages } : {}),
+    ...(input.workoutFamily && typeof input.workoutFamily === 'object'
+      ? { workoutFamily: input.workoutFamily }
+      : {}),
     ...(diagnostics.length > 0 ? { diagnostics } : {})
   }
 }
