@@ -14,6 +14,7 @@ import { hasActiveStructureGenerationRun } from '../../../../server/utils/struct
 
 vi.mock('../../../../server/utils/db', () => ({
   prisma: {
+    $transaction: vi.fn(async (callback: any) => callback(prisma)),
     plannedWorkout: {
       findUnique: vi.fn(),
       update: vi.fn()
@@ -160,6 +161,40 @@ describe('planned-workout-intervals-publish', () => {
     expect(createIntervalsPlannedWorkout).toHaveBeenCalled()
   })
 
+  it('passes the captured sport, zero dose and raw description to the publication guard', async () => {
+    vi.mocked(prisma.plannedWorkout.findUnique).mockResolvedValue({
+      ...baseWorkout,
+      type: 'Rest',
+      durationSec: 0,
+      tss: 0,
+      description: null
+    } as any)
+    await publishPlannedWorkoutToIntervals(userId, workoutId)
+    expect(createIntervalsPlannedWorkout).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ type: 'Rest', durationSec: 0, tss: 0, description: null })
+    )
+  })
+
+  it('records the returned identity when the locked update recreates a missing event', async () => {
+    vi.mocked(prisma.plannedWorkout.findUnique).mockResolvedValue({
+      ...baseWorkout,
+      externalId: '99999'
+    } as any)
+    vi.mocked(updateIntervalsPlannedWorkout).mockResolvedValue({ id: 54321 } as any)
+    const result = await publishPlannedWorkoutToIntervals(userId, workoutId)
+    expect(result).toMatchObject({ success: true, action: 'recreated' })
+    expect(plannedWorkoutRepository.update).toHaveBeenCalledWith(
+      workoutId,
+      userId,
+      expect.objectContaining({ externalId: '54321' })
+    )
+    expect(plannedWorkoutPublishRepository.upsert).toHaveBeenCalledWith(
+      workoutId,
+      'intervals',
+      expect.objectContaining({ externalId: '54321' })
+    )
+  })
   it('recreates on intervals when update returns 404', async () => {
     vi.mocked(prisma.plannedWorkout.findUnique).mockResolvedValue({
       ...baseWorkout,
@@ -191,3 +226,8 @@ describe('planned-workout-intervals-publish', () => {
     ).toContain('FTP')
   })
 })
+
+vi.mock('../../../../server/utils/training-prescription/service', async (importOriginal) => ({
+  ...(await importOriginal<any>()),
+  ...(await import('../../helpers/prescription-boundary-double')).prescriptionBoundaryDouble
+}))

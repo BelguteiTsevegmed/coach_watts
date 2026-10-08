@@ -28,6 +28,8 @@ type InjuryRecord = {
   resolvedAt: Date | null
   affectedSports: string[]
   notes: string | null
+  loadRestriction?: string | null
+  redFlags?: string[]
   createdAt: Date
   updatedAt: Date
 }
@@ -45,6 +47,8 @@ export function serializeInjury(injury: InjuryRecord): InjuryDTO {
     resolvedAt: injury.resolvedAt ? injury.resolvedAt.toISOString() : null,
     affectedSports: injury.affectedSports || [],
     notes: injury.notes,
+    loadRestriction: injury.loadRestriction ?? null,
+    redFlags: injury.redFlags ?? [],
     createdAt: injury.createdAt.toISOString(),
     updatedAt: injury.updatedAt.toISOString()
   }
@@ -103,6 +107,8 @@ export const createInjurySchema = z.object({
   status: z.enum(INJURY_STATUSES).optional(),
   onsetDate: dateString.optional(),
   affectedSports: sportsSchema.optional(),
+  loadRestriction: z.enum(['NO_LOADING', 'MODIFIED_ONLY']).nullable().optional(),
+  redFlags: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
   notes: optionalText(2000)
 })
 
@@ -116,6 +122,8 @@ export const updateInjurySchema = z
     status: z.enum(INJURY_STATUSES).optional(),
     onsetDate: dateString.optional(),
     affectedSports: sportsSchema.optional(),
+    loadRestriction: z.enum(['NO_LOADING', 'MODIFIED_ONLY']).nullable().optional(),
+    redFlags: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
     notes: optionalText(2000)
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
@@ -184,6 +192,8 @@ export const injuryService = {
         onsetDate,
         resolvedAt: status === 'RESOLVED' ? new Date() : null,
         affectedSports: input.affectedSports ?? [],
+        loadRestriction: input.loadRestriction ?? null,
+        redFlags: input.redFlags ?? [],
         notes: input.notes ?? null
       }
     })
@@ -204,6 +214,8 @@ export const injuryService = {
         ...(input.status !== undefined && { status: input.status }),
         ...(input.onsetDate !== undefined && { onsetDate: parseInjuryDate(input.onsetDate)! }),
         ...(input.affectedSports !== undefined && { affectedSports: input.affectedSports }),
+        ...(input.loadRestriction !== undefined && { loadRestriction: input.loadRestriction }),
+        ...(input.redFlags !== undefined && { redFlags: input.redFlags }),
         ...(input.notes !== undefined && { notes: input.notes }),
         ...(resolvedAt !== undefined && { resolvedAt })
       }

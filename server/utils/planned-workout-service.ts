@@ -1,11 +1,10 @@
-import { prisma } from './db'
 import {
-  createIntervalsPlannedWorkout,
-  deleteIntervalsPlannedWorkout,
-  normalizeIntervalsSportType,
-  isIntervalsEventId,
-  cleanIntervalsDescription
-} from './intervals'
+  lockPrescriptionSchedule,
+  validatePrescriptionWrite,
+  withPrescriptionAssessment
+} from './training-prescription/service'
+import { prisma } from './db'
+import { normalizeIntervalsSportType, isIntervalsEventId } from './intervals'
 import { syncPlannedWorkoutToIntervals } from './intervals-sync'
 import { plannedWorkoutRepository } from './repositories/plannedWorkoutRepository'
 import { metabolicService } from './services/metabolicService'
@@ -115,36 +114,10 @@ export async function createPlannedWorkoutForUser(userId: string, body: any) {
   const workoutDoc = await buildWorkoutDoc(userId, null, body)
   const { integration, importPlannedWorkouts } = await getPlannedWorkoutSyncSettings(userId)
 
-  let intervalsWorkout = null
-  let externalId = `adhoc-${Date.now()}`
-  let syncStatus = 'LOCAL_ONLY'
+  const externalId = `adhoc-${Date.now()}`
+  const syncStatus = 'LOCAL_ONLY'
 
-  if (integration && importPlannedWorkouts) {
-    try {
-      intervalsWorkout = await createIntervalsPlannedWorkout(integration, {
-        date: forcedDate,
-        startTime: body.startTime,
-        title: body.title,
-        description: body.description,
-        type: body.type || 'Ride',
-        category: body.category,
-        durationSec: body.durationSec,
-        tss: body.tss,
-        workout_doc: workoutDoc || undefined
-      })
-      externalId = String(intervalsWorkout.id)
-      syncStatus = 'SYNCED'
-    } catch (error) {
-      console.error('Failed to sync to Intervals.icu:', error)
-      syncStatus = 'PENDING'
-    }
-  }
-
-  if (structureWrite && syncStatus === 'SYNCED') {
-    delete (structureWrite.data as any).syncStatus
-  }
-
-  const plannedWorkout = await plannedWorkoutRepository.create({
+  let plannedWorkout = await plannedWorkoutRepository.create({
     userId,
     externalId,
     date: forcedDate,
@@ -153,7 +126,8 @@ export async function createPlannedWorkoutForUser(userId: string, body: any) {
     description: body.description || '',
     type: body.type || 'Ride',
     category: body.category,
-    durationSec: body.durationSec || 3600,
+    durationSec: body.durationSec ?? (body.type === 'Rest' ? 0 : 3600),
+    distanceMeters: body.distanceMeters,
     tss: body.tss,
     workIntensity: body.workIntensity,
     fuelingStrategy: body.fuelingStrategy || 'STANDARD',
@@ -164,8 +138,23 @@ export async function createPlannedWorkoutForUser(userId: string, body: any) {
       ? { trainingWeekId: body.trainingWeekId }
       : {}),
     ...(structureWrite ? structureWrite.data : {}),
-    rawJson: intervalsWorkout || {}
+    rawJson: {}
   })
+
+  if (integration && importPlannedWorkouts) {
+    const synced = await syncPlannedWorkoutToIntervals(
+      'CREATE',
+      { ...plannedWorkout, workout_doc: workoutDoc || undefined },
+      userId
+    )
+    plannedWorkout = await plannedWorkoutRepository.update(plannedWorkout.id, userId, {
+      syncStatus: synced.synced ? 'SYNCED' : 'PENDING',
+      syncError: synced.error || null,
+      ...(synced.synced && synced.result?.id
+        ? { externalId: String(synced.result.id), lastSyncedAt: new Date() }
+        : {})
+    })
+  }
 
   try {
     if (await isNutritionTrackingEnabled(userId)) {
@@ -204,27 +193,6 @@ export async function updatePlannedWorkoutForUser(userId: string, workoutId: str
     thresholdPace: Number(structureSettings?.thresholdPace || 0)
   }
 
-  if (body.structuredWorkout !== undefined) {
-    await writeCanonicalPlannedWorkoutStructure({
-      plannedWorkoutId: workoutId,
-      source: 'MANUAL_EDIT',
-      workoutType: body.type || existing.type,
-      structure: body.structuredWorkout,
-      zoneProfileSnapshot:
-        (existing.structuredWorkout as any)?.zoneProfileSnapshot ||
-        createZoneProfileSnapshot(structureSettings),
-      syncStatus: importPlannedWorkouts ? 'PENDING' : existing.syncStatus,
-      refs,
-      fallbackOrder: targetPolicy.fallbackOrder as Array<'power' | 'heartRate' | 'pace' | 'rpe'>,
-      preservePlannedDuration:
-        body.durationSec || body.duration_minutes
-          ? body.duration_minutes
-            ? body.duration_minutes * 60
-            : body.durationSec
-          : existing.durationSec
-    })
-  }
-
   // Content edits (not date-only moves) re-tag AI-managed sessions as athlete-owned
   // so RECALCULATE_WEEK / plan cleanup preserve them instead of silently deleting.
   const isContentEdit =
@@ -239,7 +207,7 @@ export async function updatePlannedWorkoutForUser(userId: string, workoutId: str
     body.structuredWorkout !== undefined ||
     body.startTime !== undefined
 
-  const updated = (await plannedWorkoutRepository.update(workoutId, userId, {
+  const editData = {
     ...(forcedDate && { date: forcedDate }),
     ...(body.title && { title: body.title }),
     ...(body.description !== undefined && { description: body.description }),
@@ -255,7 +223,33 @@ export async function updatePlannedWorkoutForUser(userId: string, workoutId: str
     modifiedLocally: true,
     ...(isContentEdit && existing.managedBy !== 'USER' ? { managedBy: 'USER' } : {}),
     ...(importPlannedWorkouts && !body.structuredWorkout && { syncStatus: 'PENDING' })
-  })) as any
+  }
+
+  let updated: any
+  if (body.structuredWorkout !== undefined) {
+    const write = await writeCanonicalPlannedWorkoutStructure({
+      plannedWorkoutId: workoutId,
+      source: 'MANUAL_EDIT',
+      extra: editData,
+      workoutType: body.type || existing.type,
+      structure: body.structuredWorkout,
+      zoneProfileSnapshot:
+        (existing.structuredWorkout as any)?.zoneProfileSnapshot ||
+        createZoneProfileSnapshot(structureSettings),
+      syncStatus: importPlannedWorkouts ? 'PENDING' : existing.syncStatus,
+      refs,
+      fallbackOrder: targetPolicy.fallbackOrder as Array<'power' | 'heartRate' | 'pace' | 'rpe'>,
+      preservePlannedDuration:
+        body.durationSec || body.duration_minutes
+          ? body.duration_minutes
+            ? body.duration_minutes * 60
+            : body.durationSec
+          : existing.durationSec
+    })
+    updated = write.workout
+  } else {
+    updated = await plannedWorkoutRepository.update(workoutId, userId, editData)
+  }
 
   try {
     if (await isNutritionTrackingEnabled(userId)) {
@@ -269,18 +263,18 @@ export async function updatePlannedWorkoutForUser(userId: string, workoutId: str
 
   const isLocal = existing.syncStatus === 'LOCAL_ONLY' || !isIntervalsEventId(existing.externalId)
   const workoutDoc = await buildWorkoutDoc(userId, updated, body)
-  const cleanDescription = cleanIntervalsDescription(updated.description || '')
 
   if (importPlannedWorkouts) {
     const syncResult = await syncPlannedWorkoutToIntervals(
       isLocal ? 'CREATE' : 'UPDATE',
       {
         id: updated.id,
+        structureRevision: updated.structureRevision,
         externalId: updated.externalId,
         date: updated.date,
         startTime: updated.startTime,
         title: updated.title,
-        description: cleanDescription,
+        description: updated.description,
         type: updated.type,
         durationSec: updated.durationSec,
         tss: updated.tss,
@@ -322,21 +316,6 @@ export async function deletePlannedWorkoutForUser(userId: string, workoutId: str
     throw createError({ statusCode: 404, message: 'Workout not found' })
   }
 
-  const { integration, importPlannedWorkouts } = await getPlannedWorkoutSyncSettings(userId)
-  if (integration && workout.externalId && importPlannedWorkouts) {
-    if (isIntervalsEventId(workout.externalId)) {
-      try {
-        await deleteIntervalsPlannedWorkout(integration, workout.externalId)
-      } catch (error) {
-        console.error('Failed to delete from Intervals.icu:', error)
-      }
-    } else {
-      console.info(
-        `[deletePlannedWorkoutForUser] skipping delete from Intervals.icu: ${workout.externalId} is not a valid Intervals ID`
-      )
-    }
-  }
-
   await plannedWorkoutRepository.delete(workoutId, userId)
 
   try {
@@ -375,19 +354,50 @@ export async function movePlannedWorkoutForUser(
     }
   })
 
-  await prisma.$transaction(async (tx) => {
-    if (conflictingWorkout) {
-      await tx.plannedWorkout.update({
-        where: { id: conflictingWorkout.id },
-        data: { date: sourceWorkout.date }
+  await prisma.$transaction(
+    async (tx) => {
+      await lockPrescriptionSchedule(tx, userId)
+      const currentSource = await tx.plannedWorkout.findUniqueOrThrow({
+        where: { id: workoutId, userId }
       })
-    }
+      const currentConflict = await tx.plannedWorkout.findFirst({
+        where: { userId, date: targetDate, id: { not: workoutId } }
+      })
+      if (
+        currentSource.updatedAt.getTime() !== sourceWorkout.updatedAt.getTime() ||
+        currentConflict?.id !== conflictingWorkout?.id
+      )
+        throw createError({
+          statusCode: 409,
+          message: 'The schedule changed before this move. Reload and try again.'
+        })
+      const proposals = [
+        { ...currentSource, date: targetDate },
+        ...(currentConflict ? [{ ...currentConflict, date: currentSource.date }] : [])
+      ]
+      const assessment = await validatePrescriptionWrite(tx, userId, proposals, {
+        source: 'calendar-move'
+      })
+      if (conflictingWorkout) {
+        await tx.plannedWorkout.update({
+          where: { id: conflictingWorkout.id },
+          data: {
+            date: sourceWorkout.date,
+            rawJson: withPrescriptionAssessment(conflictingWorkout.rawJson, assessment.id)
+          }
+        })
+      }
 
-    await tx.plannedWorkout.update({
-      where: { id: workoutId },
-      data: { date: targetDate }
-    })
-  })
+      await tx.plannedWorkout.update({
+        where: { id: workoutId },
+        data: {
+          date: targetDate,
+          rawJson: withPrescriptionAssessment(sourceWorkout.rawJson, assessment.id)
+        }
+      })
+    },
+    { isolationLevel: 'Serializable' }
+  )
 
   return { success: true }
 }

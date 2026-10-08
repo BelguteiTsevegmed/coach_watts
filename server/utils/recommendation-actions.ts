@@ -1,3 +1,4 @@
+import { plannedWorkoutRepository } from './repositories/plannedWorkoutRepository'
 import { prisma } from './db'
 import {
   syncPlannedWorkoutToIntervals,
@@ -87,37 +88,32 @@ export async function acceptActivityRecommendation(userId: string, recommendatio
   let updatedWorkout
 
   if (targetPlannedWorkoutId) {
-    updatedWorkout = await prisma.plannedWorkout.update({
-      where: { id: targetPlannedWorkoutId },
-      data: {
-        title,
-        type,
-        durationSec,
-        tss: modifications.new_tss,
-        description: newDescription,
-        modifiedLocally: true,
-        syncStatus: nextSyncStatus(targetWorkout?.syncStatus),
-        syncError: null
-      }
+    updatedWorkout = await plannedWorkoutRepository.update(targetPlannedWorkoutId, userId, {
+      title,
+      type,
+      durationSec,
+      tss: modifications.new_tss,
+      description: newDescription,
+      modifiedLocally: true,
+      syncStatus: nextSyncStatus(targetWorkout?.syncStatus),
+      syncError: null
     })
   } else {
-    updatedWorkout = await prisma.plannedWorkout.create({
-      data: {
-        userId,
-        externalId: `recommendation-${recommendationId}`,
-        date: recommendation.date,
-        title,
-        description: newDescription,
-        type,
-        durationSec,
-        tss: modifications.new_tss,
-        completed: false,
-        modifiedLocally: true,
-        syncStatus: 'LOCAL_ONLY',
-        syncError: null,
-        rawJson: {},
-        managedBy: 'COACH_WATTS'
-      }
+    updatedWorkout = await plannedWorkoutRepository.create({
+      userId,
+      externalId: `recommendation-${recommendationId}`,
+      date: recommendation.date,
+      title,
+      description: newDescription,
+      type,
+      durationSec,
+      tss: modifications.new_tss,
+      completed: false,
+      modifiedLocally: true,
+      syncStatus: 'LOCAL_ONLY',
+      syncError: null,
+      rawJson: {},
+      managedBy: 'COACH_WATTS'
     })
     targetPlannedWorkoutId = updatedWorkout.id
   }
@@ -168,8 +164,10 @@ export async function acceptActivityRecommendation(userId: string, recommendatio
       'UPDATE',
       {
         id: updatedWorkout.id,
+        structureRevision: updatedWorkout.structureRevision,
         externalId: updatedWorkout.externalId,
         date: updatedWorkout.date,
+        startTime: updatedWorkout.startTime,
         title: updatedWorkout.title,
         description: updatedWorkout.description,
         type: updatedWorkout.type,

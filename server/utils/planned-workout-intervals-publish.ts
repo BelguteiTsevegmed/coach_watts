@@ -2,9 +2,7 @@ import { prisma } from './db'
 import {
   createIntervalsPlannedWorkout,
   updateIntervalsPlannedWorkout,
-  cleanIntervalsDescription,
-  isIntervalsEventId,
-  normalizeIntervalsSportType
+  isIntervalsEventId
 } from './intervals'
 import { plannedWorkoutPublishRepository } from './repositories/plannedWorkoutPublishRepository'
 import { plannedWorkoutRepository } from './repositories/plannedWorkoutRepository'
@@ -25,6 +23,7 @@ export type PublishPlannedWorkoutIntervalsCode =
   | 'no_structure'
   | 'generation_in_flight'
   | 'sync_conflict'
+  | 'prescription_rejected'
   | 'export_blocked'
   | 'publish_failed'
 
@@ -56,6 +55,8 @@ function isIntervalsNotFoundError(error: any): boolean {
 
 function buildIntervalsPayload(
   workout: {
+    id?: string
+    structureRevision?: number
     date: Date
     startTime?: string | null
     title: string
@@ -67,14 +68,15 @@ function buildIntervalsPayload(
   },
   workoutDoc: string
 ) {
-  const intervalsType = normalizeIntervalsSportType(workout.type)
   return {
+    id: workout.id,
+    structureRevision: workout.structureRevision,
     date: workout.date,
     startTime: workout.startTime,
     title: workout.title,
-    description: cleanIntervalsDescription(workout.description || ''),
-    type: intervalsType,
-    durationSec: workout.durationSec || 3600,
+    description: workout.description,
+    type: workout.type,
+    durationSec: workout.durationSec ?? 3600,
     tss: workout.tss ?? undefined,
     workout_doc: workoutDoc,
     managedBy: workout.managedBy
@@ -194,14 +196,24 @@ export async function publishPlannedWorkoutToIntervals(
       )
     } else {
       try {
-        await updateIntervalsPlannedWorkout(integration, existingExternalId!, payload)
-        action = 'updated'
-        message = 'Workout updated on Intervals.icu.'
+        const intervalsWorkout = await updateIntervalsPlannedWorkout(
+          integration,
+          existingExternalId!,
+          payload
+        )
+        action =
+          intervalsWorkout?.id && String(intervalsWorkout.id) !== existingExternalId
+            ? 'recreated'
+            : 'updated'
+        message =
+          action === 'recreated'
+            ? 'Workout recreated on Intervals.icu.'
+            : 'Workout updated on Intervals.icu.'
         await markIntervalsPublishSuccess(
           workoutId,
           userId,
           provider,
-          existingExternalId!,
+          String(intervalsWorkout?.id || existingExternalId),
           workout.structuredWorkout,
           workout.structureRevision
         )
@@ -257,6 +269,7 @@ export function throwPublishPlannedWorkoutHttpError(
     no_structure: 422,
     generation_in_flight: 409,
     sync_conflict: 409,
+    prescription_rejected: 422,
     export_blocked: 422,
     publish_failed: 500
   }

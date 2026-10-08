@@ -15,6 +15,7 @@ import { enqueueIntervalsStreamSync } from '../../../../../server/utils/interval
 
 vi.mock('../../../../../server/utils/db', () => ({
   prisma: {
+    $transaction: vi.fn(async (callback: any) => callback({ ...prisma })),
     integration: { findUnique: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
     plannedWorkout: {
       findUnique: vi.fn(),
@@ -466,3 +467,8 @@ describe('IntervalsService syncActivities deduplication', () => {
     expect(triggerWorkoutDeduplicationIfEnabled).not.toHaveBeenCalled()
   })
 })
+
+vi.mock('../../../../../server/utils/training-prescription/service', async (importOriginal) => ({
+  ...(await importOriginal<any>()),
+  ...(await import('../../../helpers/prescription-boundary-double')).prescriptionBoundaryDouble
+}))

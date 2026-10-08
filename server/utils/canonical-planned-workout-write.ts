@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { createError } from 'h3'
 import { prisma } from './db'
@@ -19,6 +20,11 @@ import { validateCanonicalSemantics } from '../../shared/workout-canonical-valid
 import { summarizePlannedStimulus } from './training-stimulus'
 import { validateFinalStructureDose } from './plans/structure-dose'
 import { supersedeActiveStructureGenerationRuns } from './structure-generation-run'
+import {
+  lockPrescriptionSchedule,
+  validatePrescriptionWrite,
+  withPrescriptionAssessment
+} from './training-prescription/service'
 
 type WriteSource = Extract<
   StructureSource,
@@ -279,45 +285,59 @@ export async function persistIntervalsPlannedWorkoutImport(
     sportSettings: any
     seenAt: Date
   }
-) {
-  const { userId, existingRecord, normalizedPlanned, sportSettings, seenAt } = options
-  const externalId = normalizedPlanned.externalId
-
-  if (existingRecord && existingRecord.externalId !== externalId) {
-    await client.plannedWorkout.update({
-      where: { id: existingRecord.id },
-      data: buildIntervalsImportPersistenceFields({
-        existingRecord,
-        normalizedPlanned,
-        sportSettings,
-        seenAt
-      })
+): Promise<void> {
+  if (client === prisma)
+    return prisma.$transaction((tx) => persistIntervalsPlannedWorkoutImport(tx, options), {
+      isolationLevel: 'Serializable'
     })
-    return
-  }
-
-  const createData = buildIntervalsImportPersistenceFields({
+  const { userId, normalizedPlanned, sportSettings, seenAt } = options
+  await lockPrescriptionSchedule(client, userId)
+  const externalId = normalizedPlanned.externalId
+  const existingRecord =
+    options.existingRecord?.externalId !== externalId && options.existingRecord?.id
+      ? await client.plannedWorkout.findUnique({ where: { id: options.existingRecord.id, userId } })
+      : await client.plannedWorkout.findUnique({
+          where: { userId_externalId: { userId, externalId } }
+        })
+  const id = existingRecord?.id || randomUUID()
+  const assessment = await validatePrescriptionWrite(
+    client,
+    userId,
+    [{ ...normalizedPlanned, id }],
+    { source: 'intervals-import', imported: true }
+  )
+  const baseCreateData = buildIntervalsImportPersistenceFields({
     existingRecord: null,
     normalizedPlanned,
     sportSettings,
     seenAt
   }) as Prisma.PlannedWorkoutUncheckedCreateInput
-
-  const recordForUpdate =
-    existingRecord ??
-    (await client.plannedWorkout.findUnique({
-      where: { userId_externalId: { userId, externalId } }
-    }))
-
+  const createData = {
+    ...baseCreateData,
+    id,
+    rawJson: withPrescriptionAssessment(normalizedPlanned.rawJson, assessment.id)
+  } as Prisma.PlannedWorkoutUncheckedCreateInput
+  const updateData = buildIntervalsImportPersistenceFields({
+    existingRecord,
+    normalizedPlanned,
+    sportSettings,
+    seenAt
+  })
+  updateData.rawJson = withPrescriptionAssessment(
+    updateData.rawJson ?? existingRecord?.rawJson,
+    assessment.id
+  )
+  if (existingRecord && existingRecord.externalId !== externalId) {
+    await client.plannedWorkout.update({
+      where: { id: existingRecord.id, userId },
+      data: updateData
+    })
+    return
+  }
   await client.plannedWorkout.upsert({
     where: { userId_externalId: { userId, externalId } },
     create: createData,
-    update: buildIntervalsImportPersistenceFields({
-      existingRecord: recordForUpdate,
-      normalizedPlanned,
-      sportSettings,
-      seenAt
-    })
+    update: updateData
   })
 }
 
@@ -334,6 +354,13 @@ export async function writeCanonicalPlannedWorkoutStructure(
   }
 ) {
   const persist = async (client: DbClient) => {
+    const initial = await client.plannedWorkout.findUnique({
+      where: { id: options.plannedWorkoutId }
+    })
+    if (!initial && options.expectedGenerationRevision !== undefined)
+      return { ...buildCanonicalPlannedWorkoutWriteData(options), stale: true }
+    if (!initial) throw createError({ statusCode: 404, message: 'Planned workout not found' })
+    await lockPrescriptionSchedule(client, initial.userId)
     const existing = await client.plannedWorkout.findUnique({
       where: { id: options.plannedWorkoutId }
     })
@@ -352,11 +379,20 @@ export async function writeCanonicalPlannedWorkoutStructure(
     if (existing && options.source !== 'INTERVALS_IMPORT' && options.source !== 'LEGACY_ADAPTER')
       await validateFinalStructureDose(
         client,
-        existing,
+        { ...existing, ...options.extra },
         Number(data.durationSec || 0),
         options.workoutType ?? existing.type,
         typeof data.tss === 'number' ? data.tss : null
       )
+    if (existing && options.source !== 'LEGACY_ADAPTER') {
+      const assessment = await validatePrescriptionWrite(
+        client,
+        existing.userId,
+        [{ ...existing, ...data, type: options.workoutType ?? existing.type }],
+        { source: `canonical-${options.source}`, imported: options.source === 'INTERVALS_IMPORT' }
+      )
+      data.rawJson = withPrescriptionAssessment(existing.rawJson, assessment.id)
+    }
     if (options.source === 'MANUAL_EDIT' && options.incrementRevision !== false) {
       await supersedeActiveStructureGenerationRuns(options.plannedWorkoutId, client)
       ;(data as any).generationRevision = { increment: 1 }

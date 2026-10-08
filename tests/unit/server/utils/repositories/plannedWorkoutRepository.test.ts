@@ -4,8 +4,11 @@ import { prisma } from '../../../../../server/utils/db'
 
 vi.mock('../../../../../server/utils/db', () => ({
   prisma: {
+    $transaction: vi.fn(async (callback: any) => callback(prisma)),
+    syncQueue: { updateMany: vi.fn(), createMany: vi.fn() },
     plannedWorkout: {
       findFirst: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
@@ -76,7 +79,11 @@ describe('plannedWorkoutRepository', () => {
       await plannedWorkoutRepository.create(data as any)
 
       expect(prisma.plannedWorkout.create).toHaveBeenCalledWith({
-        data
+        data: expect.objectContaining({
+          ...data,
+          id: expect.any(String),
+          rawJson: { prescriptionAssessmentId: 'test-assessment' }
+        })
       })
     })
   })
@@ -100,6 +107,7 @@ describe('plannedWorkoutRepository', () => {
 
   describe('delete', () => {
     it('should delete a workout with userId check', async () => {
+      vi.mocked(prisma.plannedWorkout.findUniqueOrThrow).mockResolvedValue(mockWorkout as any)
       vi.mocked(prisma.plannedWorkout.delete).mockResolvedValue(mockWorkout as any)
 
       await plannedWorkoutRepository.delete(workoutId, userId)
@@ -165,3 +173,8 @@ describe('plannedWorkoutRepository', () => {
     })
   })
 })
+
+vi.mock('../../../../../server/utils/training-prescription/service', async (importOriginal) => ({
+  ...(await importOriginal<any>()),
+  ...(await import('../../../helpers/prescription-boundary-double')).prescriptionBoundaryDouble
+}))

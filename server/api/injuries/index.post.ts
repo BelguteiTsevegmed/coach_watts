@@ -31,6 +31,12 @@ defineRouteMeta({
                 type: 'array',
                 items: { type: 'string', enum: ['run', 'ride', 'swim', 'strength'] }
               },
+              loadRestriction: {
+                type: 'string',
+                enum: ['NO_LOADING', 'MODIFIED_ONLY'],
+                nullable: true
+              },
+              redFlags: { type: 'array', items: { type: 'string' } },
               notes: { type: 'string', nullable: true }
             }
           }

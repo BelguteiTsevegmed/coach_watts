@@ -1,3 +1,4 @@
+import { plannedWorkoutRepository } from '../server/utils/repositories/plannedWorkoutRepository'
 import './init'
 import { logger, task } from '@trigger.dev/sdk/v3'
 import { generateStructuredAnalysis, buildWorkoutSummary } from '../server/utils/gemini'
@@ -241,23 +242,21 @@ export async function runGenerateAdHocWorkout(payload: GenerateAdHocWorkoutPaylo
   )
 
   // Create Planned Workout
-  const plannedWorkout = await prisma.plannedWorkout.create({
-    data: {
-      userId,
-      date: today, // Correctly aligned to user's local day start (UTC)
-      title: suggestion.title,
-      description: `${suggestion.description}\n\nObjective: ${suggestion.objective}\n${
-        Array.isArray(suggestion.executionCues) && suggestion.executionCues.length > 0
-          ? `Execution Cues: ${suggestion.executionCues.join(' | ')}\n`
-          : ''
-      }\nReasoning: ${suggestion.reasoningText}`,
-      type: suggestion.type,
-      durationSec: suggestion.durationMinutes * 60,
-      tss: suggestion.targetTss,
-      syncStatus: 'LOCAL_ONLY', // Mark as local initially
-      externalId: `adhoc-${userId}-${Date.now()}`, // Generate unique external ID
-      managedBy: 'COACH_WATTS'
-    }
+  const plannedWorkout = await plannedWorkoutRepository.create({
+    userId,
+    date: today, // Correctly aligned to user's local day start (UTC)
+    title: suggestion.title,
+    description: `${suggestion.description}\n\nObjective: ${suggestion.objective}\n${
+      Array.isArray(suggestion.executionCues) && suggestion.executionCues.length > 0
+        ? `Execution Cues: ${suggestion.executionCues.join(' | ')}\n`
+        : ''
+    }\nReasoning: ${suggestion.reasoningText}`,
+    type: suggestion.type,
+    durationSec: suggestion.durationMinutes * 60,
+    tss: suggestion.targetTss,
+    syncStatus: 'LOCAL_ONLY', // Mark as local initially
+    externalId: `adhoc-${userId}-${Date.now()}`, // Generate unique external ID
+    managedBy: 'COACH_WATTS'
   })
 
   logger.log('Created planned workout', { id: plannedWorkout.id })

@@ -1,3 +1,7 @@
+import {
+  validatePrescriptionWrite,
+  withPrescriptionAssessment
+} from '../server/utils/training-prescription/service'
 import './init'
 import { createHash, randomUUID } from 'node:crypto'
 import { logger, task } from '@trigger.dev/sdk/v3'
@@ -259,6 +263,18 @@ export async function runAdaptTrainingPlan(
     durationSec: Math.round(day.durationMinutes * 60),
     distanceMeters: day.distanceMeters,
     tss: day.targetTSS,
+    workIntensity:
+      day.intensity === 'hard'
+        ? 0.9
+        : day.intensity === 'very_hard'
+          ? 1
+          : day.intensity === 'moderate'
+            ? 0.75
+            : day.intensity === 'easy'
+              ? 0.6
+              : day.intensity === 'recovery'
+                ? 0.5
+                : null,
     targetArea: day.targetArea,
     managedBy: 'COACH_WATTS',
     syncStatus: 'LOCAL_ONLY',
@@ -296,6 +312,15 @@ export async function runAdaptTrainingPlan(
         }
         const current = await loadSnapshot(tx, payload)
         if (scheduleFingerprint(current) !== fingerprint) return null
+        const assessment = await validatePrescriptionWrite(tx, payload.userId, workouts, {
+          source: 'weekly-recalculation',
+          replaceIds: replacement.replaceable.map((w) => w.id)
+        })
+        for (const workout of workouts)
+          workout.rawJson = withPrescriptionAssessment(
+            workout.rawJson,
+            assessment.id
+          ) as typeof workout.rawJson
         const removed = await tx.plannedWorkout.deleteMany({
           where: { userId: payload.userId, id: { in: replacement.replaceable.map((w) => w.id) } }
         })

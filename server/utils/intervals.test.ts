@@ -153,6 +153,27 @@ It has multiple lines.
   })
 
   describe('planned workout publishing', () => {
+    it('updates an identity committed by an earlier publication and preserves zero rest dose', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: '12345' }) })
+      vi.stubGlobal('fetch', fetchMock)
+      await createIntervalsPlannedWorkout(
+        { accessToken: 'token', scope: 'CALENDAR:WRITE', refreshToken: null } as any,
+        {
+          id: 'local-1',
+          externalId: '12345',
+          date: new Date('2026-10-08'),
+          title: 'Rest',
+          type: 'Rest',
+          durationSec: 0,
+          tss: 0
+        }
+      )
+      const [url, init] = fetchMock.mock.calls[0]!
+      expect(url).toContain('/events/12345')
+      expect(init.method).toBe('PUT')
+      expect(JSON.parse(init.body)).toMatchObject({ duration: 0, tss: 0 })
+    })
+
     it('includes top-level duration when publishing a structured workout', async () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
@@ -498,3 +519,8 @@ describe('Intervals elevation validation', () => {
     expect(computeElevationGainFromAltitudeStream([100, 105, 103, 110])).toBe(12)
   })
 })
+
+vi.mock('./training-prescription/publication', () => ({
+  withPrescriptionPublication: async (_userId: any, expected: any, send: any) =>
+    send(expected, { plannedWorkout: { update: async () => {} } })
+}))

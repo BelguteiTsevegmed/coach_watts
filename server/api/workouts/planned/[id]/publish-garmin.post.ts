@@ -1,3 +1,4 @@
+import { withPrescriptionPublication } from '../../../../utils/training-prescription/publication'
 import { z } from 'zod'
 import { prisma } from '../../../../utils/db'
 import { getServerSession } from '../../../../utils/session'
@@ -133,79 +134,118 @@ export default defineEventHandler(async (event) => {
   const existingTarget = await plannedWorkoutPublishRepository.getByProvider(id, provider)
 
   try {
-    if (destination === 'training') {
-      const payload = serializeCanonicalForGarmin({
-        title: workout.title,
-        description: workout.description || '',
-        type: workout.type,
-        structure: workout.structuredWorkout,
-        zoneProfileSnapshot: (workout.structuredWorkout as any)?.zoneProfileSnapshot,
-        durationSec: workout.durationSec,
-        distanceMeters: workout.distanceMeters,
-        sourceId: workout.id,
-        workout,
-        liveSportSettings: sportSettings
+    return await withPrescriptionPublication(userId, workout, async () => {
+      if (destination === 'training') {
+        const payload = serializeCanonicalForGarmin({
+          title: workout.title,
+          description: workout.description || '',
+          type: workout.type,
+          structure: workout.structuredWorkout,
+          zoneProfileSnapshot: (workout.structuredWorkout as any)?.zoneProfileSnapshot,
+          durationSec: workout.durationSec,
+          distanceMeters: workout.distanceMeters,
+          sourceId: workout.id,
+          workout,
+          liveSportSettings: sportSettings
+        })
+
+        let workoutId = existingTarget?.externalId || null
+        if (workoutId) {
+          try {
+            await updateGarminWorkout(integration, workoutId, payload)
+          } catch (e: any) {
+            const message = String(e?.message || '')
+            // Stale/partial Garmin workouts or invalid update identity → recreate.
+            if (
+              message.includes('(404)') ||
+              (message.includes('requires') && message.includes('ownerId')) ||
+              message.includes('requires numeric workoutId') ||
+              message.includes('not a valid `java.lang.Long`') ||
+              message.includes("doesn't match with null") ||
+              message.includes('has no steps') ||
+              e?.code === 'GARMIN_OWNER_ID_REQUIRED' ||
+              e?.code === 'GARMIN_WORKOUT_ID_INVALID'
+            ) {
+              workoutId = null
+            } else {
+              throw e
+            }
+          }
+        }
+
+        if (!workoutId) {
+          const created = await createGarminWorkout(integration, payload)
+          workoutId = String(created?.workoutId || created?.id || '')
+        }
+
+        if (!workoutId) {
+          throw new Error('Garmin workout created but no workoutId was returned')
+        }
+
+        const schedulePayload = {
+          workoutId: Number(workoutId),
+          date: toDateOnly(workout.date)
+        }
+
+        let scheduleId = existingTarget?.scheduleId || null
+        if (scheduleId) {
+          try {
+            await updateGarminWorkoutSchedule(integration, scheduleId, schedulePayload)
+          } catch (e: any) {
+            if (String(e?.message || '').includes('(404)')) {
+              scheduleId = null
+            } else {
+              throw e
+            }
+          }
+        }
+        if (!scheduleId) {
+          const createdSchedule = await createGarminWorkoutSchedule(integration, schedulePayload)
+          scheduleId = extractGarminScheduleId(createdSchedule)
+        }
+
+        const now = new Date()
+        await plannedWorkoutPublishRepository.upsert(id, provider, {
+          externalId: workoutId,
+          scheduleId,
+          status: 'SYNCED',
+          error: null,
+          lastSyncedAt: now
+        })
+
+        return {
+          success: true,
+          message: appendPublishStalenessWarning(
+            'Workout published to Garmin Training API.',
+            settingsStaleness
+          ),
+          destination,
+          ...(buildPublishWarnings(settingsStaleness)
+            ? { warnings: buildPublishWarnings(settingsStaleness) }
+            : {}),
+          target: {
+            provider,
+            externalId: workoutId,
+            scheduleId,
+            status: 'SYNCED',
+            lastSyncedAt: now
+          }
+        }
+      }
+
+      const geoPoints = extractCourseGeoPoints(workout)
+      const coursePayload = buildGarminCoursePayload({
+        ...workout,
+        geoPoints
       })
 
-      let workoutId = existingTarget?.externalId || null
-      if (workoutId) {
-        try {
-          await updateGarminWorkout(integration, workoutId, payload)
-        } catch (e: any) {
-          const message = String(e?.message || '')
-          // Stale/partial Garmin workouts or invalid update identity → recreate.
-          if (
-            message.includes('(404)') ||
-            (message.includes('requires') && message.includes('ownerId')) ||
-            message.includes('requires numeric workoutId') ||
-            message.includes('not a valid `java.lang.Long`') ||
-            message.includes("doesn't match with null") ||
-            message.includes('has no steps') ||
-            e?.code === 'GARMIN_OWNER_ID_REQUIRED' ||
-            e?.code === 'GARMIN_WORKOUT_ID_INVALID'
-          ) {
-            workoutId = null
-          } else {
-            throw e
-          }
-        }
-      }
-
-      if (!workoutId) {
-        const created = await createGarminWorkout(integration, payload)
-        workoutId = String(created?.workoutId || created?.id || '')
-      }
-
-      if (!workoutId) {
-        throw new Error('Garmin workout created but no workoutId was returned')
-      }
-
-      const schedulePayload = {
-        workoutId: Number(workoutId),
-        date: toDateOnly(workout.date)
-      }
-
-      let scheduleId = existingTarget?.scheduleId || null
-      if (scheduleId) {
-        try {
-          await updateGarminWorkoutSchedule(integration, scheduleId, schedulePayload)
-        } catch (e: any) {
-          if (String(e?.message || '').includes('(404)')) {
-            scheduleId = null
-          } else {
-            throw e
-          }
-        }
-      }
-      if (!scheduleId) {
-        const createdSchedule = await createGarminWorkoutSchedule(integration, schedulePayload)
-        scheduleId = extractGarminScheduleId(createdSchedule)
-      }
+      const course = await createGarminCourse(integration, coursePayload)
+      const courseId = String(course?.courseId || course?.id || '')
+      if (!courseId) throw new Error('Garmin course created but no courseId was returned')
 
       const now = new Date()
       await plannedWorkoutPublishRepository.upsert(id, provider, {
-        externalId: workoutId,
-        scheduleId,
+        externalId: courseId,
         status: 'SYNCED',
         error: null,
         lastSyncedAt: now
@@ -214,7 +254,7 @@ export default defineEventHandler(async (event) => {
       return {
         success: true,
         message: appendPublishStalenessWarning(
-          'Workout published to Garmin Training API.',
+          'Course published to Garmin Courses API.',
           settingsStaleness
         ),
         destination,
@@ -223,49 +263,12 @@ export default defineEventHandler(async (event) => {
           : {}),
         target: {
           provider,
-          externalId: workoutId,
-          scheduleId,
+          externalId: courseId,
           status: 'SYNCED',
           lastSyncedAt: now
         }
       }
-    }
-
-    const geoPoints = extractCourseGeoPoints(workout)
-    const coursePayload = buildGarminCoursePayload({
-      ...workout,
-      geoPoints
     })
-
-    const course = await createGarminCourse(integration, coursePayload)
-    const courseId = String(course?.courseId || course?.id || '')
-    if (!courseId) throw new Error('Garmin course created but no courseId was returned')
-
-    const now = new Date()
-    await plannedWorkoutPublishRepository.upsert(id, provider, {
-      externalId: courseId,
-      status: 'SYNCED',
-      error: null,
-      lastSyncedAt: now
-    })
-
-    return {
-      success: true,
-      message: appendPublishStalenessWarning(
-        'Course published to Garmin Courses API.',
-        settingsStaleness
-      ),
-      destination,
-      ...(buildPublishWarnings(settingsStaleness)
-        ? { warnings: buildPublishWarnings(settingsStaleness) }
-        : {}),
-      target: {
-        provider,
-        externalId: courseId,
-        status: 'SYNCED',
-        lastSyncedAt: now
-      }
-    }
   } catch (error: any) {
     await plannedWorkoutPublishRepository.upsert(id, provider, {
       status: 'FAILED',

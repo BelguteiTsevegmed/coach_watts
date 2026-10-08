@@ -1710,6 +1710,7 @@ OUTPUT JSON matching the schema.`
             'CREATE',
             {
               id: updatedWorkout.id,
+              structureRevision: updatedWorkout.structureRevision,
               externalId: updatedWorkout.externalId,
               date: updatedWorkout.date,
               startTime: updatedWorkout.startTime,
@@ -1797,6 +1798,7 @@ OUTPUT JSON matching the schema.`
           'UPDATE',
           {
             id: updatedWorkout.id,
+            structureRevision: updatedWorkout.structureRevision,
             externalId: updatedWorkout.externalId,
             date: updatedWorkout.date,
             startTime: updatedWorkout.startTime,

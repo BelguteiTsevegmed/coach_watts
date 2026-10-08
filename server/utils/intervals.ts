@@ -386,11 +386,11 @@ export async function upsertIntervalsEvent(
         ? data.workout_doc.duration
         : null
 
-  if (durationSec && durationSec > 0) {
+  if (typeof durationSec === 'number' && durationSec >= 0) {
     eventData.duration = durationSec
   }
 
-  if (data.tss) {
+  if (typeof data.tss === 'number' && data.tss >= 0) {
     eventData.tss = data.tss
   }
 
@@ -445,11 +445,38 @@ export async function deleteIntervalsEvent(
   }
 }
 
+async function sendIntervalsPrescription(integration: Integration, data: any, eventId?: string) {
+  const payload = {
+    ...data,
+    description: cleanIntervalsDescription(data.description || ''),
+    category: 'WORKOUT'
+  }
+  if (!eventId) return upsertIntervalsEvent(integration, payload, 'POST')
+  try {
+    return await upsertIntervalsEvent(integration, { ...payload, id: eventId }, 'PUT')
+  } catch (error) {
+    if (!String(error).includes('Intervals API error: 404')) throw error
+    return upsertIntervalsEvent(integration, payload, 'POST')
+  }
+}
+
 export async function createIntervalsPlannedWorkout(
   integration: Integration,
   data: any
 ): Promise<IntervalsPlannedWorkout> {
-  return upsertIntervalsEvent(integration, { ...data, category: 'WORKOUT' }, 'POST')
+  const { withPrescriptionPublication } = await import('./training-prescription/publication')
+  return withPrescriptionPublication(integration.userId, data, async (current, tx) => {
+    const result = await sendIntervalsPrescription(
+      integration,
+      data,
+      isIntervalsEventId(current.externalId) ? current.externalId : undefined
+    )
+    await tx.plannedWorkout.update({
+      where: { id: current.id },
+      data: { externalId: String(result.id) }
+    })
+    return result
+  })
 }
 
 export async function updateIntervalsPlannedWorkout(
@@ -457,7 +484,19 @@ export async function updateIntervalsPlannedWorkout(
   eventId: string,
   data: any
 ): Promise<IntervalsPlannedWorkout> {
-  return upsertIntervalsEvent(integration, { ...data, id: eventId, category: 'WORKOUT' }, 'PUT')
+  const { withPrescriptionPublication } = await import('./training-prescription/publication')
+  return withPrescriptionPublication(integration.userId, data, async (current, tx) => {
+    const result = await sendIntervalsPrescription(
+      integration,
+      data,
+      isIntervalsEventId(current.externalId) ? current.externalId : eventId
+    )
+    await tx.plannedWorkout.update({
+      where: { id: current.id },
+      data: { externalId: String(result.id) }
+    })
+    return result
+  })
 }
 
 export async function deleteIntervalsPlannedWorkout(

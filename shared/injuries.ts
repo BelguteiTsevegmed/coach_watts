@@ -180,6 +180,8 @@ export function getEffectiveAffectedSports(injury: {
  * `onsetDate` is a calendar date stored at UTC midnight, so format it in UTC.
  */
 export type InjuryDTO = {
+  loadRestriction?: string | null
+  redFlags?: string[]
   id: string
   bodyArea: string
   side: InjurySide | null

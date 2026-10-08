@@ -10,6 +10,7 @@ import {
 
 vi.mock('../../../../server/utils/db', () => ({
   prisma: {
+    $transaction: vi.fn(async (callback: any) => callback(prisma)),
     plannedWorkout: {
       findUnique: vi.fn()
     }
@@ -131,3 +132,8 @@ describe('planned-workout-publish-guards', () => {
     ).toContain('FTP')
   })
 })
+
+vi.mock('../../../../server/utils/training-prescription/service', async (importOriginal) => ({
+  ...(await importOriginal<any>()),
+  ...(await import('../../helpers/prescription-boundary-double')).prescriptionBoundaryDouble
+}))

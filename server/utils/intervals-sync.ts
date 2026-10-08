@@ -151,6 +151,8 @@ export async function syncPlannedWorkoutToIntervals(
   } catch (error: any) {
     console.error(`Failed to sync workout ${operation} to Intervals.icu:`, error.message)
 
+    if (error.statusCode === 422 || error.statusCode === 409)
+      return { success: false, synced: false, message: error.message, error: error.message }
     const structureRevision = await resolvePlannedWorkoutStructureRevision(
       'planned_workout',
       workoutData.id,
@@ -194,6 +196,10 @@ type PlannedWorkoutForAutoUpload = {
 export async function autoUploadPlannedWorkoutToIntervalsIfEnabled(
   workout: PlannedWorkoutForAutoUpload
 ): Promise<{ attempted: boolean; synced: boolean; error?: string }> {
+  const current = await prisma.plannedWorkout.findUnique({
+    where: { id: workout.id, userId: workout.userId }
+  })
+  if (!current || !current.structuredWorkout) return { attempted: false, synced: false }
   const integration = await prisma.integration.findFirst({
     where: {
       userId: workout.userId,
@@ -216,40 +222,12 @@ export async function autoUploadPlannedWorkoutToIntervalsIfEnabled(
     return { attempted: false, synced: false }
   }
 
-  const syncResult = await syncPlannedWorkoutToIntervals(
-    'CREATE',
-    {
-      id: workout.id,
-      externalId: workout.externalId,
-      date: workout.date,
-      startTime: workout.startTime || undefined,
-      title: workout.title,
-      description: workout.description || '',
-      type: workout.type || 'Ride',
-      durationSec: workout.durationSec || 3600,
-      tss: workout.tss ?? undefined,
-      managedBy: workout.managedBy || undefined
-    },
-    workout.userId
-  )
-
-  await prisma.plannedWorkout.update({
-    where: { id: workout.id },
-    data: {
-      syncStatus: syncResult.synced ? 'SYNCED' : 'PENDING',
-      lastSyncedAt: syncResult.synced ? new Date() : undefined,
-      syncError: syncResult.error || null,
-      ...(syncResult.synced &&
-        syncResult.result?.id && {
-          externalId: String(syncResult.result.id)
-        })
-    }
-  })
-
+  const { publishPlannedWorkoutToIntervals } = await import('./planned-workout-intervals-publish')
+  const result = await publishPlannedWorkoutToIntervals(workout.userId, current.id)
   return {
     attempted: true,
-    synced: syncResult.synced,
-    error: syncResult.error
+    synced: result.success,
+    error: result.success ? undefined : result.error
   }
 }
 
@@ -407,6 +385,10 @@ export async function processSyncQueueItem(queueItem: any): Promise<boolean> {
 
     // Attempt sync
     const payload = hydrateQueuedSyncPayload(queueItem.payload)
+    if (queueItem.entityType === 'planned_workout') {
+      payload.id = queueItem.entityId
+      if (queuedStructureRevision !== null) payload.structureRevision = queuedStructureRevision
+    }
 
     if (queueItem.entityType === 'planned_workout') {
       switch (queueItem.operation) {
@@ -427,7 +409,12 @@ export async function processSyncQueueItem(queueItem: any): Promise<boolean> {
         case 'UPDATE':
           if (isIntervalsEventId(payload.externalId)) {
             try {
-              await updateIntervalsPlannedWorkout(integration, payload.externalId, payload)
+              const updated = await updateIntervalsPlannedWorkout(
+                integration,
+                payload.externalId,
+                payload
+              )
+              if (updated?.id) payload.externalId = String(updated.id)
             } catch (error) {
               if (!isIntervalsMissingEventError(error)) {
                 throw error

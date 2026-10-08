@@ -462,3 +462,11 @@ describe('POST /api/recommendations/[id]/accept', () => {
     })
   })
 })
+
+vi.mock('../../../../../server/utils/repositories/plannedWorkoutRepository', () => ({
+  plannedWorkoutRepository: {
+    create: async (data: any) => prisma.plannedWorkout.create({ data }),
+    update: async (id: string, _userId: string, data: any) =>
+      prisma.plannedWorkout.update({ where: { id }, data })
+  }
+}))
