@@ -272,7 +272,7 @@ export default defineEventHandler(async (event) => {
         isDuplicate: false,
         date: { gte: new Date(now.getTime() - 28 * 86400000), lte: now }
       },
-      select: { id: true, type: true, date: true, durationSec: true, isDuplicate: true }
+      select: { id: true, type: true, date: true, durationSec: true, isDuplicate: true, tss: true }
     }),
     prisma.trainingAvailability.findMany({ where: { userId } })
   ])

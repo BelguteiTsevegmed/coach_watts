@@ -13,7 +13,13 @@ export const DEFAULT_WORKOUT_LIMITS = {
   maxSteps: 250
 } as const
 
-export type ZoneRange = { min: number; max: number; name?: string }
+export type ZoneRange = {
+  min: number
+  max: number
+  name?: string
+  /** Explicit athlete/profile mapping; vendor zone numbers do not imply a domain. */
+  domain?: 'easy' | 'moderate' | 'hard'
+}
 export type ZoneProfileSnapshot = {
   pace?: { unit: 'm/s'; ranges: ZoneRange[]; thresholdMps?: number }
   power?: { unit: 'watts'; ranges: ZoneRange[] }
@@ -223,7 +229,8 @@ export function createZoneProfileSnapshot(settings: any): ZoneProfileSnapshot {
           .map((zone: any) => ({
             min: Number(zone?.min),
             max: Number(zone?.max),
-            name: zone?.name
+            name: zone?.name,
+            ...(['easy', 'moderate', 'hard'].includes(zone?.domain) ? { domain: zone.domain } : {})
           }))
           .filter((zone) => Number.isFinite(zone.min) && Number.isFinite(zone.max))
       : []

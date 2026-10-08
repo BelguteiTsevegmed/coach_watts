@@ -84,6 +84,7 @@ export default defineEventHandler(async (event) => {
       return buildTemplateStructureWriteData({
         structure: workout.structuredWorkout,
         sportSettings: settings,
+        workoutType: workout.type,
         preservePlannedDuration: workout.durationSec,
         syncStatus: 'LOCAL_ONLY'
       }).data

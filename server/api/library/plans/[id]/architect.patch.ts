@@ -251,6 +251,7 @@ export default defineEventHandler(async (event) => {
             ? buildTemplateStructureWriteData({
                 structure: woData.structuredWorkout,
                 sportSettings,
+                workoutType: woData.type,
                 preservePlannedDuration: woData.durationSec
               })
             : null

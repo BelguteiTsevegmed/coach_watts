@@ -14,7 +14,10 @@ import { workoutRepository } from '../server/utils/repositories/workoutRepositor
 import { wellnessRepository } from '../server/utils/repositories/wellnessRepository'
 import { sportSettingsRepository } from '../server/utils/repositories/sportSettingsRepository'
 import { availabilityRepository } from '../server/utils/repositories/availabilityRepository'
-import { generateTrainingContext } from '../server/utils/training-metrics'
+import {
+  generateTrainingContext,
+  formatTrainingContextForPrompt
+} from '../server/utils/training-metrics'
 import { userBackgroundQueue } from './queues'
 import { checkQuota } from '../server/utils/quotas/engine'
 import {
@@ -691,6 +694,8 @@ ${
         .join('\n')
     : 'None'
 }
+
+${formatTrainingContextForPrompt(trainingContext)}
 
 RECENT TRAINING (Last 14 days):
 ${
