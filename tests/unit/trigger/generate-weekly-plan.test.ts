@@ -227,6 +227,11 @@ describe('generateWeeklyPlan task', () => {
       expect(generateStructuredAnalysis).toHaveBeenCalledTimes(1)
       const prompt = vi.mocked(generateStructuredAnalysis).mock.calls[0]![0] as string
       expect(prompt).toContain('Week Focus: Base')
+      expect(prompt).toContain('ENDURANCE STRENGTH PROGRAMME v1')
+      expect(prompt).toContain('Phase: foundation')
+      expect(result.proposal).toMatchObject({
+        strengthProgramme: { phase: 'foundation', version: 1 }
+      })
       expect(prompt).toContain('RESOLVED PERSONAL READINESS: fixture context')
       expect(prompt).not.toContain('Average recovery score:')
       expect(prompt).toContain('at most 120 minutes and 80 TSS')

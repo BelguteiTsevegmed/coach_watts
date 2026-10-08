@@ -1,3 +1,8 @@
+import {
+  loadStrengthProgramme,
+  formatStrengthProgramme,
+  normalizeStrengthPlanTss
+} from '../server/utils/strength-programme'
 import { formatMacroWeekForPrompt } from '../server/utils/plans/macro-policy'
 import { buildReadinessContext } from '../server/utils/services/readinessContextService'
 import { retireReplacedPrescriptionExports } from '../server/utils/training-prescription/replacement-sync'
@@ -659,6 +664,13 @@ No active goals set. Plan for general fitness maintenance and improvement.
     today: getUserLocalDate(timezone)
   })
 
+  const strengthProgramme = await loadStrengthProgramme(prisma, userId, {
+    today: alignedWeekStart,
+    planPhase: fullContext?.block.type || phaseInstruction,
+    eventDates: activeGoals.flatMap((goal) => (goal.eventDate ? [goal.eventDate] : [])),
+    hasOpenInjury: openInjuries.length > 0
+  })
+
   let prompt = `${buildCoachRoleIntro({
     persona: aiSettings.aiPersona,
     sport: primarySport,
@@ -720,6 +732,8 @@ ${
 ${injuryContext}
 
 ${readiness.prompt}
+
+${formatStrengthProgramme(strengthProgramme)}
 
 PLANNING PERIOD:
 - Start: ${formatUserDate(alignedWeekStart, timezone)} (YYYY-MM-DD)
@@ -817,20 +831,27 @@ Retain the current block and week focus. Return actual replacement sessions, nev
     userInstructions: userInstructions || 'None'
   })
 
-  const generatePlan = (promptText: string) =>
-    generateStructuredAnalysis(promptText, weeklyPlanSchema, aiSettings.aiModelPreference, {
-      userId,
-      operation: 'weekly_plan_generation',
-      entityType: 'WeeklyTrainingPlan',
-      entityId: undefined
-    })
+  const generatePlan = async (promptText: string) => {
+    const generated = await generateStructuredAnalysis<any>(
+      promptText,
+      weeklyPlanSchema,
+      aiSettings.aiModelPreference,
+      {
+        userId,
+        operation: 'weekly_plan_generation',
+        entityType: 'WeeklyTrainingPlan',
+        entityId: undefined
+      }
+    )
+    return normalizeStrengthPlanTss(generated)
+  }
 
   let plan = await generatePlan(prompt)
 
   // Recalculation validates and persists the complete replacement in its own transaction.
   // No schedule writes or external publication are allowed while preparing a proposal.
   if (payload.proposalOnly) {
-    return { success: true, proposal: plan }
+    return { success: true, proposal: { ...plan, strengthProgramme } }
   }
 
   // Validate the generated week against the plan week's volume budget (when linked)
@@ -972,7 +993,11 @@ Retain the current block and week focus. Return actual replacement sessions, nev
     status: 'ACTIVE',
     generatedBy: 'AI',
     modelVersion: aiSettings.aiModelPreference,
-    planJson: { ...(plan as any), coachingEvidenceVersion: COACHING_EVIDENCE_VERSION },
+    planJson: {
+      ...(plan as any),
+      coachingEvidenceVersion: COACHING_EVIDENCE_VERSION,
+      strengthProgramme
+    },
     totalTSS: (plan as any).totalTSS,
     totalDuration: Array.isArray((plan as any)?.days)
       ? (plan as any).days.reduce((sum: number, d: any) => sum + (d.durationMinutes || 0) * 60, 0)

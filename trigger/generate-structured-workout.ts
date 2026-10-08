@@ -1,4 +1,10 @@
 import './init'
+import {
+  loadStrengthProgramme,
+  formatStrengthProgramme,
+  validateStrengthProgramme
+} from '../server/utils/strength-programme'
+import { fetchOpenInjuries, formatInjuriesForPrompt } from '../server/utils/coaching/injury-context'
 import { logger, task } from '@trigger.dev/sdk/v3'
 import { generateStructuredAnalysis, buildConciseWorkoutSummary } from '../server/utils/gemini'
 import { prisma } from '../server/utils/db'
@@ -1050,10 +1056,16 @@ export async function runGenerateStructuredWorkout(
         ? 'Prefer single-value targets for steady aerobic/endurance/tempo blocks. Use ranges only when the workout explicitly asks for a range or ramp.'
         : 'Prefer metric ranges for steady aerobic/endurance/tempo blocks.'
     const isStrength = isStrengthWorkoutType(workout.type)
+    const strengthPrescriptionDate = workout.date ? new Date(workout.date) : new Date()
+    const strengthHistoryAsOf = new Date(Math.min(+strengthPrescriptionDate, Date.now()))
     let strengthIntensityReferences: StrengthIntensityReference[] = []
     if (isStrength) {
       try {
-        strengthIntensityReferences = await loadStrengthIntensityReferences(prisma, workout.userId)
+        strengthIntensityReferences = await loadStrengthIntensityReferences(
+          prisma,
+          workout.userId,
+          strengthHistoryAsOf
+        )
         logStage('loaded-strength-intensity-references', {
           count: strengthIntensityReferences.length
         })
@@ -1063,6 +1075,21 @@ export async function runGenerateStructuredWorkout(
         })
       }
     }
+    const strengthInjuries = isStrength ? await fetchOpenInjuries(workout.userId) : []
+    const strengthGoals = isStrength
+      ? await prisma.goal.findMany({
+          where: { userId: workout.userId, status: 'ACTIVE', eventDate: { not: null } },
+          select: { eventDate: true }
+        })
+      : []
+    const strengthProgramme = isStrength
+      ? await loadStrengthProgramme(prisma, workout.userId, {
+          today: strengthPrescriptionDate,
+          planPhase: phase,
+          eventDates: strengthGoals.flatMap((goal) => (goal.eventDate ? [goal.eventDate] : [])),
+          hasOpenInjury: strengthInjuries.length > 0
+        })
+      : null
     const strengthIntensityContext = formatStrengthIntensityReferences(strengthIntensityReferences)
     const sportSpecificInstructions = buildSportSpecificInstructions({
       workoutType: workout.type || '',
@@ -1097,6 +1124,9 @@ ${preserveExistingStructure ? `EXISTING STRUCTURE TO PRESERVE:\n${existingStruct
 ${zoneDefinitions}
 
 ${strengthIntensityContext}
+${isStrength ? `STRENGTH ATHLETE CONTEXT (experience, equipment and existing routine; explicit restrictions take precedence):\n${workout.user.aiContext || 'Unknown experience/equipment; conservative bodyweight preparation.'}` : ''}
+${strengthProgramme ? formatStrengthProgramme(strengthProgramme) : ''}
+${isStrength ? formatInjuriesForPrompt(strengthInjuries, { today: strengthPrescriptionDate }) : ''}
 
 ${targetingBlock}
 
@@ -1288,13 +1318,20 @@ OUTPUT JSON matching the schema.`
         applyStrengthIntensityTargets(
           structure,
           strengthIntensityReferences,
-          workout.user.weightUnits
+          workout.user.weightUnits,
+          {
+            allowLoadIncrease: false,
+            onlyConcreteLoads: true,
+            targetRir: strengthProgramme?.targetRir,
+            fillMissingLoads: !preserveExistingStructure && strengthProgramme?.phase !== 'modified'
+          }
         )
 
-        const strengthValidation = validateStrengthStructuredWorkout(
-          rawStrengthStructure,
-          structure
-        )
+        const nativeValidation = validateStrengthStructuredWorkout(rawStrengthStructure, structure)
+        const strengthValidation =
+          nativeValidation.valid && strengthProgramme && !preserveExistingStructure
+            ? validateStrengthProgramme(structure, strengthProgramme, strengthIntensityReferences)
+            : nativeValidation
         if (!strengthValidation.valid) {
           if (attempt >= 2) {
             throw new Error(
@@ -1307,8 +1344,7 @@ OUTPUT JSON matching the schema.`
             reason: strengthValidation.reason ?? 'Strength validation failed',
             previousDraft: lastAiOutputForRetry,
             generatorMode,
-            extraInstructions:
-              "Return native strength 'blocks' with exercise 'steps' and per-set 'setRows'. Loaded lifts must use real sets/reps/load."
+            extraInstructions: `Return native strength blocks with explicit setRows, rest and RIR/RPE notes. Specify sRPE_target. Unknown exercise loads must remain blank. ${strengthProgramme ? formatStrengthProgramme(strengthProgramme) : ''}`
           })
           logStage('strength-validation-retry-requested', {
             attempt,
@@ -1317,6 +1353,9 @@ OUTPUT JSON matching the schema.`
           continue
         }
       }
+
+      if (strengthProgramme && !preserveExistingStructure)
+        structure.strengthProgramme = strengthProgramme
 
       structure = normalizeStructuredWorkoutForPersistence(structure, {
         refs: {
@@ -1641,6 +1680,14 @@ OUTPUT JSON matching the schema.`
         totalTSS += (blockDuration / 3600) * 40
       }
     }
+    if (isStrength) {
+      // Native blocks are canonical; avoid counting their flattened mirror twice or
+      // assigning generic endurance TSS to resistance exercise time.
+      totalDuration = computeStrengthExerciseMetrics(
+        structure.blocks?.flatMap((block: any) => block.steps || [])
+      ).durationSec
+      totalTSS = 0
+    }
     logStage('structure-normalized', {
       totalDistance,
       totalDuration,
@@ -1657,7 +1704,7 @@ OUTPUT JSON matching the schema.`
     if (renderable && totalDuration <= 0) {
       throw new Error('Generated structured workout has zero total duration')
     }
-    if (!familyCompilation && renderable && totalTSS <= 0) {
+    if (!familyCompilation && !isStrength && renderable && totalTSS <= 0) {
       throw new Error('Generated structured workout has zero total TSS')
     }
     if (!renderable) {
