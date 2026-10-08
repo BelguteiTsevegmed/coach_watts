@@ -109,6 +109,11 @@ export default defineEventHandler(async (event) => {
     liveUserFtp: user.ftp
   })
   const structureGenerationInFlight = await hasActiveStructureGenerationRun(id)
+  const latestStructureGenerationRun = await prisma.workoutStructureGenerationRun.findFirst({
+    where: { plannedWorkoutId: id, generationRevision: workout.generationRevision },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, mode: true, status: true, error: true }
+  })
 
   return {
     workout,
@@ -119,6 +124,7 @@ export default defineEventHandler(async (event) => {
     sportSettings,
     settingsStaleness,
     structureGenerationInFlight,
+    latestStructureGenerationRun,
     hasRenderableStructure: hasRenderableStructure(workout.structuredWorkout)
   }
 })

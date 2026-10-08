@@ -5,6 +5,7 @@ import {
   markStructureGenerationRunRunning,
   markStructureGenerationRunStale
 } from './structure-generation-run'
+import { getCurrentTaskExecution } from './task-registry'
 
 type GenerationTaskPayload = {
   generationRunId?: string
@@ -63,6 +64,13 @@ export const terminateStructureGenerationTask = finishStructureGenerationTask
 export async function failStructureGenerationTaskFromPayload(payload: unknown, error: unknown) {
   const runId = (payload as GenerationTaskPayload | null)?.generationRunId
   if (!runId) return
+  const execution = getCurrentTaskExecution()
+  if (
+    execution?.attemptNumber !== undefined &&
+    execution.maxAttempts !== undefined &&
+    execution.attemptNumber < execution.maxAttempts
+  )
+    return
   const message = error instanceof Error ? error.message : String(error || 'Generation failed')
   await markStructureGenerationRunFailed(runId, message)
 }

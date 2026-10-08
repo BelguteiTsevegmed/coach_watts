@@ -10,11 +10,11 @@ export interface TaskExecutionContext {
 export type TaskHandler<T = any> = (payload: T, context?: TaskExecutionContext) => Promise<any>
 
 const registry = new Map<string, TaskHandler>()
-const executionStorage = new AsyncLocalStorage<{
-  taskId: string
-  runId?: string
-  signal?: AbortSignal
-}>()
+const executionStorage = new AsyncLocalStorage<
+  TaskExecutionContext & {
+    taskId: string
+  }
+>()
 
 /**
  * Registers a task handler function for execution by BullMQ workers or fallback drivers.
@@ -53,8 +53,7 @@ export function hasTaskHandler(taskId: string): boolean {
   return registry.has(taskId)
 }
 
-export function getCurrentTaskExecution():
-  { taskId: string; runId?: string; signal?: AbortSignal } | undefined {
+export function getCurrentTaskExecution(): (TaskExecutionContext & { taskId: string }) | undefined {
   return executionStorage.getStore()
 }
 
@@ -70,8 +69,5 @@ export async function executeRegisteredTask(
   if (!handler) {
     throw new Error(`[TaskRegistry] No handler registered for task: ${taskId}`)
   }
-  return await executionStorage.run(
-    { taskId, runId: context?.runId, signal: context?.signal },
-    () => handler(payload, context)
-  )
+  return await executionStorage.run({ ...context, taskId }, () => handler(payload, context))
 }
