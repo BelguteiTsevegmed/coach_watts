@@ -87,9 +87,30 @@ describe('formatInjuriesForPrompt', () => {
     expect(lines[1]).toContain('Left achilles')
     expect(lines[2]).toContain('Right shoulder')
     expect(prompt.match(/Left achilles/g)).toHaveLength(1)
-    expect(prompt).toContain('Injury rules (pain-monitoring model)')
+    expect(prompt).toContain('Injury rules (condition-specific; product modification threshold)')
     expect(prompt).toContain('pain >= 4/10')
     expect(prompt).toContain('Never diagnose')
+  })
+
+  it('gives red flags precedence over low pain or recovering status', () => {
+    const prompt = formatInjuriesForPrompt(
+      [
+        {
+          ...achilles,
+          bodyArea: 'shin',
+          painLevel: 1,
+          status: 'RECOVERING',
+          description: 'Pinpoint bone tenderness and night pain'
+        }
+      ],
+      { today }
+    )
+    expect(prompt).toContain('pain 1/10 | RECOVERING')
+    expect(prompt).toContain('Pinpoint bone tenderness and night pain')
+    expect(prompt).toContain('Red flags override pain scores and ACTIVE/RECOVERING status')
+    expect(prompt).toContain('stop loading the area and seek clinical assessment')
+    expect(prompt).toContain('Low pain is not clearance')
+    expect(prompt).not.toContain('training can continue, monitored')
   })
 
   it('can omit the rules and use a custom heading', () => {

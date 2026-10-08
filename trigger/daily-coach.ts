@@ -24,7 +24,10 @@ import { evaluateFitbitRecoveryAlert } from '../server/utils/wellness'
 import { dispatchTask } from '../server/utils/task-dispatcher'
 import { formatPromptHeight, formatPromptWeight } from '../server/utils/ai-prompt-format'
 import { getAthletePrimarySport } from '../server/utils/coaching/sport'
-import { buildCoachingPrinciples } from '../server/utils/coaching/principles'
+import {
+  buildCoachingPrinciples,
+  READINESS_DECISION_PROMPT
+} from '../server/utils/coaching/principles'
 import { buildCoachRoleIntro } from '../server/utils/coaching/persona'
 import { fetchOpenInjuries, formatInjuriesForPrompt } from '../server/utils/coaching/injury-context'
 
@@ -302,20 +305,9 @@ FITBIT RECOVERY ALERT CHECK:
 ${formatInjuriesForPrompt(openInjuries, { today: todayDateOnly })}
 
 DECISION LOGIC:
-Use Training Stress Balance (TSB/Form) as primary indicator:
-- TSB > 25: Detraining risk - need more training stimulus
-- TSB 5 to 25: Peak form - good for race/event day
-- TSB -10 to 5: Maintenance - steady training
-- TSB -25 to -10: Building fitness - optimal training zone
-- TSB -40 to -25: High fatigue - reduce intensity
-- TSB < -40: Overreaching - rest required
+${READINESS_DECISION_PROMPT}
 
 Also consider:
-- Recovery Score < 33% (or Poor proxy metrics): Recommend rest or very easy activity
-- Recovery 33-50%: Reduce intensity significantly
-- Recovery 50-67%: Proceed with caution, modify as needed
-- Recovery 67-80%: Proceed as planned
-- Recovery > 80%: Good day for high intensity
 - Yesterday's TSS was ${yesterdayWorkout?.tss || 0}
 - Multiple high-load days increase fatigue risk
 - Low HRV combined with high HR indicates stress
@@ -323,15 +315,15 @@ Also consider:
 - If Fitbit recovery alert is triggered, prefer 'rest' or 'reduce_intensity' unless user explicitly overrides with strong justification
 ${activeGoals.length > 0 ? `- Consider how today's recommendation impacts progress toward active goals` : ''}
 
-CRITICAL: Base your recommendation on the comprehensive training load data above, especially TSB (Form), not just today's recovery metrics. If Recovery Score is "Unknown", rely on TSB, HRV trend, and Sleep.
+CRITICAL: Use current load alongside symptoms, feedback and recovery trends. If Recovery Score is "Unknown", state that uncertainty; do not treat TSB as clearance.
 
 Provide a structured recommendation for today's training${activeGoals.length > 0 ? ", considering the athlete's current goals and training load" : ''}.
 
 CRITICAL INSTRUCTIONS:
 1. PRIORITIZE the "Training Load & Form" metrics provided in the training context above for any fitness assessment.
 2. IGNORE any conflicting TSB/CTL values found in the "ATHLETE PROFILE" section if they differ from the fresh metrics, as the profile may contain stale summaries.
-3. Base your recommendation on the current TSB and recovery metrics.
-4. An ACTIVE injury with pain >= 4/10 overrides "proceed" for sessions that load it: modify, cross-train or rest, and say why.
+3. Combine current recorded load with symptoms, feedback and personal recovery trends; no metric alone clears training.
+4. Red flags override any pain score or sensor reassurance: stop loading the area and refer. An ACTIVE injury with pain >= 4/10 overrides "proceed" for sessions that load it: modify, cross-train or rest, and say why.
 5. Maintain your **${aiSettings.aiPersona}** persona throughout.
 
 ${buildCoachingPrinciples(primarySport)}`

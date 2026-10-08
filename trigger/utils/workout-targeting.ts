@@ -1,3 +1,4 @@
+import { COACHING_EVIDENCE_VERSION } from '../../shared/coaching-evidence'
 import {
   formatSteadyTargetStyleInstruction,
   normalizeTargetPolicy,
@@ -993,6 +994,7 @@ export function buildPlannedWorkoutGenerationContext(input: {
 }) {
   return {
     version: 1,
+    coachingEvidenceVersion: COACHING_EVIDENCE_VERSION,
     generatedAt: new Date().toISOString(),
     operation: input.operation,
     generatorMode: input.generatorMode || 'legacy_json',

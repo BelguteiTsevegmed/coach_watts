@@ -1,7 +1,7 @@
 /**
  * Training Stress Metrics Calculation Service
  *
- * Implements the Performance Management Chart (PMC) methodology for tracking:
+ * Implements the Fresh Management Chart (PMC) methodology for tracking:
  * - CTL (Chronic Training Load) - 42-day weighted average representing "Fitness"
  * - ATL (Acute Training Load) - 7-day weighted average representing "Fatigue"
  * - TSB (Training Stress Balance) - CTL - ATL representing "Form"
@@ -59,48 +59,51 @@ export function getStressScore(workout: any): number {
 }
 
 /**
- * Get form status based on TSB value
+ * Describe recorded load balance using product display bands.
+ * These bands do not diagnose overtraining, predict injury, or clear racing.
  */
 export function getFormStatus(tsb: number): FormStatus {
   if (tsb > 25) {
     return {
-      status: 'No Fitness',
+      status: 'Very fresh',
       color: 'gray',
-      description: 'Resting too long; fitness declining'
+      description: 'Recent load is well below longer-term load; check training history'
     }
   }
   if (tsb > 5) {
     return {
-      status: 'Performance',
+      status: 'Fresh',
       color: 'green',
-      description: 'Fresh and ready to race; peak form'
+      description: 'Recent load is below longer-term load; assess readiness separately'
     }
   }
   if (tsb > -10) {
     return {
-      status: 'Maintenance',
+      status: 'Balanced load',
       color: 'yellow',
-      description: 'Neutral zone; maintaining fitness'
+      description: 'Recent and longer-term load are similar'
     }
   }
   if (tsb > -25) {
     return {
-      status: 'Productive',
+      status: 'Accumulating load',
       color: 'blue',
-      description: 'Optimal training zone; building fitness'
+      description: 'Recent load is above longer-term load; monitor recovery'
     }
   }
   if (tsb > -40) {
     return {
-      status: 'Cautionary',
+      status: 'High recent load',
       color: 'orange',
-      description: 'High fatigue; injury risk increasing'
+      description:
+        'Recent load is substantially above longer-term load; review symptoms and recovery'
     }
   }
   return {
-    status: 'Overreaching',
+    status: 'Very high recent load',
     color: 'red',
-    description: 'Severe fatigue; rest needed immediately'
+    description:
+      'Recent load is far above longer-term load; review recovery before further hard work'
   }
 }
 

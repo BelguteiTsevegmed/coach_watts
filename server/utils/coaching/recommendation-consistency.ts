@@ -247,8 +247,7 @@ export function applyRecommendationConsistency<T extends RecommendationLike>(par
     const first = conflicts[0]!
     const location = formatInjuryLocation(first.injury.bodyArea, first.injury.side).toLowerCase()
     analysis.recommendation = 'modify'
-    analysis.reasoning =
-      `Your ${location} is logged at ${first.injury.painLevel}/10, so don't do this session as planned: swap it for cross-training that doesn't load it, or rest, until pain is 3/10 or less and settled by the next morning. ${analysis.reasoning || ''}`.trim()
+    analysis.reasoning = `Your ${location} is logged at ${first.injury.painLevel}/10, so don't do this session as planned: swap it for cross-training that doesn't load it, or rest. Low pain alone does not clear a return; follow symptoms and any clinician restrictions, and seek assessment for red flags.`
     ;(analysis as Record<string, unknown>).injury_guard = {
       overridden: 'proceed',
       conflicts: conflicts.map((conflict) => ({

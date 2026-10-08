@@ -1,5 +1,7 @@
 # Workout Safety Layer Plan
 
+> Evidence review: `coaching-evidence-v1`, 2026-10-08. See the [evidence/policy register](../../docs/04-guides/coaching-evidence-policy.md). This is a design draft, not validated injury prediction. Numeric caps below are proposed product heuristics, not proven safety boundaries. Passing a validator means compliance with configured policy, not medical clearance. Red flags and clinician restrictions take precedence over any load or pain score.
+
 ## 1. Objective
 
 Introduce a deterministic workout safety layer that sits between workout generation/editing and persistence so Coach Watts can:
@@ -64,7 +66,7 @@ Suggested output contract:
 ```ts
 type WorkoutSafetyCheck = {
   allowed: boolean
-  risk: 'low' | 'medium' | 'high'
+  policySeverity: 'low' | 'medium' | 'high' // Constraint severity, not injury probability
   reasons: string[]
   warnings: string[]
   adjusted?: {
@@ -102,7 +104,7 @@ Rules:
 
 1. Cap week-over-week long run duration increase.
    - Initial suggestion: `+15 min` default cap.
-   - Optional higher cap only when athlete has a deep recent history and low risk score.
+   - Optional higher cap only when athlete has a sufficient sport-specific history and a recorded, bounded product-policy override; never override clinical restrictions.
 2. Cap long run share of weekly run volume.
    - Initial suggestion: no more than `30-35%` of weekly run duration in early build/rebuild.
 3. Cap absolute long run duration by phase.
@@ -176,7 +178,7 @@ The service should support three modes:
 1. `warn`
    - return warnings only
 2. `adjust`
-   - automatically scale duration/TSS to the nearest safe value
+   - automatically scale duration/TSS to the nearest policy-compliant value
 3. `block`
    - reject the proposal
 
@@ -306,3 +308,16 @@ Done for phase 1 when all are true:
 3. Safety decisions are logged and explainable.
 4. The same service is called from the major planning entry points.
 5. Contract tests cover rejection and adjustment behavior for known risky cases.
+
+## 17. Evidence Review of Proposed Numeric Rules
+
+| Proposal                                            | Review and product interpretation                                                                                                                                                                                                                             |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Long-run growth `10-15%` vs previous `2-4` weeks    | Unvalidated duration heuristic. The 2025 cohort studied **distance** vs the longest run in the previous **30 days**; association does not validate this duration cap or prove prevention. Preserve the evidence measurement separately from any enforced cap. |
+| Long-run share `30-35%`, early rebuild `3h` example | Coaching defaults requiring athlete/event context; no reviewed trial establishes these as universal boundaries.                                                                                                                                               |
+| Weekly ramp `8-12%`                                 | Product policy only. The novice-runner 10% trial did not reduce injury incidence; neither that result nor the session cohort validates a universal weekly cap.                                                                                                |
+| Deload every `3-4` weeks and hard-day spacing       | Coaching scheduling heuristics; adapt to symptoms, exposure, constraints and response. No established injury probability follows from violation.                                                                                                              |
+| Rebuild tightening and sparse-history caps          | Conservative product choices under uncertainty; no precise injury-prevention effect established.                                                                                                                                                              |
+| ATL/CTL ratio or TSB threshold                      | Do not add a fixed injury-prevention, overtraining-diagnosis or race-clearance threshold. Use recorded load as context with feedback and symptoms.                                                                                                            |
+
+Before implementation, record the policy version, units, observed exposure, chosen limits and explanation. A warning based on observational evidence must remain distinct from a hard product-policy rejection; neither should claim an injury probability. The shared validator remains the separate scope of issue #10.

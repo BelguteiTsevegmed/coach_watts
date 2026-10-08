@@ -213,6 +213,10 @@ describe('recommendTodayActivityTask — coach brain', () => {
     expect(prompt).toContain('Left achilles | pain 5/10 | ACTIVE')
     expect(prompt).toContain('## Coaching Principles')
     expect(prompt).toContain('### Running specifics')
+    expect(prompt).toContain('coaching-evidence-v1')
+    expect(prompt).toContain('Higher scores do not automatically clear')
+    expect(prompt).not.toContain('TSB > -10')
+    expect(prompt).not.toContain('(High Risk)')
 
     const schema = generateStructuredAnalysis.mock.calls[0]![1] as any
     expect(schema.properties.suggested_modifications.required).toEqual(
@@ -220,7 +224,7 @@ describe('recommendTodayActivityTask — coach brain', () => {
     )
   })
 
-  it('never saves "proceed" over an injury conflict and strips contradicting numbers', async () => {
+  it('never saves "proceed" or its reassuring rationale over an injury conflict', async () => {
     generateStructuredAnalysis.mockResolvedValue({
       recommendation: 'proceed',
       confidence: 0.7,
@@ -238,14 +242,14 @@ describe('recommendTodayActivityTask — coach brain', () => {
     )![2]
     expect(saved.recommendation).toBe('modify')
     expect(saved.reasoning).toBe(
-      "Your left achilles is logged at 5/10, so don't do this session as planned: swap it for cross-training that doesn't load it, or rest, until pain is 3/10 or less and settled by the next morning. You are fresh, so enjoy a run."
+      "Your left achilles is logged at 5/10, so don't do this session as planned: swap it for cross-training that doesn't load it, or rest. Low pain alone does not clear a return; follow symptoms and any clinician restrictions, and seek assessment for red flags."
     )
     expect(saved.analysisJson.planned_workout).toEqual({
       original_title: 'Easy Run + 4 strides',
       original_tss: 33,
       original_duration_min: 40
     })
-    expect(saved.analysisJson.rationale_check.adjusted).toBe(true)
+    expect(saved.analysisJson.rationale_check).toBeUndefined()
     expect(saved.analysisJson.injury_guard.overridden).toBe('proceed')
   })
 })

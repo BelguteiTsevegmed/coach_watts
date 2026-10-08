@@ -129,7 +129,7 @@ describe('chat coach persona & body status', () => {
       '- Left achilles "Achilles tightness" | pain 5/10 | ACTIVE | since 2026-09-28 (6 days ago) | affects: Running'
     )
     expect(context).toContain('Injury ID for tools: inj-1 (achilles)')
-    expect(context).toContain('Injury rules (pain-monitoring model)')
+    expect(context).toContain('Injury rules (condition-specific; product modification threshold)')
   })
 
   it('says so when no injuries are logged', async () => {

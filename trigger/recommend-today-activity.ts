@@ -59,7 +59,10 @@ import {
 import { registerTaskHandler } from '../server/utils/task-registry'
 import { dispatchTask } from '../server/utils/task-dispatcher'
 import { getAthletePrimarySport } from '../server/utils/coaching/sport'
-import { buildCoachingPrinciples } from '../server/utils/coaching/principles'
+import {
+  buildCoachingPrinciples,
+  READINESS_DECISION_PROMPT
+} from '../server/utils/coaching/principles'
 import { buildCoachRoleIntro } from '../server/utils/coaching/persona'
 import {
   fetchOpenInjuries,
@@ -948,14 +951,14 @@ CRITICAL INSTRUCTIONS:
 1. ALWAYS use the user's specific zones defined below for the relevant activity type.
 2. PRIORITIZE the "CURRENT ATHLETE STATUS (Source of Truth)" metrics above for any fitness assessment.
 3. IGNORE any conflicting TSB/CTL values found in the "ATHLETE PROFILE" section if they differ from the Source of Truth, as they may be stale summaries.
-4. Refer to the "PROJECTED FITNESS TRENDS" for future state, but base your primary decision on the current TSB and recovery metrics.
+4. Refer to the "PROJECTED FITNESS TRENDS" for future state, but combine current recorded load with symptoms, feedback and personal recovery trends. TSB alone cannot clear training.
 5. RESPECT TRAINING AVAILABILITY: do not recommend sessions outside declared availability windows unless user feedback explicitly asks to override.
 6. If Fitbit recovery alert is triggered, bias strongly toward 'rest' or 'reduce_intensity' unless user feedback explicitly requests otherwise.
 7. Never invent subjective scores. If stress, fatigue, soreness, mood, or motivation are missing, explicitly describe them as "not reported today" instead of assigning a value.
 8. If a synced wellness event overlaps today or the recent biometrics downturn, explicitly call out that correlation in your reasoning and adjust the recommendation accordingly.
 9. Treat future goals, athlete-profile themes, and event categories as planning context only. They do NOT make a workout scheduled unless that intensity appears in the planned workouts list.
 10. Never frame the athlete's current ride, tour, or planned session as something you can abort or overwrite. You may only propose a safer alternative.
-11. INJURIES: read the "ACTIVE INJURIES & NIGGLES" section before deciding. If an ACTIVE injury with pain >= 4/10 affects today's session sport, you MUST modify or replace the session (cross-train without loading the area, reduce, or rest) and say why. Refer to a physio/doctor for red flags; never diagnose.
+11. INJURIES: read the "ACTIVE INJURIES & NIGGLES" section before deciding. If an ACTIVE injury with pain >= 4/10 affects today's session sport, you MUST modify or replace the session (cross-train without loading the area, reduce, or rest) and say why. Red flags override low pain and ACTIVE/RECOVERING status: stop loading the area and seek clinical assessment. Never diagnose.
 
 ${buildCoachingPrinciples(primarySport)}
 
@@ -968,22 +971,18 @@ Analyze whether the athlete should proceed with today's planned workout or modif
 
 **IMPORTANT**: Pay close attention to the "AI Analysis Insights" in the RECENT TRAINING section. If recent workouts highlight persistent technical weaknesses, fatigue-related pacing issues, or specific improvement recommendations, incorporate those insights into today's guidance.
 
-**PLANNED REST DAYS**: If the today's planned workout type is "Rest", your DEFAULT recommendation should be to **proceed with the rest day** (Rest). Only suggest modifying to a light activity if the athlete is exceptionally fresh (TSB > 10 and high recovery score) or if they specifically asked for a workout in their feedback. Recovery is a vital part of the training process.
+**PLANNED REST DAYS**: If the today's planned workout type is "Rest", your DEFAULT recommendation should be to **proceed with the rest day** (Rest). Only suggest modifying to a light activity if the athlete is reporting good recovery without contraindications or if they specifically asked for a workout in their feedback. Recovery is a vital part of the training process.
 
 DECISION CRITERIA:
 1. **Recovery Status**:
-   - Recovery < 33%: Strong recommendation for rest or active recovery (Zone 1).
-   - Recovery 33-50%: Reduce intensity (cap at Zone 2/3).
-   - Recovery 50-67%: Modify if workout is hard (Threshold+).
-   - Recovery 67-80%: Proceed as planned.
-   - Recovery > 80%: Good day for intensity.
+${READINESS_DECISION_PROMPT}
 
 2. **Future Load & Events (PROACTIVE LOAD MANAGEMENT)**:
-   - Check the **Upcoming Events** list. If an 'A' or 'B' priority event is within 48-72 hours, ensure freshness (TSB > -10). Recommend tapering/easy sessions if fatigue is high.
-   - Review **Projected Fitness Trends**. If TSB is projected to drop below -30 (High Risk) in the next few days, consider reducing load TODAY to prevent overreaching, unless it is a planned "Overload Block".
+   - Check the **Upcoming Events** list. If an 'A' or 'B' priority event is within 48-72 hours, review event demands, fatigue, symptoms and taper response. Recommend easier sessions when indicated; no fixed TSB ensures readiness.
+   - Review **Projected Fitness Trends**. If projected load rises substantially relative to recent sport-specific exposure, review recovery and consider less load today. A projected TSB does not establish injury risk or diagnose overreaching; a planned overload block does not override contraindications.
    - If a massive workout (TSS > 150) is planned tomorrow, consider keeping today easier.
 
-**If Recovery Score is "Unknown"**: Infer recovery status from Sleep (quality/duration), HRV trends, and Resting HR.
+**If Recovery Score is "Unknown"**: State that recovery status is unknown; use available sleep, personal HRV/resting-HR trends, symptoms and feedback without inventing a score or clearance.
 
 - **Late in the day**: If it is late (e.g. > 20:00) and workout not done, suggest Rest or Short version.
 - **Completed Training**: If user already trained today, recommend REST or mark as complete.

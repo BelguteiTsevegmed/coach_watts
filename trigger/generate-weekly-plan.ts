@@ -1,3 +1,4 @@
+import { COACHING_EVIDENCE_VERSION } from '../shared/coaching-evidence'
 import {
   readSportVolumeTargets,
   remainingProgressionBudgets,
@@ -961,7 +962,7 @@ Retain the current block and week focus. Return actual replacement sessions, nev
     status: 'ACTIVE',
     generatedBy: 'AI',
     modelVersion: aiSettings.aiModelPreference,
-    planJson: plan as any,
+    planJson: { ...(plan as any), coachingEvidenceVersion: COACHING_EVIDENCE_VERSION },
     totalTSS: (plan as any).totalTSS,
     totalDuration: Array.isArray((plan as any)?.days)
       ? (plan as any).days.reduce((sum: number, d: any) => sum + (d.durationMinutes || 0) * 60, 0)
