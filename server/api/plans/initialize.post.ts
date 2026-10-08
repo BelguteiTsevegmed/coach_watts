@@ -2,16 +2,25 @@ import { prisma } from '../../utils/db'
 import { z } from 'zod/v3'
 import { requireAuth } from '../../utils/auth-guard'
 import { getUserTimezone, getUserLocalDate } from '../../utils/date'
-import { generateStructuredAnalysis } from '../../utils/gemini'
 
 import {
   buildPlanProgression,
-  calculateProgressionWeekTargets,
   weeklyAvailabilityMinutes
 } from '../../utils/plans/progression-policy'
 import { trainingPlanRepository } from '../../utils/repositories/trainingPlanRepository'
-import { getAthletePrimarySport, getDefaultActivityTypes } from '../../utils/coaching/sport'
-import { baseWeeklyVolumeMinutes, isRecoveryWeek } from '../../utils/plans/week-targets'
+import {
+  getAthletePrimarySport,
+  getDefaultActivityTypes,
+  inferSportFromText,
+  classifySportFamily
+} from '../../utils/coaching/sport'
+import { baseWeeklyVolumeMinutes } from '../../utils/plans/week-targets'
+import {
+  buildMacroPlan,
+  macroBlocks,
+  macroWeekPolicy,
+  macroWeekTargets
+} from '../../utils/plans/macro-policy'
 
 const initializePlanSchema = z.object({
   goalId: z.string(),
@@ -52,34 +61,110 @@ export default defineEventHandler(async (event) => {
     startingPhase
   } = validation.data
   const userId = authUser.id
-  const preferredActivityTypes = validation.data.preferredActivityTypes?.length
-    ? validation.data.preferredActivityTypes
-    : getDefaultActivityTypes(await getAthletePrimarySport(userId))
-
   // 1. Fetch Goal to get target date
   const goal = await prisma.goal.findUnique({
     where: { id: goalId },
     include: { events: true } // If linked to an event
   })
 
-  if (!goal) {
+  if (!goal || goal.userId !== userId) {
     throw createError({ statusCode: 404, message: 'Goal not found' })
   }
 
-  // Fetch User Profile for Age context
-  const user = await prisma.user.findUnique({
-    where: { id: userId }
-  })
-  const age = user?.dob ? new Date().getFullYear() - new Date(user.dob).getFullYear() : 30
+  const primaryEvent = [...goal.events].sort((a, b) => {
+    const rank = { A: 0, B: 1, C: 2 }
+    return (
+      (rank[a.priority as keyof typeof rank] ?? 1) - (rank[b.priority as keyof typeof rank] ?? 1) ||
+      a.date.getTime() - b.date.getTime()
+    )
+  })[0]
+  const explicitSport = classifySportFamily(
+    primaryEvent?.type || goal.eventType || primaryEvent?.subType
+  )
+  const goalSport =
+    explicitSport === 'ride'
+      ? 'cycling'
+      : explicitSport === 'run'
+        ? 'running'
+        : explicitSport === 'swim'
+          ? 'swimming'
+          : inferSportFromText(goal.eventType || primaryEvent?.subType || goal.title)
+  const preferredActivityTypes = validation.data.preferredActivityTypes?.length
+    ? validation.data.preferredActivityTypes
+    : getDefaultActivityTypes(goalSport || (await getAthletePrimarySport(userId)))
 
   let targetDate = endDate ? new Date(endDate) : goal.targetDate || goal.eventDate
   if (!targetDate && goal.events.length > 0 && goal.events[0] && !endDate) {
-    targetDate = goal.events[0].date
+    targetDate = new Date(Math.max(...goal.events.map((e) => e.date.getTime())))
   }
 
   if (!targetDate) {
     throw createError({ statusCode: 400, message: 'Goal must have a target date' })
   }
+
+  // 2. Calculate Timeline
+  // Force start date to UTC midnight of the calendar day
+  const timezone = await getUserTimezone(userId)
+  const start = getUserLocalDate(timezone, new Date(startDate))
+
+  const end = new Date(new Date(targetDate).toISOString().slice(0, 10) + 'T00:00:00Z')
+  // Include the event day, even when it falls on the first day of a partial final week.
+  const totalWeeks = Math.ceil(((end.getTime() - start.getTime()) / 86400000 + 1) / 7)
+  if (totalWeeks < 4 || totalWeeks > 104) {
+    throw createError({ statusCode: 400, message: 'Plan duration must be 4 to 104 weeks' })
+  }
+
+  // Keep sport exposure and import uncertainty distinct from the athlete's availability.
+  const now = new Date()
+  const [workouts, availability] = await Promise.all([
+    prisma.workout.findMany({
+      where: {
+        userId,
+        isDuplicate: false,
+        date: { gte: new Date(now.getTime() - 28 * 86400000), lte: now }
+      },
+      select: { id: true, type: true, date: true, durationSec: true, isDuplicate: true, tss: true }
+    }),
+    prisma.trainingAvailability.findMany({ where: { userId } })
+  ])
+  const progressionContext = buildPlanProgression({
+    now,
+    workouts,
+    activityTypes: preferredActivityTypes,
+    requestedVolumeMinutes: baseWeeklyVolumeMinutes(volumeHours, volumePreference),
+    availabilityMinutes: weeklyAvailabilityMinutes(availability),
+    historyCompleteness: validation.data.historyCompleteness,
+    planWeeks: totalWeeks
+  })
+  const macroPlan = buildMacroPlan({
+    start,
+    end,
+    activityTypes: preferredActivityTypes,
+    progression: progressionContext,
+    requestedPhase: startingPhase,
+    recoveryRhythm,
+    strategy,
+    events: goal.events.length
+      ? goal.events
+      : goal.eventType && (goal.eventDate || goal.targetDate)
+        ? [
+            {
+              id: goal.id,
+              title: goal.title,
+              date: goal.eventDate || goal.targetDate!,
+              subType: goal.eventType,
+              priority: 'A',
+              distance: goal.distance,
+              expectedDuration: goal.duration,
+              elevation: goal.elevation,
+              terrain: goal.terrain
+            }
+          ]
+        : []
+  })
+  progressionContext.macroPlan = macroPlan
+  const finalBlocksConfig = macroBlocks(macroPlan)
+  let loadingWeekOrdinal = 0
 
   // 0. Clean up any existing DRAFT plans for this user
   // This prevents multiple overlapping draft plans from cluttering the calendar
@@ -111,182 +196,6 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // 2. Calculate Timeline
-  // Force start date to UTC midnight of the calendar day
-  const timezone = await getUserTimezone(userId)
-  const start = getUserLocalDate(timezone, new Date(startDate))
-
-  const end = new Date(targetDate)
-  const totalWeeks = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 7))
-
-  if (totalWeeks < 4) {
-    throw createError({ statusCode: 400, message: 'Plan duration too short (min 4 weeks)' })
-  }
-
-  // 3. AI Structural Decision (Gemini)
-  // We ask Gemini to determine the macro-structure details based on the user context.
-  const allEventsContext =
-    goal.events.length > 0
-      ? goal.events
-          .map((e) => {
-            const dateStr = e.date instanceof Date ? e.date.toISOString().split('T')[0] : e.date
-            return `- [Priority ${e.priority || 'B'}] ${e.title} (${e.subType || e.type || 'General'}) on ${dateStr}. Distance: ${e.distance || 'N/A'}`
-          })
-          .join('\n    ')
-      : 'No specific events linked (General Fitness Goal).'
-
-  const structurePrompt = `
-    Design the complete periodization block structure for a ${age}-year-old athlete.
-    
-    Context:
-    - Goal: ${goal.title}
-    - Total Duration Available: ${totalWeeks} weeks
-    - Strategy: ${strategy}
-    - Current Readiness (Start Phase): ${startingPhase}
-    - Recovery Rhythm Preference: ${recoveryRhythm === 3 ? 'High Recovery (2:1)' : 'Standard (3:1)'}
-
-    Scheduled Events:
-    ${allEventsContext}
-
-    Custom Instructions: ${customInstructions || 'None'}
-
-    Task:
-    Generate a list of Training Blocks that sum up EXACTLY to ${totalWeeks} weeks.
-    
-    Rules:
-    1. Total Duration MUST be ${totalWeeks} weeks.
-    2. If Starting Readiness is 'BUILD', do NOT schedule BASE blocks. Start immediately with BUILD.
-    3. If Starting Readiness is 'PEAK', schedule only a short Build/Sharpening phase + Taper.
-    4. Align blocks so that "Race" or "Peak" blocks coincide with the A-Priority events if possible.
-    5. Block Types: [BASE, BUILD, PEAK, RACE, TRANSITION].
-    6. Focus: [AEROBIC_ENDURANCE, SWEET_SPOT, TEMPO, THRESHOLD, VO2_MAX, ANAEROBIC_CAPACITY, RACE_SPECIFIC].
-    
-    Output a JSON object with a 'rationale' string and a 'blocks' array.
-  `
-
-  const aiStructureSchema = {
-    type: 'object',
-    properties: {
-      rationale: { type: 'string', description: 'Explanation of the structure and strategy' },
-      blocks: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            name: { type: 'string', description: 'e.g. Base 1, Build 2' },
-            type: { type: 'string', enum: ['BASE', 'BUILD', 'PEAK', 'RACE', 'TRANSITION'] },
-            focus: { type: 'string', description: 'Primary physiological focus' },
-            durationWeeks: { type: 'integer', minimum: 1, maximum: 12 }
-          },
-          required: ['name', 'type', 'focus', 'durationWeeks']
-        }
-      }
-    },
-    required: ['rationale', 'blocks']
-  }
-
-  let aiStructure
-  try {
-    aiStructure = await generateStructuredAnalysis<any>(
-      structurePrompt,
-      aiStructureSchema,
-      'flash',
-      {
-        userId,
-        operation: 'plan_structure',
-        entityType: 'goal',
-        entityId: goalId
-      }
-    )
-  } catch (e) {
-    console.error('Gemini structure generation failed, falling back to algorithmic generation', e)
-    // Fallback to empty structure, causing calculateBlocks to use legacy logic if we kept it,
-    // OR we can implement a basic fallback here.
-    // For now, let's just throw or handle it in the block mapper.
-  }
-
-  // 4. Define Blocks
-  // If AI succeeded, use its blocks. If not (or if logic fails), we could fallback.
-  // Ideally, we implement the duration normalization here.
-
-  const finalBlocksConfig = aiStructure?.blocks || []
-
-  // FALLBACK: If AI failed or returned no blocks, use a simple linear generator
-  if (!finalBlocksConfig.length) {
-    // Simple linear fallback
-    const taper = 2
-    const training = Math.max(0, totalWeeks - taper)
-    const base = Math.floor(training * 0.6)
-    const build = training - base
-
-    if (base > 0)
-      finalBlocksConfig.push({
-        name: 'Base Phase',
-        type: 'BASE',
-        focus: 'SWEET_SPOT',
-        durationWeeks: base
-      })
-    if (build > 0)
-      finalBlocksConfig.push({
-        name: 'Build Phase',
-        type: 'BUILD',
-        focus: 'THRESHOLD',
-        durationWeeks: build
-      })
-    finalBlocksConfig.push({
-      name: 'Peak & Taper',
-      type: 'PEAK',
-      focus: 'RACE_SPECIFIC',
-      durationWeeks: taper
-    })
-  }
-
-  // NORMALIZE DURATION (AI Math Safety)
-  const currentTotal = finalBlocksConfig.reduce((sum: number, b: any) => sum + b.durationWeeks, 0)
-  const diff = totalWeeks - currentTotal
-
-  if (diff !== 0 && finalBlocksConfig.length > 0) {
-    // We need to adjust. Find the best block to adjust (Longest Base or Build)
-    const adjustIdx = finalBlocksConfig.findIndex(
-      (b: any) => b.type === 'BASE' || b.type === 'BUILD'
-    )
-    // If no Base/Build, just adjust the first block
-    const targetIdx = adjustIdx >= 0 ? adjustIdx : 0
-
-    // Apply adjustment
-    finalBlocksConfig[targetIdx].durationWeeks += diff
-
-    // Safety: If we reduced it to <= 0, remove it or set to 1 and borrow from elsewhere (simplification: ensure min 1)
-    if (finalBlocksConfig[targetIdx].durationWeeks < 1) {
-      finalBlocksConfig[targetIdx].durationWeeks = 1
-      // Recalculate and brute force trim from end if needed, but this is an edge case.
-    }
-  }
-
-  // Keep sport exposure and import uncertainty distinct from the athlete's availability.
-  const now = new Date()
-  const [workouts, availability] = await Promise.all([
-    prisma.workout.findMany({
-      where: {
-        userId,
-        isDuplicate: false,
-        date: { gte: new Date(now.getTime() - 28 * 86400000), lte: now }
-      },
-      select: { id: true, type: true, date: true, durationSec: true, isDuplicate: true, tss: true }
-    }),
-    prisma.trainingAvailability.findMany({ where: { userId } })
-  ])
-  const progressionContext = buildPlanProgression({
-    now,
-    workouts,
-    activityTypes: preferredActivityTypes,
-    requestedVolumeMinutes: baseWeeklyVolumeMinutes(volumeHours, volumePreference),
-    availabilityMinutes: weeklyAvailabilityMinutes(availability),
-    historyCompleteness: validation.data.historyCompleteness,
-    planWeeks: totalWeeks
-  })
-  let loadingWeekOrdinal = 0
-
   // 5. Create Plan Skeleton
   const plan = await trainingPlanRepository.create(
     {
@@ -300,18 +209,12 @@ export default defineEventHandler(async (event) => {
       customInstructions: customInstructions,
       recoveryRhythm,
       progressionContext,
-      description: [
-        aiStructure?.rationale || 'Generated Training Plan',
-        ...progressionContext.explanations
-      ].join('\n\n'),
+      description: [macroPlan.rationale, ...progressionContext.explanations].join('\n\n'),
       blocks: {
-        create: finalBlocksConfig.map((blockConfig: any, index: number) => {
+        create: finalBlocksConfig.map((blockConfig, index) => {
           // Calculate Start Date for this block
           const blockStartDate = new Date(start)
-          let weeksPrior = 0
-          for (let i = 0; i < index; i++) {
-            weeksPrior += finalBlocksConfig[i].durationWeeks
-          }
+          const weeksPrior = blockConfig.globalWeekStart - 1
           blockStartDate.setUTCDate(blockStartDate.getUTCDate() + weeksPrior * 7)
 
           return {
@@ -321,7 +224,8 @@ export default defineEventHandler(async (event) => {
             primaryFocus: blockConfig.focus,
             startDate: blockStartDate,
             durationWeeks: blockConfig.durationWeeks,
-            recoveryWeekIndex: recoveryRhythm, // Still use user pref for micro-cycles within the block
+            recoveryWeekIndex: recoveryRhythm,
+            description: macroPlan.rationale,
             weeks: {
               create: Array.from({ length: blockConfig.durationWeeks }).map((_, i) => {
                 const weekStart = new Date(blockStartDate)
@@ -329,25 +233,24 @@ export default defineEventHandler(async (event) => {
                 const weekEnd = new Date(weekStart)
                 weekEnd.setUTCDate(weekEnd.getUTCDate() + 6)
 
-                // Determine recovery week based on rhythm
-                // e.g. Rhythm 4 (3:1) -> Weeks 4, 8, 12 are recovery
-                // But specifically for Taper/Race blocks, usually the whole thing is recovery/taper logic handled by workout generator
-                const isRecovery = isRecoveryWeek(i + 1, recoveryRhythm, blockConfig.type)
-                if (!isRecovery) loadingWeekOrdinal++
-
-                const targets = calculateProgressionWeekTargets(progressionContext, {
-                  blockType: blockConfig.type,
-                  weekNumber: i + 1,
-                  blockDurationWeeks: blockConfig.durationWeeks,
-                  isRecovery,
-                  loadingWeekOrdinal: Math.max(1, loadingWeekOrdinal)
-                })
+                const policy = macroWeekPolicy(macroPlan, weeksPrior + i + 1)
+                const isRecovery = policy.isRecovery
+                if (policy.advancesLoading) loadingWeekOrdinal++
+                const {
+                  trainingVolumeMinutes,
+                  eventLoadMinutes,
+                  eventExceedsCapacity,
+                  ...targets
+                } = macroWeekTargets(progressionContext, policy, Math.max(1, loadingWeekOrdinal))
+                weekEnd.setTime(new Date(policy.end).getTime())
 
                 return {
                   weekNumber: i + 1,
                   startDate: weekStart,
                   endDate: weekEnd,
                   isRecovery,
+                  focus: policy.focus,
+                  explanation: `${policy.rationale} Ordinary training allowance: ${trainingVolumeMinutes} minutes. ${eventExceedsCapacity ? 'Event exceeds current sport capacity: adjust the goal/event dose before prescription.' : ''}`,
                   ...targets
                 }
               })
@@ -371,5 +274,3 @@ export default defineEventHandler(async (event) => {
     plan
   }
 })
-
-// Removed calculateBlocks function as logic is now inline/AI-driven

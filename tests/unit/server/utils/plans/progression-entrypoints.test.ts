@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ plan: null as any, id: 0 }))
+const state = vi.hoisted(() => ({ plan: null as any, id: 0, goal: null as any }))
 vi.stubGlobal('defineEventHandler', (fn: any) => fn)
 vi.stubGlobal('getRouterParam', (event: any, key: string) => event.params?.[key])
 vi.stubGlobal('readBody', async (event: any) => event.body)
@@ -22,13 +22,14 @@ vi.mock('../../../../../server/utils/plan-logic', () => ({ shiftPlanDates: async
 vi.mock('../../../../../server/utils/db', () => {
   const prisma: any = {
     goal: {
-      findUnique: async () => ({
-        id: 'goal',
-        userId: 'athlete',
-        title: '5k',
-        targetDate: new Date('2026-11-04Z'),
-        events: []
-      })
+      findUnique: async () =>
+        state.goal || {
+          id: 'goal',
+          userId: 'athlete',
+          title: '5k',
+          targetDate: new Date('2026-11-03Z'),
+          events: []
+        }
     },
     user: { findUnique: async () => ({ id: 'athlete' }) },
     workout: {
@@ -132,6 +133,7 @@ const initialize = async () => {
 beforeEach(() => {
   state.plan = null
   state.id = 0
+  state.goal = null
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-07T00:00:00Z'))
 })
@@ -221,3 +223,68 @@ it.each(['reorder', 'delete'])(
     expect(later.weeks[0].sportVolumeTargets).toEqual({ run: 72 })
   }
 )
+
+it('initialization carries event demand and bounded phase selection to the persisted calendar', async () => {
+  state.goal = {
+    id: 'goal',
+    userId: 'athlete',
+    title: 'First marathon',
+    targetDate: new Date('2026-11-04Z'),
+    eventType: 'Marathon',
+    duration: 4,
+    events: []
+  }
+  const handler = (await import('../../../../../server/api/plans/initialize.post')).default
+  await handler({
+    body: {
+      goalId: 'goal',
+      startDate: '2026-10-07T00:00:00.000Z',
+      volumeHours: 7.5,
+      startingPhase: 'PEAK',
+      historyCompleteness: 'COMPLETE'
+    }
+  } as any)
+  expect(state.plan.activityTypes).toEqual(['Run'])
+  expect(state.plan.progressionContext.macroPlan).toMatchObject({
+    resolvedPhase: 'BASE',
+    goalAdjustmentRequired: true,
+    events: [{ kind: 'run-marathon', durationMinutes: 240 }]
+  })
+  const weeks = state.plan.blocks.flatMap((b: any) => b.weeks)
+  expect(weeks).toHaveLength(5)
+  expect(weeks[4].endDate.toISOString()).toBe('2026-11-04T00:00:00.000Z')
+  expect(weeks[4].explanation).toMatch(/exceeds current sport capacity/)
+})
+
+it('recovery cadence continues across newly added blocks shorter than the rhythm', async () => {
+  await initialize()
+  const add = (await import('../../../../../server/api/plans/[id]/blocks/index.post')).default
+  await add({
+    params: { id: 'plan' },
+    body: { name: 'Short block', type: 'BASE', primaryFocus: 'AEROBIC_ENDURANCE', durationWeeks: 3 }
+  } as any)
+  await add({
+    params: { id: 'plan' },
+    body: {
+      name: 'Recovery boundary',
+      type: 'BASE',
+      primaryFocus: 'AEROBIC_ENDURANCE',
+      durationWeeks: 1
+    }
+  } as any)
+  const weeks = state.plan.blocks.flatMap((b: any) => b.weeks)
+  expect(weeks[7].isRecovery).toBe(true)
+  expect(weeks[7].volumeTargetMinutes).toBeLessThan(weeks[6].volumeTargetMinutes)
+})
+
+it('rejects another athlete’s goal before replacing any draft', async () => {
+  state.goal = {
+    id: 'goal',
+    userId: 'someone-else',
+    title: 'Marathon',
+    targetDate: new Date('2026-12-01Z'),
+    events: []
+  }
+  await expect(initialize()).rejects.toMatchObject({ statusCode: 404 })
+  expect(state.plan).toBeNull()
+})

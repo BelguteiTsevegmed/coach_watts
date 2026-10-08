@@ -1,3 +1,4 @@
+import type { MacroPlan } from './macro-policy'
 import { formatDateUTC, formatUserDate } from '../date'
 import { classifySportFamily, type SportFamily } from '../coaching/sport'
 import { RECOVERY_WEEK_FACTOR, TSS_PER_HOUR, type WeekTargetOptions } from './week-targets'
@@ -15,6 +16,7 @@ export const DEFAULT_PROGRESSION_POLICY = {
 export type ProgressionPolicy = typeof DEFAULT_PROGRESSION_POLICY
 export type SportVolumeTargets = Partial<Record<SportFamily, number>>
 export type PlanProgression = {
+  macroPlan?: MacroPlan
   version: 'sport-progression-v1'
   capturedAt: string
   requestedVolumeMinutes: number
@@ -33,6 +35,8 @@ export type PlanProgression = {
       SportFamily,
       {
         recentWeeklyAvgMinutes: number
+        completedSessions?: number
+        activeWeeks?: number
         lastWorkoutAt: string | null
         daysSinceLastWorkout: number | null
         status: 'ACTIVE' | 'RETURNING' | 'INACTIVE' | 'UNKNOWN_HISTORY'
@@ -136,6 +140,10 @@ export function buildPlanProgression(input: {
         coverage
       },
       recentWeeklyAvgMinutes: average,
+      completedSessions: rows.length,
+      activeWeeks: new Set(
+        rows.map((w) => Math.floor((input.now.getTime() - w.date.getTime()) / (7 * 86400000)))
+      ).size,
       lastWorkoutAt: last?.toISOString() ?? null,
       daysSinceLastWorkout: days,
       status: returning

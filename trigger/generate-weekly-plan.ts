@@ -1,3 +1,4 @@
+import { formatMacroWeekForPrompt } from '../server/utils/plans/macro-policy'
 import { retireReplacedPrescriptionExports } from '../server/utils/training-prescription/replacement-sync'
 import { randomUUID } from 'node:crypto'
 import {
@@ -511,6 +512,7 @@ CONTEXT FROM MASTER PLAN:
 - Target Weekly Volume: ${Math.round(fullContext.volumeTargetMinutes / 60)} hours
 - Target Weekly TSS: ${fullContext.tssTarget}
 - Sport-specific minute ceilings: ${JSON.stringify(sportVolumeTargets || {})}. Unused cycling time cannot be spent running.
+${formatMacroWeekForPrompt(fullContext.block.plan.progressionContext, fullContext.startDate)}
 `
     // Override phase instruction with strict block context
     phaseInstruction = `\nCURRENT PHASE: ${fullContext.block.type}. Focus strictly on ${fullContext.block.primaryFocus}. This is Week ${fullContext.weekNumber} of the block.`
