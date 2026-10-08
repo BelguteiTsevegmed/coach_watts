@@ -227,6 +227,8 @@ describe('generateWeeklyPlan task', () => {
       expect(generateStructuredAnalysis).toHaveBeenCalledTimes(1)
       const prompt = vi.mocked(generateStructuredAnalysis).mock.calls[0]![0] as string
       expect(prompt).toContain('Week Focus: Base')
+      expect(prompt).toContain('RESOLVED PERSONAL READINESS: fixture context')
+      expect(prompt).not.toContain('Average recovery score:')
       expect(prompt).toContain('at most 120 minutes and 80 TSS')
       expect(prompt).toContain('2026-03-18, 2026-03-19')
     })
@@ -400,4 +402,17 @@ describe('generateWeeklyPlan task', () => {
 vi.mock('../../../server/utils/training-prescription/service', async (importOriginal) => ({
   ...(await importOriginal<any>()),
   ...(await import('../helpers/prescription-boundary-double')).prescriptionBoundaryDouble
+}))
+
+vi.mock('../../../server/utils/services/readinessContextService', () => ({
+  buildReadinessContext: vi.fn().mockResolvedValue({
+    context: {
+      version: 'readiness-v1',
+      asOf: '2026-03-10',
+      decision: 'unknown',
+      reasons: [],
+      conflicts: []
+    },
+    prompt: 'RESOLVED PERSONAL READINESS: fixture context'
+  })
 }))

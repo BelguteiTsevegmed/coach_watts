@@ -324,3 +324,10 @@ describe('getWaveRange / getMetabolicStatesForRange local-day workout grouping (
     expect(feb15Workouts.map((w) => w.id)).toContain('w1')
   })
 })
+
+vi.mock('../../../../server/utils/services/readinessContextService', () => ({
+  buildReadinessContext: vi.fn().mockResolvedValue({
+    context: { decision: 'unknown' },
+    prompt: 'RESOLVED PERSONAL READINESS: fixture context'
+  })
+}))

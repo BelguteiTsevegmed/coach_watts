@@ -299,3 +299,10 @@ describe('analyzeWellness skin temperature formatting', () => {
     expect(prompt).toContain('Skin Temp: 33.5°C')
   })
 })
+
+vi.mock('../../../../../server/utils/services/readinessContextService', () => ({
+  buildReadinessContext: vi.fn().mockResolvedValue({
+    context: { decision: 'unknown' },
+    prompt: 'RESOLVED PERSONAL READINESS: fixture context'
+  })
+}))

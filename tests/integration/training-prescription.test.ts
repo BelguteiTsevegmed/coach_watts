@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { prisma } from '../../server/utils/db'
 import { plannedWorkoutRepository } from '../../server/utils/repositories/plannedWorkoutRepository'
 import {
+  prescriptionSession,
   loadPrescriptionSnapshot,
   validatePrescriptionWrite
 } from '../../server/utils/training-prescription/service'
@@ -54,11 +55,98 @@ beforeEach(async () => {
   await prisma.workout.deleteMany({ where: { userId } })
   await prisma.plannedWorkout.deleteMany({ where: { userId } })
   await prisma.injury.deleteMany({ where: { userId } })
+  await prisma.wellness.deleteMany({ where: { userId } })
+  await prisma.dailyCheckin.deleteMany({ where: { userId } })
+  await prisma.calendarNote.deleteMany({ where: { userId } })
   await prisma.trainingAvailability.deleteMany({ where: { userId } })
   await prisma.trainingPrescriptionAssessment.deleteMany({ where: { userId } })
 })
 
 describe('prescription write boundaries against PostgreSQL', () => {
+  it('rechecks fresh athlete feedback when applying a proposed session', async () => {
+    const existing = await plannedWorkoutRepository.create(draft({ type: 'Ride' }))
+    await prisma.wellness.create({ data: { userId, date, fatigue: 8 } })
+    await expect(
+      plannedWorkoutRepository.update(existing.id, userId, { workIntensity: 0.95 })
+    ).rejects.toMatchObject({ statusCode: 422 })
+    expect(
+      (await prisma.plannedWorkout.findUniqueOrThrow({ where: { id: existing.id } })).workIntensity
+    ).toBe(0.6)
+    const receipt = await prisma.trainingPrescriptionAssessment.findFirstOrThrow({
+      where: { userId, outcome: 'reject' }
+    })
+    expect(receipt.snapshot).toMatchObject({
+      readiness: { decision: 'reduce', application: { status: 'advice_only' } }
+    })
+  })
+  it('applies an easy replacement through canonical validation after poor feedback', async () => {
+    const existing = await plannedWorkoutRepository.create(draft({ type: 'Ride' }))
+    await writeCanonicalPlannedWorkoutStructure({
+      plannedWorkoutId: existing.id,
+      source: 'MANUAL_EDIT',
+      workoutType: 'Ride',
+      structure: { steps: [{ duration: 1200, rpe: 8, primaryTarget: 'rpe' }] }
+    })
+    await prisma.wellness.create({ data: { userId, date, fatigue: 8 } })
+    await writeCanonicalPlannedWorkoutStructure({
+      plannedWorkoutId: existing.id,
+      source: 'MANUAL_EDIT',
+      workoutType: 'Ride',
+      structure: { steps: [{ duration: 900, rpe: 3, primaryTarget: 'rpe', intent: 'easy' }] }
+    })
+    const updated = await prisma.plannedWorkout.findUniqueOrThrow({ where: { id: existing.id } })
+    expect(updated.durationSec).toBe(900)
+    expect(prescriptionSession(updated).hard).toBe(false)
+    expect(updated.stimulusSummary).toMatchObject({ hardSession: null })
+    expect(updated.structureRevision).toBe(2)
+  })
+  it('accepts rest for confirmed illness and clears old hard structure and queued revisions', async () => {
+    const existing = await plannedWorkoutRepository.create(draft({ type: 'Ride' }))
+    await writeCanonicalPlannedWorkoutStructure({
+      plannedWorkoutId: existing.id,
+      source: 'MANUAL_EDIT',
+      workoutType: 'Ride',
+      structure: { steps: [{ duration: 1200, rpe: 8, primaryTarget: 'rpe' }] }
+    })
+    await prisma.wellness.create({ data: { userId, date, tags: 'Sick' } })
+    await expect(
+      plannedWorkoutRepository.update(existing.id, userId, { durationSec: 900 })
+    ).rejects.toMatchObject({ statusCode: 422 })
+    const updated = await plannedWorkoutRepository.update(existing.id, userId, {
+      type: 'Rest',
+      durationSec: 0,
+      tss: 0
+    })
+    expect(updated).toMatchObject({
+      type: 'Rest',
+      durationSec: 0,
+      tss: 0,
+      distanceMeters: 0,
+      structuredWorkout: null,
+      stimulusSummary: null
+    })
+    expect(updated.generationRevision).toBe(2)
+  })
+
+  it('rejects an accepted suggestion when its session revision changed meanwhile', async () => {
+    const existing = await plannedWorkoutRepository.create(draft({ type: 'Ride' }))
+    const current = await prisma.plannedWorkout.update({
+      where: { id: existing.id },
+      data: { title: 'New session', updatedAt: new Date(existing.updatedAt.getTime() + 1000) }
+    })
+    await expect(
+      plannedWorkoutRepository.update(
+        existing.id,
+        userId,
+        { type: 'Rest' },
+        { expectedUpdatedAt: existing.updatedAt }
+      )
+    ).rejects.toMatchObject({ statusCode: 409 })
+    expect(
+      (await prisma.plannedWorkout.findUniqueOrThrow({ where: { id: current.id } })).title
+    ).toBe('New session')
+  })
+
   it('requires captured structure and start-time revisions before sending', async () => {
     const existing = await plannedWorkoutRepository.create(draft({ startTime: '08:00' }))
     await writeCanonicalPlannedWorkoutStructure({

@@ -203,6 +203,7 @@ describe('recommendTodayActivityTask — coach brain', () => {
 
     const prompt = generateStructuredAnalysis.mock.calls[0]![0] as string
     expect(prompt).toContain('expert running coach')
+    expect(prompt).toContain('RESOLVED PERSONAL READINESS: fixture context')
     expect(prompt).not.toContain('cycling coach')
     expect(prompt).toContain('GROUND TRUTH')
     expect(prompt).toMatch(
@@ -253,3 +254,16 @@ describe('recommendTodayActivityTask — coach brain', () => {
     expect(saved.analysisJson.injury_guard.overridden).toBe('proceed')
   })
 })
+
+vi.mock('../../../server/utils/services/readinessContextService', () => ({
+  buildReadinessContext: vi.fn().mockResolvedValue({
+    context: {
+      version: 'readiness-v1',
+      asOf: '2026-03-10',
+      decision: 'unknown',
+      reasons: [],
+      conflicts: []
+    },
+    prompt: 'RESOLVED PERSONAL READINESS: fixture context'
+  })
+}))

@@ -1,3 +1,4 @@
+import { buildCanonicalPlannedWorkoutWriteData } from '../../../utils/canonical-planned-workout-write'
 import { plannedWorkoutRepository } from '../../../utils/repositories/plannedWorkoutRepository'
 import { requireAuth } from '../../../utils/auth-guard'
 import { prisma } from '../../../utils/db'
@@ -132,19 +133,38 @@ export default defineEventHandler(async (event) => {
   const nextSyncStatus = (syncStatus: string | null | undefined) =>
     syncStatus === 'LOCAL_ONLY' ? 'LOCAL_ONLY' : 'PENDING'
 
+  // A readiness reduction carries its easy structure, not just a smaller scalar dose
+  // on top of the original hard intervals. The repository validates the final proposal.
+  const readinessStructure =
+    analysis?.readiness_context?.version === 'readiness-v1' && modifications.structured_workout
+      ? buildCanonicalPlannedWorkoutWriteData({
+          source: 'MANUAL_EDIT',
+          structure: modifications.structured_workout,
+          workoutType: type,
+          syncStatus: targetWorkout?.syncStatus,
+          extra: { generationRevision: { increment: 1 } }
+        }).data
+      : {}
+
   let updatedWorkout
 
   if (targetPlannedWorkoutId) {
-    updatedWorkout = await plannedWorkoutRepository.update(targetPlannedWorkoutId, userId, {
-      title,
-      type,
-      durationSec,
-      tss: modifications.new_tss,
-      description: newDescription,
-      modifiedLocally: true,
-      syncStatus: nextSyncStatus(targetWorkout?.syncStatus),
-      syncError: null
-    })
+    updatedWorkout = await plannedWorkoutRepository.update(
+      targetPlannedWorkoutId,
+      userId,
+      {
+        title,
+        type,
+        durationSec,
+        tss: modifications.new_tss,
+        description: newDescription,
+        modifiedLocally: true,
+        syncStatus: nextSyncStatus(targetWorkout?.syncStatus),
+        syncError: null,
+        ...readinessStructure
+      },
+      { expectedUpdatedAt: targetWorkout?.updatedAt }
+    )
   } else {
     updatedWorkout = await plannedWorkoutRepository.create({
       userId,
@@ -160,7 +180,10 @@ export default defineEventHandler(async (event) => {
       syncStatus: 'LOCAL_ONLY',
       syncError: null,
       rawJson: {},
-      managedBy: 'COACH_WATTS'
+      managedBy: 'COACH_WATTS',
+      ...readinessStructure,
+      structureRevision: 0,
+      generationRevision: 0
     })
     targetPlannedWorkoutId = updatedWorkout.id
   }
@@ -194,7 +217,7 @@ export default defineEventHandler(async (event) => {
 
   // Trigger regeneration of structured workout based on the new description/title/params.
   // The generation task is responsible for syncing the final structure to Intervals.
-  if (requiresStructure) {
+  if (requiresStructure && !('structuredWorkout' in readinessStructure)) {
     const queued = await enqueuePlannedWorkoutStructureGeneration({
       userId,
       plannedWorkoutId: targetPlannedWorkoutId!,

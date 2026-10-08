@@ -171,3 +171,16 @@ describe('recommendTodayActivityTask', () => {
     })
   })
 })
+
+vi.mock('../../../server/utils/services/readinessContextService', () => ({
+  buildReadinessContext: vi.fn().mockResolvedValue({
+    context: {
+      version: 'readiness-v1',
+      asOf: '2026-03-10',
+      decision: 'unknown',
+      reasons: [],
+      conflicts: []
+    },
+    prompt: 'RESOLVED PERSONAL READINESS: fixture context'
+  })
+}))

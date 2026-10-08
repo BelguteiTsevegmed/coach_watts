@@ -1,4 +1,5 @@
 import { formatMacroWeekForPrompt } from '../server/utils/plans/macro-policy'
+import { buildReadinessContext } from '../server/utils/services/readinessContextService'
 import { retireReplacedPrescriptionExports } from '../server/utils/training-prescription/replacement-sync'
 import { randomUUID } from 'node:crypto'
 import {
@@ -418,6 +419,8 @@ export async function runGenerateWeeklyPlan(payload: {
 
   const activeGoals = filterGoalsForContext(rawActiveGoals, timezone, alignedWeekStart)
 
+  const readiness = await buildReadinessContext(userId, getUserLocalDate(timezone), timezone)
+
   // Calculate Age
   const userAge = calculateAge(user?.dob)
 
@@ -455,11 +458,6 @@ export async function runGenerateWeeklyPlan(payload: {
 
   // Calculate recent training load
   const recentTSS = recentWorkouts.reduce((sum, w) => sum + (w.tss || 0), 0)
-  const avgRecovery =
-    recentWellness.length > 0
-      ? recentWellness.reduce((sum, w) => sum + (w.recoveryScore || 50), 0) / recentWellness.length
-      : 50
-
   // Generate training context for load management
   const thirtyDaysAgo = getStartOfDaysAgoUTC(timezone, 30)
   const trainingContext = await generateTrainingContext(
@@ -721,10 +719,7 @@ ${
 
 ${injuryContext}
 
-RECENT RECOVERY (Last 7 days):
-- Average recovery score: ${avgRecovery.toFixed(0)}%
-- Latest HRV (rMSSD): ${recentWellness[0]?.hrv || 'N/A'} ms
-- Latest resting HR: ${recentWellness[0]?.restingHr || 'N/A'} bpm
+${readiness.prompt}
 
 PLANNING PERIOD:
 - Start: ${formatUserDate(alignedWeekStart, timezone)} (YYYY-MM-DD)

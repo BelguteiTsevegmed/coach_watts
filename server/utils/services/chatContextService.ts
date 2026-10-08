@@ -1,3 +1,4 @@
+import { buildReadinessContext } from './readinessContextService'
 import { prisma } from '../db'
 import { sportSettingsRepository } from '../repositories/sportSettingsRepository'
 import { getUserLocalDate, formatUserDate, formatDateUTC } from '../date'
@@ -143,6 +144,8 @@ export async function buildAthleteContext(
   const nutritionTrackingEnabled = userProfile?.nutritionTrackingEnabled !== false
   const todayDate = getUserLocalDate(userTimezone)
   const currentGoals = filterGoalsForContext(activeGoals, userTimezone, todayDate)
+
+  const readiness = await buildReadinessContext(userId, todayDate, userTimezone)
 
   // 2. Fetch Recent Activity Data (Last 7 Days)
   const sevenDaysAgo = new Date(todayDate)
@@ -313,7 +316,7 @@ export async function buildAthleteContext(
   })
 
   // 3. Build Comprehensive Athlete Context
-  let athleteContext = '\n\n## Athlete Profile\n'
+  let athleteContext = '\n\n## Athlete Profile\n' + readiness.prompt
 
   if (userProfile) {
     if (userProfile.name) athleteContext += `- **Name**: ${userProfile.name}\n`

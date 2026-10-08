@@ -1,6 +1,7 @@
 import { prisma } from '../db'
 import type { Prisma } from '@prisma/client'
 import { normalizeWellnessFields } from '../wellnessNormalization'
+import { readinessProvenance } from '../../../shared/readiness'
 
 function areEquivalentValues(left: unknown, right: unknown) {
   if (left instanceof Date && right instanceof Date) {
@@ -218,6 +219,21 @@ export const wellnessRepository = {
             }
           }
         }
+      }
+    }
+
+    // Keep field-level origins across unrelated provider merges and raw snapshot replacement.
+    // lastSource describes the last row change, not the origin of every measurement.
+    const provenance = readinessProvenance(existing?.rawJson, finalUpdateData, source)
+    const createProvenance = readinessProvenance(null, sanitizedCreateData, source)
+    if (provenance) {
+      const raw = (finalUpdateData.rawJson ?? existing?.rawJson ?? {}) as Record<string, unknown>
+      finalUpdateData.rawJson = { ...raw, _readinessProvenance: provenance }
+    }
+    if (createProvenance) {
+      sanitizedCreateData.rawJson = {
+        ...((sanitizedCreateData.rawJson as Record<string, unknown>) || {}),
+        _readinessProvenance: createProvenance
       }
     }
 

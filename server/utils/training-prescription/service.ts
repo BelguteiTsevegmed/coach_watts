@@ -1,4 +1,6 @@
+import { isExplicitEasyReadinessStructure } from '../../../shared/readiness'
 import type { Prisma } from '@prisma/client'
+import { getReadinessContext } from '../services/readinessContextService'
 import { createError } from 'h3'
 import { fromZonedTime } from 'date-fns-tz'
 import { randomUUID } from 'node:crypto'
@@ -40,9 +42,15 @@ export function prescriptionSession(
     tss: workout.tss ?? null,
     hard:
       summary?.hardSession ??
-      (typeof (completed ? workout.intensity : workout.workIntensity) === 'number'
-        ? (completed ? workout.intensity : workout.workIntensity) >= 0.85
-        : null),
+      (!completed && isExplicitEasyReadinessStructure(workout.structuredWorkout)
+        ? false
+        : !completed &&
+            !workout.structuredWorkout &&
+            ['easy', 'hard'].includes(metadata.prescriptionEffort)
+          ? metadata.prescriptionEffort === 'hard'
+          : typeof (completed ? workout.intensity : workout.workIntensity) === 'number'
+            ? (completed ? workout.intensity : workout.workIntensity) >= 0.85
+            : null),
     protected: !!(workout.completed || metadata.locked || metadata.isAnchor)
   }
 }
@@ -111,6 +119,7 @@ export async function loadPrescriptionSnapshot(
     where: { userId, trainingWeekId: null, date: { gte: from, lte: through } }
   })
   return {
+    readiness: await getReadinessContext(userId, new Date(`${today}T00:00:00Z`), tx, timezone),
     capturedAt: now.toISOString(),
     today,
     timezone,
