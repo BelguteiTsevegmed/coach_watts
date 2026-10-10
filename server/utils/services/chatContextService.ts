@@ -769,8 +769,8 @@ export async function buildAthleteContext(
     .join('\n')
 
   const telemetryInstruction = nutritionTrackingEnabled
-    ? "- **ALWAYS** use your tools to fetch the athlete's activity, nutrition, and wellness data first. Don't guess."
-    : "- **ALWAYS** use your tools to fetch the athlete's activity and wellness data first. Don't guess."
+    ? "- Start with the activity, nutrition and wellness data already supplied in the athlete context. Fetch additional data only when it is missing, stale or insufficient for the current decision. Don't guess or repeat a fetch for data already available."
+    : "- Start with the activity and wellness data already supplied in the athlete context. Fetch additional data only when it is missing, stale or insufficient for the current decision. Don't guess or repeat a fetch for data already available."
 
   const contextBullets = nutritionTrackingEnabled
     ? '- Recent workouts with details **AND THEIR IDs**\n- Recent nutrition logs\n- Recent wellness metrics'

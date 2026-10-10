@@ -35,6 +35,7 @@ import {
 import { normalizeCoreMessagesForGemini } from './core-message-normalizer'
 import { extractMemoryCandidatesFromConversation } from './memory-extraction'
 import { findToolNameRepair } from './tool-call-repair'
+import { awaitWithAbort, runChatMaintenance } from './abortable'
 import {
   classifyChatSkills,
   composeSkillInstructions,
@@ -847,7 +848,11 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
   let firstOutputLatencyMs: number | null = null
   let terminalTimeoutReason: string | null = null
   let terminalFailureReason: string | null = null
+  let responseCompleted = false
+  let executionFinished = false
   const executionAbortController = new AbortController()
+  const waitForTurn = <T>(operation: PromiseLike<T> | T) =>
+    awaitWithAbort(operation, executionAbortController.signal)
   const executionHost = {
     deploymentId:
       process.env.RENDER_GIT_COMMIT ||
@@ -967,34 +972,41 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
 
   return await (async () => {
     try {
-      const earlyUsage = await chatTurnService.startLlmUsage(turn.id, turn.userId, content || '')
+      const earlyUsage = await waitForTurn(
+        chatTurnService.startLlmUsage(turn.id, turn.userId, content || '')
+      )
 
-      const draft = await chatTurnService.createAssistantDraft({
-        turnId: turn.id,
-        roomId: turn.roomId,
-        status: CHAT_TURN_STATUS.RUNNING,
-        existingMessageId: turn.assistantMessageId
-      })
+      const draft = await waitForTurn(
+        chatTurnService.createAssistantDraft({
+          turnId: turn.id,
+          roomId: turn.roomId,
+          status: CHAT_TURN_STATUS.RUNNING,
+          existingMessageId: turn.assistantMessageId
+        })
+      )
       assistantDraft = draft
 
       currentPhase = 'building_context'
-      const { systemInstruction: baseSystemInstruction } = await buildAthleteContext(turn.userId, {
-        includeDomainToolInstructions: false
-      })
+      const { systemInstruction: baseSystemInstruction } = await waitForTurn(
+        buildAthleteContext(turn.userId, {
+          includeDomainToolInstructions: false
+        })
+      )
       ensureTurnNotAborted()
       currentPhase = 'loading_settings'
-      const timezone = await getUserTimezone(turn.userId)
+      const timezone = await waitForTurn(getUserTimezone(turn.userId))
       ensureTurnNotAborted()
-      const aiSettings = await getUserAiSettings(turn.userId)
+      const aiSettings = await waitForTurn(getUserAiSettings(turn.userId))
       ensureTurnNotAborted()
       const roomMetadata = (turn.room.metadata as any) || {}
       currentPhase = 'loading_memory'
-      const { globalBlock: globalMemoryBlock, roomBlock: roomMemoryBlock } =
-        await userMemoryService.composePromptMemoryBlock({
+      const { globalBlock: globalMemoryBlock, roomBlock: roomMemoryBlock } = await waitForTurn(
+        userMemoryService.composePromptMemoryBlock({
           userId: turn.userId,
           roomId: turn.roomId,
           memoryEnabled: aiSettings.aiMemoryEnabled
         })
+      )
       const roomSummaryBlock = roomMetadata?.historySummary
         ? `## Previous Conversation Summary\n${roomMetadata.historySummary}`
         : ''
@@ -1011,7 +1023,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         apiKey: process.env.GEMINI_API_KEY
       })
       currentPhase = 'loading_model_settings'
-      const opSettings = await getLlmOperationSettings(turn.userId, 'chat')
+      const opSettings = await waitForTurn(getLlmOperationSettings(turn.userId, 'chat'))
       ensureTurnNotAborted()
       const modelName = opSettings.modelId
       const allTools = getToolsWithContext(turn.userId, timezone, aiSettings, turn.roomId, {
@@ -1022,25 +1034,39 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         actorUserId
       })
       currentPhase = 'routing_skills'
-      const routedSkillSelection = await classifyChatSkills({
-        userId: turn.userId,
-        turnId: turn.id,
-        messages: submittedMessages,
-        roomMetadata,
-        requireToolApproval: !!aiSettings?.aiRequireToolApproval,
-        nutritionTrackingEnabled: aiSettings?.nutritionTrackingEnabled !== false,
-        abortSignal: executionAbortController.signal
-      })
+      const routedSkillSelection = await waitForTurn(
+        classifyChatSkills({
+          userId: turn.userId,
+          turnId: turn.id,
+          messages: submittedMessages,
+          roomMetadata,
+          requireToolApproval: !!aiSettings?.aiRequireToolApproval,
+          nutritionTrackingEnabled: aiSettings?.nutritionTrackingEnabled !== false,
+          abortSignal: executionAbortController.signal
+        })
+      )
       const skillSelection = expandSkillSelectionForRequest(routedSkillSelection, content || '')
       ensureTurnNotAborted()
       currentPhase = 'preparing_model_request'
-      const { tools, selectedToolNames, systemInstruction } = await buildTurnExecutionSkillConfig({
-        allTools,
-        baseSystemInstruction: finalSystemInstruction,
-        skillSelection,
-        aiRequireToolApproval: !!aiSettings?.aiRequireToolApproval,
-        nutritionTrackingEnabled: aiSettings?.nutritionTrackingEnabled !== false
-      })
+      const { tools, selectedToolNames, systemInstruction } = await waitForTurn(
+        buildTurnExecutionSkillConfig({
+          allTools,
+          baseSystemInstruction: finalSystemInstruction,
+          skillSelection,
+          aiRequireToolApproval: !!aiSettings?.aiRequireToolApproval,
+          nutritionTrackingEnabled: aiSettings?.nutritionTrackingEnabled !== false
+        })
+      )
+      ensureTurnNotAborted()
+      // A provider or timed-out continuation must never start another mutation.
+      for (const tool of Object.values(tools)) {
+        if (typeof tool.execute !== 'function') continue
+        const execute = tool.execute
+        tool.execute = (...args: any[]) => {
+          ensureTurnNotAborted()
+          return execute(...args)
+        }
+      }
       finalSystemInstruction = systemInstruction
       const availableToolNames = selectedToolNames
 
@@ -1127,9 +1153,8 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         historyToolCalls.set(approvedContinuation.toolCallId, continuationCall)
         currentTurnToolCalls.set(approvedContinuation.toolCallId, continuationCall)
 
-        const directResult = await tools[approvedContinuation.toolName].execute(
-          approvedContinuation.args,
-          {
+        const directResult = await waitForTurn(
+          tools[approvedContinuation.toolName].execute(approvedContinuation.args, {
             toolCallId: approvedContinuation.toolCallId,
             context: {
               turnId: activeTurn.id,
@@ -1137,8 +1162,9 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
               roomId: turn.roomId,
               userId: turn.userId,
               actorUserId
-            }
-          }
+            },
+            abortSignal: executionAbortController.signal
+          })
         )
 
         const directDetailedResult = {
@@ -1211,6 +1237,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
           if (completedUpdate.count === 0) {
             throw createAbortError('Turn ownership changed before local completion.')
           }
+          responseCompleted = true
 
           await broadcastAssistantMessage(
             {
@@ -1233,33 +1260,46 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
             completionMode: 'local_after_approved_tool'
           } as any)
 
-          await prisma.llmUsage
-            .update({
-              where: { id: earlyUsage.id },
-              data: {
-                model: 'approval_continuation_local',
-                success: true,
-                errorType: null,
-                errorMessage: null,
-                durationMs: executionDurationMs,
-                ttft: firstOutputLatencyMs,
-                responsePreview: assistantText.substring(0, 500)
-              }
-            })
-            .catch(() => null)
+          runChatMaintenance(
+            () =>
+              prisma.llmUsage
+                .update({
+                  where: { id: earlyUsage.id },
+                  data: {
+                    model: 'approval_continuation_local',
+                    success: true,
+                    errorType: null,
+                    errorMessage: null,
+                    durationMs: executionDurationMs,
+                    ttft: firstOutputLatencyMs,
+                    responsePreview: assistantText.substring(0, 500)
+                  }
+                })
+                .catch(() => null),
+            (error) => {
+              console.error('[ChatTurn] Optional usage accounting failed:', {
+                turnId: turn.id,
+                error
+              })
+            }
+          )
 
-          await scheduleChatRoomSummaryIfNeeded({
-            roomId: turn.roomId,
-            userId: turn.userId,
-            roomName: turn.room.name,
-            roomMetadata
-          }).catch((error) => {
-            console.error('[ChatTurn] Failed to schedule chat summary after local completion:', {
-              turnId: activeTurn.id,
-              roomId: turn.roomId,
-              error
-            })
-          })
+          runChatMaintenance(
+            () =>
+              scheduleChatRoomSummaryIfNeeded({
+                roomId: turn.roomId,
+                userId: turn.userId,
+                roomName: turn.room.name,
+                roomMetadata
+              }),
+            (error) => {
+              console.error('[ChatTurn] Failed to schedule chat summary after local completion:', {
+                turnId: activeTurn.id,
+                roomId: turn.roomId,
+                error
+              })
+            }
+          )
 
           return {
             success: true,
@@ -1275,7 +1315,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
       })
 
       const coreMessages = sanitizeCoreMessagesForToolApprovals(
-        await transformHistoryToCoreMessages(historyMessages)
+        await waitForTurn(transformHistoryToCoreMessages(historyMessages))
       )
       ensureTurnNotAborted()
       const normalizedMessages = normalizeCoreMessagesForGemini(coreMessages)
@@ -1406,6 +1446,9 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         force = false,
         extraMetadata: Record<string, any> = {}
       ) {
+        const isFailure =
+          status === CHAT_TURN_STATUS.FAILED || status === CHAT_TURN_STATUS.INTERRUPTED
+        if (!isFailure) ensureTurnNotAborted()
         const now = Date.now()
         if (!force && assistantText === persistedText && now - lastPersistAt < 250) return
 
@@ -1432,6 +1475,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         lastPersistAt = now
 
         const lease = await chatTurnService.heartbeat(activeTurn.id, undefined, ownedRunId)
+        if (!isFailure) ensureTurnNotAborted()
         if (lease.count === 0) {
           throw createAbortError('Turn ownership changed while persisting the response.')
         }
@@ -1460,11 +1504,13 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
           } as any
         })
 
+        if (!isFailure) ensureTurnNotAborted()
         const statusHeartbeat = await chatTurnService.heartbeat(
           activeTurn.id,
           status as any,
           ownedRunId
         )
+        if (!isFailure) ensureTurnNotAborted()
         if (statusHeartbeat.count === 0) {
           throw createAbortError('Turn ownership changed while updating response status.')
         }
@@ -1475,7 +1521,12 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
       }
 
       const markSlowResponse = async () => {
-        if (slowResponseRecorded || firstVisibleOutputAt || terminalTimeoutReason) {
+        if (
+          executionAbortController.signal.aborted ||
+          slowResponseRecorded ||
+          firstVisibleOutputAt ||
+          terminalTimeoutReason
+        ) {
           return
         }
 
@@ -1506,7 +1557,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
       }, CHAT_TURN_SLOW_RESPONSE_LIMIT_MS)
 
       function ensureTurnNotAborted() {
-        if (executionAbortController.signal.aborted) {
+        if (executionFinished || executionAbortController.signal.aborted) {
           throw createAbortError(terminalFailureReason || 'Turn aborted.')
         }
       }
@@ -1515,6 +1566,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         source: 'text_delta' | 'tool_step',
         extra: Record<string, any> = {}
       ) {
+        ensureTurnNotAborted()
         if (firstVisibleOutputAt) {
           return
         }
@@ -1541,6 +1593,10 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
       const providerOptions = getHardcodedChatProviderOptions(opSettings.model, modelName)
 
       const executeStreamAttempt = async (attemptIndex: number) => {
+        let finishResponse!: () => void
+        const responseFinished = new Promise<void>((resolve) => {
+          finishResponse = resolve
+        })
         let shouldRetryEmptyResponse = false
         const attemptProviderOptions = providerOptions
         const writeRepairPromptUsed = attemptIndex > 0 && shouldUseWriteRepairPrompt(skillSelection)
@@ -1594,9 +1650,11 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
           stopWhen: isStepCount(opSettings.maxSteps),
           providerOptions: attemptProviderOptions,
           onChunk: async ({ chunk }) => {
+            ensureTurnNotAborted()
             if (chunk.type === 'text-delta') {
               const deltaText = chunk.text
               await markFirstVisibleOutput('text_delta')
+              ensureTurnNotAborted()
               assistantText += deltaText
               currentPhase = 'streaming'
               await broadcastAssistantTextDelta(deltaText, CHAT_TURN_STATUS.STREAMING)
@@ -1611,6 +1669,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
             }
           },
           onStepEnd: async ({ toolCalls, toolResults, usage }) => {
+            ensureTurnNotAborted()
             latestUsage = usage
             if (toolCalls) {
               toolCalls.forEach((tc) => {
@@ -1653,6 +1712,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
             )
           },
           onEnd: async (event) => {
+            ensureTurnNotAborted()
             const { text, toolResults: finalStepResults, usage, toolCalls: finalCalls } = event
             latestUsage = usage
             assistantText = text || assistantText
@@ -1773,6 +1833,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
             if (completedUpdate.count === 0) {
               throw createAbortError('Turn ownership changed before completion.')
             }
+            responseCompleted = true
             await broadcastAssistantMessage(
               {
                 id: draft.id,
@@ -1799,149 +1860,192 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
               firstOutputLatencyMs
             })
 
-            await prisma.llmUsage
-              .update({
-                where: { id: earlyUsage.id },
-                data: {
-                  model: modelName,
-                  success: !shouldFallbackForEmptyResponse || recoveredEmptyResponse,
-                  errorType: shouldFallbackForEmptyResponse
-                    ? recoveredEmptyResponse
-                      ? 'EMPTY_RESPONSE_RECOVERED'
-                      : 'EMPTY_RESPONSE'
-                    : null,
-                  errorMessage: shouldFallbackForEmptyResponse
-                    ? 'LLM response finished with empty text.'
-                    : null,
-                  durationMs: executionDurationMs,
-                  ttft: firstOutputLatencyMs,
-                  responsePreview: assistantText.substring(0, 500),
-                  retryCount: attemptIndex
+            runChatMaintenance(
+              async (signal) => {
+                await awaitWithAbort(
+                  prisma.llmUsage
+                    .update({
+                      where: { id: earlyUsage.id },
+                      data: {
+                        model: modelName,
+                        success: !shouldFallbackForEmptyResponse || recoveredEmptyResponse,
+                        errorType: shouldFallbackForEmptyResponse
+                          ? recoveredEmptyResponse
+                            ? 'EMPTY_RESPONSE_RECOVERED'
+                            : 'EMPTY_RESPONSE'
+                          : null,
+                        errorMessage: shouldFallbackForEmptyResponse
+                          ? 'LLM response finished with empty text.'
+                          : null,
+                        durationMs: executionDurationMs,
+                        ttft: firstOutputLatencyMs,
+                        responsePreview: assistantText.substring(0, 500),
+                        retryCount: attemptIndex
+                      }
+                    })
+                    .catch(() => null),
+                  signal
+                )
+
+                await awaitWithAbort(
+                  logAttemptUsage({
+                    attemptIndex,
+                    usage,
+                    success: !shouldFallbackForEmptyResponse || recoveredEmptyResponse,
+                    errorType: shouldFallbackForEmptyResponse
+                      ? recoveredEmptyResponse
+                        ? 'EMPTY_RESPONSE_RECOVERED'
+                        : 'EMPTY_RESPONSE'
+                      : null,
+                    errorMessage: shouldFallbackForEmptyResponse
+                      ? 'LLM response finished with empty text.'
+                      : null,
+                    responsePreview: assistantText,
+                    durationMs: executionDurationMs,
+                    repairPromptUsed
+                  }),
+                  signal
+                )
+
+                try {
+                  const promptTokens = usage.inputTokens || 0
+                  const completionTokens = usage.outputTokens || 0
+                  const cachedTokens = usage.inputTokenDetails?.cacheReadTokens || 0
+                  const reasoningTokens = usage?.outputTokenDetails?.reasoningTokens || 0
+                  const estimatedCost = calculateLlmCost(
+                    modelName,
+                    promptTokens,
+                    completionTokens + reasoningTokens,
+                    cachedTokens
+                  )
+
+                  await awaitWithAbort(
+                    prisma.llmUsage.create({
+                      data: {
+                        userId: turn.userId,
+                        turnId: activeTurn.id,
+                        provider: 'gemini',
+                        model: modelName,
+                        modelType: aiSettings.aiModelPreference === 'flash' ? 'flash' : 'pro',
+                        operation: 'chat',
+                        entityType: 'ChatMessage',
+                        entityId: draft.id,
+                        promptTokens,
+                        completionTokens,
+                        cachedTokens,
+                        reasoningTokens,
+                        totalTokens: promptTokens + completionTokens,
+                        estimatedCost,
+                        durationMs: executionDurationMs,
+                        ttft: firstOutputLatencyMs,
+                        retryCount: 0,
+                        success: !shouldFallbackForEmptyResponse || recoveredEmptyResponse,
+                        errorType: shouldFallbackForEmptyResponse
+                          ? recoveredEmptyResponse
+                            ? 'EMPTY_RESPONSE_RECOVERED'
+                            : 'EMPTY_RESPONSE'
+                          : null,
+                        errorMessage: shouldFallbackForEmptyResponse
+                          ? 'LLM response finished with empty text.'
+                          : null,
+                        promptPreview: (content || '').substring(0, 500),
+                        responsePreview: assistantText.substring(0, 500),
+                        promptFull: JSON.stringify(skillSelectionMetadata).substring(0, 2000)
+                      }
+                    }),
+                    signal
+                  )
+                } catch (error) {
+                  console.error('[ChatTurn] LLM usage log failed:', error)
                 }
-              })
-              .catch(() => null)
-
-            await logAttemptUsage({
-              attemptIndex,
-              usage,
-              success: !shouldFallbackForEmptyResponse || recoveredEmptyResponse,
-              errorType: shouldFallbackForEmptyResponse
-                ? recoveredEmptyResponse
-                  ? 'EMPTY_RESPONSE_RECOVERED'
-                  : 'EMPTY_RESPONSE'
-                : null,
-              errorMessage: shouldFallbackForEmptyResponse
-                ? 'LLM response finished with empty text.'
-                : null,
-              responsePreview: assistantText,
-              durationMs: executionDurationMs,
-              repairPromptUsed
-            })
-
-            try {
-              const promptTokens = usage.inputTokens || 0
-              const completionTokens = usage.outputTokens || 0
-              const cachedTokens = usage.inputTokenDetails?.cacheReadTokens || 0
-              const reasoningTokens = usage?.outputTokenDetails?.reasoningTokens || 0
-              const estimatedCost = calculateLlmCost(
-                modelName,
-                promptTokens,
-                completionTokens + reasoningTokens,
-                cachedTokens
-              )
-
-              await prisma.llmUsage.create({
-                data: {
-                  userId: turn.userId,
-                  turnId: activeTurn.id,
-                  provider: 'gemini',
-                  model: modelName,
-                  modelType: aiSettings.aiModelPreference === 'flash' ? 'flash' : 'pro',
-                  operation: 'chat',
-                  entityType: 'ChatMessage',
-                  entityId: draft.id,
-                  promptTokens,
-                  completionTokens,
-                  cachedTokens,
-                  reasoningTokens,
-                  totalTokens: promptTokens + completionTokens,
-                  estimatedCost,
-                  durationMs: executionDurationMs,
-                  ttft: firstOutputLatencyMs,
-                  retryCount: 0,
-                  success: !shouldFallbackForEmptyResponse || recoveredEmptyResponse,
-                  errorType: shouldFallbackForEmptyResponse
-                    ? recoveredEmptyResponse
-                      ? 'EMPTY_RESPONSE_RECOVERED'
-                      : 'EMPTY_RESPONSE'
-                    : null,
-                  errorMessage: shouldFallbackForEmptyResponse
-                    ? 'LLM response finished with empty text.'
-                    : null,
-                  promptPreview: (content || '').substring(0, 500),
-                  responsePreview: assistantText.substring(0, 500),
-                  promptFull: JSON.stringify(skillSelectionMetadata).substring(0, 2000)
-                }
-              })
-            } catch (error) {
-              console.error('[ChatTurn] LLM usage log failed:', error)
-            }
-
-            await scheduleChatRoomSummaryIfNeeded({
-              roomId: turn.roomId,
-              userId: turn.userId,
-              roomName: turn.room.name,
-              roomMetadata
-            }).catch((error) => {
-              console.error('[ChatTurn] Failed to schedule chat summary after completion:', {
-                turnId: activeTurn.id,
-                roomId: turn.roomId,
-                error
-              })
-            })
-
-            if (aiSettings.aiMemoryEnabled && skillSelection.extractMemories && content?.trim()) {
-              const existingMemories = await userMemoryService.listMemories({ userId: turn.userId })
-              const extraction = await extractMemoryCandidatesFromConversation({
-                userId: turn.userId,
-                roomId: turn.roomId,
-                turnId: activeTurn.id,
-                messages: [
-                  { role: 'user', content },
-                  ...(assistantText.trim()
-                    ? [{ role: 'assistant' as const, content: assistantText.trim() }]
-                    : [])
-                ],
-                existingMemories: existingMemories.map((memory) => ({
-                  scope: memory.scope,
-                  content: memory.content
-                })),
-                operation: 'chat-memory-extract',
-                entityType: 'ChatTurn',
-                entityId: turn.id
-              })
-
-              const savedMemories = await userMemoryService.saveMemoryCandidates({
-                userId: turn.userId,
-                candidates: extraction.candidates
-              })
-
-              if (savedMemories.length > 0) {
-                await broadcastMemoryEvent({
-                  action: 'saved',
-                  memories: savedMemories,
-                  notice:
-                    savedMemories.length === 1
-                      ? 'Saved 1 memory from this conversation.'
-                      : `Saved ${savedMemories.length} memories from this conversation.`
-                }).catch((error) => {
-                  console.error('[ChatTurn] Failed to broadcast auto-saved memory event:', {
-                    turnId: activeTurn.id,
-                    roomId: turn.roomId,
-                    error
-                  })
+              },
+              (error) => {
+                console.error('[ChatTurn] Optional usage accounting failed:', {
+                  turnId: turn.id,
+                  error
                 })
               }
+            )
+
+            runChatMaintenance(
+              () =>
+                scheduleChatRoomSummaryIfNeeded({
+                  roomId: turn.roomId,
+                  userId: turn.userId,
+                  roomName: turn.room.name,
+                  roomMetadata
+                }),
+              (error) => {
+                console.error('[ChatTurn] Failed to schedule chat summary after completion:', {
+                  turnId: activeTurn.id,
+                  roomId: turn.roomId,
+                  error
+                })
+              }
+            )
+
+            if (aiSettings.aiMemoryEnabled && skillSelection.extractMemories && content?.trim()) {
+              runChatMaintenance(
+                async (signal) => {
+                  const existingMemories = await awaitWithAbort(
+                    userMemoryService.listMemories({ userId: turn.userId }),
+                    signal
+                  )
+                  const extraction = await awaitWithAbort(
+                    extractMemoryCandidatesFromConversation({
+                      userId: turn.userId,
+                      roomId: turn.roomId,
+                      turnId: activeTurn.id,
+                      messages: [
+                        { role: 'user', content },
+                        ...(assistantText.trim()
+                          ? [{ role: 'assistant' as const, content: assistantText.trim() }]
+                          : [])
+                      ],
+                      existingMemories: existingMemories.map((memory) => ({
+                        scope: memory.scope,
+                        content: memory.content
+                      })),
+                      operation: 'chat-memory-extract',
+                      entityType: 'ChatTurn',
+                      entityId: turn.id,
+                      abortSignal: signal
+                    }),
+                    signal
+                  )
+
+                  const savedMemories = await awaitWithAbort(
+                    userMemoryService.saveMemoryCandidates({
+                      userId: turn.userId,
+                      candidates: extraction.candidates
+                    }),
+                    signal
+                  )
+
+                  if (savedMemories.length > 0) {
+                    await broadcastMemoryEvent({
+                      action: 'saved',
+                      memories: savedMemories,
+                      notice:
+                        savedMemories.length === 1
+                          ? 'Saved 1 memory from this conversation.'
+                          : `Saved ${savedMemories.length} memories from this conversation.`
+                    }).catch((error) => {
+                      console.error('[ChatTurn] Failed to broadcast auto-saved memory event:', {
+                        turnId: activeTurn.id,
+                        roomId: turn.roomId,
+                        error
+                      })
+                    })
+                  }
+                },
+                (error) => {
+                  console.error('[ChatTurn] Optional memory extraction failed:', {
+                    turnId: turn.id,
+                    error
+                  })
+                }
+              )
             }
 
             const memoryToolEvent = buildMemoryEventFromToolResults(allToolResults)
@@ -1954,16 +2058,24 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
                 })
               })
             }
+            // Some providers do not close their stream after delivering onEnd.
+            // The durable completed response is sufficient to release this slot.
+            finishResponse()
           }
         })
 
         let streamError: Error | undefined
-        await result.consumeStream({
-          onError: (error) => {
-            streamError = error instanceof Error ? error : new Error(String(error))
-            console.error('[ChatTurn] Mid-stream error from LLM:', streamError.message)
-          }
-        })
+        await waitForTurn(
+          Promise.race([
+            result.consumeStream({
+              onError: (error) => {
+                streamError = error instanceof Error ? error : new Error(String(error))
+                console.error('[ChatTurn] Mid-stream error from LLM:', streamError.message)
+              }
+            }),
+            responseFinished
+          ])
+        )
         if (streamError) {
           throw streamError
         }
@@ -1989,6 +2101,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
           assistantMessageId: draft.id
         }
       } catch (error: any) {
+        if (responseCompleted) return { success: true, assistantMessageId: draft.id }
         const isExplicitTimeout =
           terminalTimeoutReason === CHAT_TURN_TIMEOUT_REASON.FIRST_OUTPUT_TIMEOUT ||
           terminalTimeoutReason === CHAT_TURN_TIMEOUT_REASON.EXECUTION_TIMEOUT
@@ -2101,6 +2214,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         throw error
       }
     } catch (error: any) {
+      if (responseCompleted) return { success: true, assistantMessageId: assistantDraft?.id }
       const activeStatuses = [
         CHAT_TURN_STATUS.RUNNING,
         CHAT_TURN_STATUS.STREAMING,
@@ -2217,6 +2331,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
 
       throw error
     } finally {
+      executionFinished = true
       clearExecutionTimers()
     }
   })()

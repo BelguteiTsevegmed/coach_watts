@@ -35,6 +35,7 @@ function formatConversation(messages: Array<{ role: string; content: string }>) 
 
 export async function extractMemoryCandidatesFromConversation(input: {
   userId: string
+  abortSignal?: AbortSignal
   roomId?: string | null
   turnId?: string | null
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
@@ -97,7 +98,8 @@ ${formatConversation(normalizedMessages)}`
       model: google(input.modelId || MEMORY_EXTRACTION_MODEL_ID),
       schema: memoryExtractionSchema,
       prompt,
-      maxRetries: 1
+      maxRetries: 1,
+      abortSignal: input.abortSignal || AbortSignal.timeout(15_000)
     })
 
     const candidates = (object.candidates || [])

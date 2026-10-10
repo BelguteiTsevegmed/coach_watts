@@ -1,5 +1,7 @@
 import { prisma } from './db'
-import { getRedisConnection, pingQueue, streamsQueue, webhookQueue } from './queue'
+import { getRedisConnection, mainTaskQueue, pingQueue, streamsQueue, webhookQueue } from './queue'
+import { getTaskDriver } from './task-dispatcher'
+import { getQueueWorkers } from './queue-workers'
 
 export type WorkerHealthStatus = 'ok' | 'degraded' | 'critical'
 
@@ -52,6 +54,7 @@ export type WorkerMonitoringSnapshot = {
     // has nothing to do with the Workout `streams` relation or the V1/V2 stream
     // tables, so there is nothing to migrate onto workoutStreamRepository.
     streams: QueueCounts & { workers: number; isPaused: boolean }
+    mainTasks: QueueCounts & { workers: number; isPaused: boolean }
   }
   webhooks: {
     pending: number
@@ -191,10 +194,13 @@ async function getRedisMemoryStats(): Promise<RedisMemoryStats> {
   }
 }
 
-async function getQueueSnapshot(queue: typeof webhookQueue, name: 'webhook' | 'ping' | 'streams') {
+async function getQueueSnapshot(
+  queue: typeof webhookQueue,
+  name: 'webhook' | 'ping' | 'streams' | 'mainTasks'
+) {
   const [counts, workers, isPaused] = await Promise.all([
     queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
-    queue.getWorkers(),
+    getQueueWorkers(queue),
     queue.isPaused()
   ])
 
@@ -213,9 +219,11 @@ async function getQueueSnapshot(queue: typeof webhookQueue, name: 'webhook' | 'p
   }
 }
 
-function evaluateWorkerHealth(input: {
+export function evaluateWorkerHealth(input: {
   redis: RedisMemoryStats
   webhook: Awaited<ReturnType<typeof getQueueSnapshot>>
+  mainTasks: Awaited<ReturnType<typeof getQueueSnapshot>>
+  mainTasksRequired: boolean
   webhooks: {
     pending: number
     processedLast10Min: number
@@ -269,6 +277,17 @@ function evaluateWorkerHealth(input: {
       level: 'critical',
       message: `No active webhook workers (found ${input.webhook.workers})`
     })
+    setStatus('critical')
+  }
+
+  // Webhook consumers can be healthy while the separate main-task consumer is
+  // absent. That queue runs workout generation, analysis, and check-ins.
+  if (input.mainTasksRequired && input.mainTasks.workers === 0) {
+    alerts.push({ level: 'critical', message: 'No active coaching task workers' })
+    setStatus('critical')
+  }
+  if (input.mainTasksRequired && input.mainTasks.isPaused) {
+    alerts.push({ level: 'critical', message: 'Coaching task queue is paused' })
     setStatus('critical')
   }
 
@@ -344,6 +363,7 @@ export async function collectWorkerMonitoringSnapshot(): Promise<WorkerMonitorin
     webhook,
     ping,
     streams,
+    mainTasks,
     pending,
     processedLast10Min,
     lastActivity,
@@ -354,6 +374,7 @@ export async function collectWorkerMonitoringSnapshot(): Promise<WorkerMonitorin
     getQueueSnapshot(webhookQueue, 'webhook'),
     getQueueSnapshot(pingQueue, 'ping'),
     getQueueSnapshot(streamsQueue, 'streams'),
+    getQueueSnapshot(mainTaskQueue, 'mainTasks'),
     prisma.webhookLog.count({ where: { status: 'PENDING' } }),
     prisma.webhookLog.count({
       where: {
@@ -388,6 +409,8 @@ export async function collectWorkerMonitoringSnapshot(): Promise<WorkerMonitorin
   const evaluation = evaluateWorkerHealth({
     redis,
     webhook,
+    mainTasks,
+    mainTasksRequired: getTaskDriver() === 'redis',
     webhooks
   })
   const chatRecovery = summarizeChatRecoveryEvents(totalChatTurns, chatRecoveryEvents)
@@ -412,6 +435,11 @@ export async function collectWorkerMonitoringSnapshot(): Promise<WorkerMonitorin
         ...streams.counts,
         workers: streams.workers,
         isPaused: streams.isPaused
+      },
+      mainTasks: {
+        ...mainTasks.counts,
+        workers: mainTasks.workers,
+        isPaused: mainTasks.isPaused
       }
     },
     webhooks,

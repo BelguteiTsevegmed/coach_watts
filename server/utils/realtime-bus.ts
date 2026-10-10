@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import IORedis from 'ioredis'
 import { logRealtimeDisabled, logRealtimeEvent } from './realtime-logger'
+import { getRedisRetryDelay } from './redis-connection'
 
 type RealtimeEnvelope = {
   originInstanceId: string
@@ -10,7 +11,7 @@ type RealtimeEnvelope = {
 
 const REALTIME_CHANNEL_BASE = 'app:realtime'
 const REDIS_URL = process.env.REDIS_URL
-const INSTANCE_ID = process.env.HOSTNAME || randomUUID()
+const INSTANCE_ID = randomUUID()
 
 /**
  * Pub/sub channel namespacing.
@@ -79,7 +80,9 @@ function createRedisClient(name: string) {
     lazyConnect: true,
     maxRetriesPerRequest: 1,
     enableOfflineQueue: false,
-    retryStrategy: () => null
+    connectTimeout: 1000,
+    commandTimeout: 1000,
+    retryStrategy: getRedisRetryDelay
   })
 
   client.on('error', (error) => {
@@ -93,31 +96,19 @@ function createRedisClient(name: string) {
 
 async function ensureConnected(client: IORedis) {
   if (client.status === 'wait') {
-    try {
-      await client.connect()
-    } catch (error) {
-      client.disconnect()
-      throw error
-    }
+    // Keep reconnecting in the background after a failed connection attempt.
+    await client.connect()
   }
 }
 
 async function getPublisher() {
+  if (publisher?.status === 'end') publisher = null
   if (!publisher) {
     publisher = createRedisClient('publisher')
   }
 
   await ensureConnected(publisher)
   return publisher
-}
-
-async function getSubscriber() {
-  if (!subscriber) {
-    subscriber = createRedisClient('subscriber')
-  }
-
-  await ensureConnected(subscriber)
-  return subscriber
 }
 
 export async function publishRealtimeEvent(userId: string, data: any) {
@@ -166,7 +157,7 @@ export async function startRealtimeSubscription(
   }
 
   subscriptionPromise = (async () => {
-    const client = await getSubscriber()
+    const client = (subscriber = createRedisClient('subscriber'))
 
     if (!subscriberHandler) {
       subscriberHandler = (channel: string, payload: string) => {
@@ -199,9 +190,15 @@ export async function startRealtimeSubscription(
       client.on('message', subscriberHandler)
     }
 
-    await client.subscribe(REALTIME_CHANNEL)
+    // Subscribe on every ready event, including recovery from an initial outage.
+    // Never rely on a cached successful promise after the Redis socket dies.
+    client.on('ready', () => {
+      void client.subscribe(REALTIME_CHANNEL).catch((error) => {
+        logRealtimeEvent('bus', 'subscribe_failed', { message: String(error) })
+      })
+    })
+    await ensureConnected(client)
   })().catch((error) => {
-    subscriptionPromise = null
     logRealtimeEvent('bus', 'subscribe_failed', {
       message: error instanceof Error ? error.message : String(error)
     })

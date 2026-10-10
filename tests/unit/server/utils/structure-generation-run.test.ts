@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { prisma } from '../../../../server/utils/db'
 import {
   beginStructureGenerationRun,
-  hasActiveStructureGenerationRun
+  hasActiveStructureGenerationRun,
+  isStructureGenerationRunCurrent,
+  markStructureGenerationRunRunning
 } from '../../../../server/utils/structure-generation-run'
 import { STRUCTURE_GENERATION_RUN_STALE_AFTER_MS } from '../../../../server/utils/workout-ai-timeouts'
 
@@ -17,6 +19,7 @@ vi.mock('../../../../server/utils/db', () => ({
     workoutStructureGenerationRun: {
       updateMany: vi.fn(),
       create: vi.fn(),
+      findUnique: vi.fn(),
       findMany: vi.fn()
     }
   }
@@ -29,6 +32,54 @@ describe('structure generation run', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it.each(['FAILED', 'COMPLETED', 'SUPERSEDED', 'STALE'])(
+    'does not execute a queued %s run even if its revision still matches',
+    async (status) => {
+      vi.mocked(prisma.workoutStructureGenerationRun.findUnique).mockResolvedValue({
+        status,
+        generationRevision: 4,
+        plannedWorkout: { generationRevision: 4 }
+      } as any)
+
+      expect(await isStructureGenerationRunCurrent('run-1')).toBe(false)
+    }
+  )
+
+  it.each(['PENDING', 'RUNNING'])('allows a current %s run or retry', async (status) => {
+    vi.mocked(prisma.workoutStructureGenerationRun.findUnique).mockResolvedValue({
+      status,
+      generationRevision: 4,
+      plannedWorkout: { generationRevision: 4 }
+    } as any)
+
+    expect(await isStructureGenerationRunCurrent('run-1')).toBe(true)
+  })
+
+  it('rejects an active run whose workout has a newer generation revision', async () => {
+    vi.mocked(prisma.workoutStructureGenerationRun.findUnique).mockResolvedValue({
+      status: 'RUNNING',
+      generationRevision: 4,
+      plannedWorkout: { generationRevision: 5 }
+    } as any)
+
+    expect(await isStructureGenerationRunCurrent('run-1')).toBe(false)
+  })
+
+  it('rejects a missing run', async () => {
+    vi.mocked(prisma.workoutStructureGenerationRun.findUnique).mockResolvedValue(null)
+    expect(await isStructureGenerationRunCurrent('run-1')).toBe(false)
+  })
+
+  it('does not claim a run when the conditional transition finds no active row', async () => {
+    vi.mocked(prisma.workoutStructureGenerationRun.updateMany).mockResolvedValue({ count: 0 })
+
+    expect(await markStructureGenerationRunRunning('run-1', 'redis:job-1')).toBe(false)
+    expect(prisma.workoutStructureGenerationRun.updateMany).toHaveBeenCalledWith({
+      where: { id: 'run-1', status: { in: ['PENDING', 'RUNNING'] } },
+      data: expect.objectContaining({ status: 'RUNNING', triggerRunId: 'redis:job-1' })
+    })
   })
 
   it('supersedes active runs and creates a revisioned run atomically', async () => {

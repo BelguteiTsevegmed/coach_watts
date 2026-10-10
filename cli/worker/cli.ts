@@ -4,7 +4,7 @@ import { Command } from 'commander'
 /**
  * Guarantee the worker agrees with the web server about NODE_ENV (CW-611).
  *
- * `realtime-bus.ts` / `chat-realtime-bus.ts` only namespace their Redis pub/sub
+ * `realtime-bus.ts` only namespaces its Redis pub/sub
  * channels per instance when `NODE_ENV === 'development'` (CW-516). A worker started
  * with NODE_ENV unset therefore publishes to the unnamespaced `app:realtime` while the
  * dev server publishes and subscribes on `app:realtime:dev-db<n>-p<port>` — and the

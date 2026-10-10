@@ -142,13 +142,14 @@ pnpm exec prisma migrate deploy
 pnpm dev
 ```
 
-In a second terminal, run the background worker:
+This starts the web app and, with the Redis task driver, its background worker together.
+The worker restarts after a crash, and both processes stop when you exit. PostgreSQL
+and Redis must be running (`docker compose up -d`). You do not need a second terminal.
 
-```bash
-pnpm dev:worker
-```
+For separately managed processes, use `pnpm dev:web` and `pnpm dev:worker`.
+After editing worker code, restart `pnpm dev` (or use `pnpm dev:worker` for watch mode).
+See the [reliability design](docs/01-architecture/reliability-design.md) for the runtime boundaries.
 
-The Redis task driver requires this worker for check-ins, AI analysis, and sync jobs.
 Visit `http://localhost:3099` and log in. This personal fork has no subscriptions,
 billing, trials, or paid feature limits; all coaching features are available.
 

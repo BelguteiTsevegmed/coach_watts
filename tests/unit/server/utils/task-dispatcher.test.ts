@@ -24,9 +24,12 @@ vi.mock('@trigger.dev/sdk/v3', () => ({
 
 vi.mock('../../../../server/utils/queue', () => ({
   mainTaskQueue: {
+    client: Promise.resolve({ options: { db: 0 } }),
     add: vi.fn(),
     getJob: vi.fn(),
-    getJobs: vi.fn()
+    getJobs: vi.fn(),
+    getWorkers: vi.fn(),
+    isPaused: vi.fn()
   }
 }))
 
@@ -63,6 +66,9 @@ describe('Task Dispatcher Framework', () => {
 
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.mocked(mainTaskQueue.getWorkers).mockResolvedValue([{ id: 'worker', db: '0' }] as any)
+    vi.mocked(mainTaskQueue.isPaused).mockResolvedValue(false)
+    vi.mocked(mainTaskQueue.add).mockResolvedValue({ id: 'job-1' } as any)
     vi.mocked(hasTaskHandler).mockImplementation((taskId) => taskId !== 'trigger-only-task')
     vi.mocked(triggerCheck.isRunFresh).mockReturnValue(true)
     process.env = { ...originalEnv }
@@ -152,6 +158,34 @@ describe('Task Dispatcher Framework', () => {
         }
       )
       expect(result).toEqual({ id: 'redis:redis_job_888' })
+    })
+
+    it.each(['generate-structured-workout', 'adjust-structured-workout'])(
+      'rejects %s when no worker can consume it',
+      async (taskId) => {
+        process.env.TASK_QUEUE_DRIVER = 'redis'
+        vi.mocked(mainTaskQueue.getWorkers).mockResolvedValue([])
+        await expect(dispatchTask(taskId, {})).rejects.toThrow(/worker.*offline/i)
+        expect(mainTaskQueue.add).not.toHaveBeenCalled()
+      }
+    )
+
+    it('does not accept a worker attached to another Redis database', async () => {
+      process.env.TASK_QUEUE_DRIVER = 'redis'
+      vi.mocked(mainTaskQueue.getWorkers).mockResolvedValue([
+        { id: 'other-worker', db: '2' }
+      ] as any)
+      await expect(dispatchTask('generate-structured-workout', {})).rejects.toThrow(
+        /worker.*offline/i
+      )
+      expect(mainTaskQueue.add).not.toHaveBeenCalled()
+    })
+
+    it('rejects structure generation when the queue is paused', async () => {
+      process.env.TASK_QUEUE_DRIVER = 'redis'
+      vi.mocked(mainTaskQueue.isPaused).mockResolvedValue(true)
+      await expect(dispatchTask('generate-structured-workout', {})).rejects.toThrow(/paused/i)
+      expect(mainTaskQueue.add).not.toHaveBeenCalled()
     })
 
     it('rejects tasks that the Redis worker has not registered', async () => {

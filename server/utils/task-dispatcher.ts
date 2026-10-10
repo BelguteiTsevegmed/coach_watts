@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { runs, tasks } from '@trigger.dev/sdk/v3'
 import type { Job, JobsOptions } from 'bullmq'
 import { mainTaskQueue } from './queue'
+import { getQueueWorkers } from './queue-workers'
 import { executeRegisteredTask, getCurrentTaskExecution, hasTaskHandler } from './task-registry'
 import { isRunFresh, safeTriggerTask } from './trigger-check'
 import taskManifest from './task-manifest.json' with { type: 'json' }
@@ -198,6 +199,21 @@ export async function dispatchTask(
     const definition = getTaskDefinition(taskIdentifier)
     if (!definition) {
       throw new Error(`Task is not available with the Redis driver: ${taskIdentifier}`)
+    }
+    // Structure generation is interactive: accepting it without a consumer
+    // leaves the athlete watching a spinner for a job that cannot start.
+    if (
+      taskIdentifier === 'generate-structured-workout' ||
+      taskIdentifier === 'adjust-structured-workout'
+    ) {
+      const [workers, paused] = await Promise.all([
+        getQueueWorkers(mainTaskQueue),
+        mainTaskQueue.isPaused()
+      ])
+      if (paused) throw new Error('Workout generation is temporarily paused. Please retry shortly.')
+      if (workers.length === 0) {
+        throw new Error('Workout generation worker is offline. Restart the app and retry.')
+      }
     }
     const requestedId = options?.id || options?.idempotencyKey
     const redisId = buildRedisJobId(taskIdentifier, requestedId)

@@ -7,7 +7,7 @@ const DEFAULT_POLL_INTERVAL_MS = 250
 const DEFAULT_RECOVERY_INTERVAL_MS = 30_000
 const DEFAULT_CONCURRENCY = 2
 
-class ChatTurnRunner {
+export class ChatTurnRunner {
   private readonly workerId = randomUUID()
   private readonly pollIntervalMs = Number(
     process.env.CHAT_TURN_POLL_INTERVAL_MS || DEFAULT_POLL_INTERVAL_MS
@@ -58,17 +58,21 @@ class ChatTurnRunner {
   }
 
   private async pump() {
-    if (this.pumping) return
+    if (!this.started || this.pumping) return
     this.pumping = true
 
     try {
-      while (this.runningCount < this.concurrency) {
+      while (this.started && this.runningCount < this.concurrency) {
         const turn = await chatTurnService.claimNextQueuedTurn(this.workerId)
         if (!turn) break
 
         this.runningCount += 1
         void this.runTurn(turn.id, turn.runId)
       }
+    } catch (error) {
+      // A transient database failure must not become an unhandled rejection.
+      // The next poll retries claiming work.
+      console.error('[ChatTurnRunner] Queue polling failed:', formatErrorForLog(error))
     } finally {
       this.pumping = false
     }

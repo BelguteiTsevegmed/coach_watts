@@ -32,6 +32,7 @@ describe('structure generation run lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getCurrentTaskExecution).mockReturnValue(undefined)
+    vi.mocked(markStructureGenerationRunRunning).mockResolvedValue(true)
   })
 
   it('keeps the lifecycle active when the Redis worker will retry the failed attempt', async () => {
@@ -71,6 +72,14 @@ describe('structure generation run lifecycle', () => {
 
     expect(result).toEqual({ stale: false })
     expect(markStructureGenerationRunRunning).toHaveBeenCalledWith('run-1', 'trigger-1')
+  })
+
+  it('skips a run terminated between checking its revision and starting it', async () => {
+    vi.mocked(isStructureGenerationRunCurrent).mockResolvedValue(true)
+    vi.mocked(markStructureGenerationRunRunning).mockResolvedValue(false)
+
+    expect(await startStructureGenerationTask(payload, 'trigger-1')).toEqual({ stale: true })
+    expect(markStructureGenerationRunStale).not.toHaveBeenCalled()
   })
 
   it('terminates skipped quota outcomes as failed runs', async () => {
