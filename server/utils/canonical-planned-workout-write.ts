@@ -413,8 +413,21 @@ export async function writeCanonicalPlannedWorkoutStructure(
     })
     return { canonical, metrics, stale: false, workout }
   }
-  // A single transaction owns the dose check and structure/metric write.
-  return options.tx
-    ? persist(options.tx)
-    : prisma.$transaction(persist, { isolationLevel: 'Serializable' })
+  // A caller-owned transaction must be retried by its owner, as a whole.
+  if (options.tx) return persist(options.tx)
+
+  // Concurrent week generation can abort an otherwise valid serializable write.
+  // Retry persistence with a fresh snapshot, including the dose and revision
+  // checks, without rerunning AI generation or briefly marking the run failed.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await prisma.$transaction(persist, { isolationLevel: 'Serializable' })
+    } catch (error) {
+      const conflict = error as { code?: string; cause?: { kind?: string } } | null
+      const retryable =
+        conflict?.code === 'P2034' || conflict?.cause?.kind === 'TransactionWriteConflict'
+      if (!retryable || attempt >= 3) throw error
+      await new Promise((resolve) => setTimeout(resolve, 25 * 2 ** attempt))
+    }
+  }
 }
