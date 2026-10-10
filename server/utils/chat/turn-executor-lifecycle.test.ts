@@ -101,6 +101,46 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('chat turn lifecycle', () => {
+  it('releases a timed-out turn when failure accounting never resolves', async () => {
+    mocks.updateUsage.mockImplementation(() => new Promise(() => {}))
+    mocks.stream.mockImplementation(() => ({ consumeStream: () => new Promise(() => {}) }))
+    let settled = false
+    const execution = executeChatTurn('turn-1', 'run-1').catch(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(60_001)
+    expect(settled).toBe(true)
+    await execution
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await vi.advanceTimersByTimeAsync(15_001)
+    errorLog.mockRestore()
+  })
+
+  it('does not publish completion when an already-entered completion callback resumes after timeout', async () => {
+    let finishCompletion!: (value: any) => void
+    mocks.updateStatus.mockImplementation(async (_id, _run, status) => {
+      if (status === 'COMPLETED')
+        return new Promise((resolve) => {
+          finishCompletion = resolve
+        })
+      return { count: 1 }
+    })
+    mocks.stream.mockImplementation((options) => ({
+      consumeStream: async () =>
+        options.onEnd({ text: 'Keep today easy.', usage: {}, toolCalls: [], toolResults: [] })
+    }))
+    const execution = executeChatTurn('turn-1', 'run-1')
+    const rejected = expect(execution).rejects.toThrow(/timed out/i)
+    await vi.advanceTimersByTimeAsync(60_001)
+    await rejected
+    mocks.send.mockClear()
+    finishCompletion({ count: 1 })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(mocks.send).not.toHaveBeenCalled()
+    expect(mocks.summary).not.toHaveBeenCalled()
+    expect(mocks.extract).not.toHaveBeenCalled()
+  })
+
   it('releases a completed response even if the provider never closes its stream', async () => {
     let callbacks: any
     mocks.stream.mockImplementation((options) => {

@@ -15,9 +15,12 @@ export function getDevServices(env: NodeJS.ProcessEnv, args: string[] = []): Ser
   const services: Service[] = [
     { name: 'web', args: ['node_modules/nuxt/bin/nuxt.mjs', 'dev', ...args], env: sharedEnv }
   ]
-  const driver =
-    env.TASK_QUEUE_DRIVER?.toLowerCase() ||
-    (env.TRIGGER_SECRET_KEY && env.E2E_MODE !== 'true' ? 'trigger' : 'redis')
+  const explicitDriver = env.TASK_QUEUE_DRIVER?.toLowerCase()
+  const driver = ['trigger', 'redis', 'inline'].includes(explicitDriver || '')
+    ? explicitDriver
+    : env.TRIGGER_SECRET_KEY && env.E2E_MODE !== 'true'
+      ? 'trigger'
+      : 'redis'
   if (driver === 'redis') {
     services.push({
       name: 'worker',

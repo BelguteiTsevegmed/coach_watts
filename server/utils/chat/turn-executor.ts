@@ -20,6 +20,7 @@ import {
   CHAT_TURN_SLOW_RESPONSE_THRESHOLD_MS,
   CHAT_TURN_STATUS,
   CHAT_TURN_TIMEOUT_REASON,
+  isActiveChatTurnStatus,
   isMutatingChatTool
 } from './turns'
 import { buildAthleteContext } from '../services/chatContextService'
@@ -1237,6 +1238,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
           if (completedUpdate.count === 0) {
             throw createAbortError('Turn ownership changed before local completion.')
           }
+          ensureTurnNotAborted()
           responseCompleted = true
 
           await broadcastAssistantMessage(
@@ -1482,6 +1484,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
 
         const updatedDraft = await chatTurnService.updateAssistantDraft({
           messageId: draft.id,
+          ownership: { turnId: activeTurn.id, runId: ownedRunId },
           content: persistedText,
           metadata: {
             isDraft: status !== CHAT_TURN_STATUS.COMPLETED,
@@ -1507,7 +1510,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
         if (!isFailure) ensureTurnNotAborted()
         const statusHeartbeat = await chatTurnService.heartbeat(
           activeTurn.id,
-          status as any,
+          isActiveChatTurnStatus(status) ? status : undefined,
           ownedRunId
         )
         if (!isFailure) ensureTurnNotAborted()
@@ -1833,6 +1836,7 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
             if (completedUpdate.count === 0) {
               throw createAbortError('Turn ownership changed before completion.')
             }
+            ensureTurnNotAborted()
             responseCompleted = true
             await broadcastAssistantMessage(
               {
@@ -2196,21 +2200,30 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
             failureReason: reason
           }
         ).catch(() => null)
-        await prisma.llmUsage
-          .update({
-            where: { id: earlyUsage.id },
-            data: {
-              model: modelName,
-              success: false,
-              errorType:
-                (terminalTimeoutReason ? String(terminalTimeoutReason).toUpperCase() : '') ||
-                (terminalStatus === CHAT_TURN_STATUS.INTERRUPTED ? 'INTERRUPTED' : 'FAILED'),
-              errorMessage: reason,
-              durationMs: executionDurationMs,
-              ttft: firstOutputLatencyMs
-            }
-          })
-          .catch(() => null)
+        runChatMaintenance(
+          () =>
+            prisma.llmUsage
+              .update({
+                where: { id: earlyUsage.id },
+                data: {
+                  model: modelName,
+                  success: false,
+                  errorType:
+                    (terminalTimeoutReason ? String(terminalTimeoutReason).toUpperCase() : '') ||
+                    (terminalStatus === CHAT_TURN_STATUS.INTERRUPTED ? 'INTERRUPTED' : 'FAILED'),
+                  errorMessage: reason,
+                  durationMs: executionDurationMs,
+                  ttft: firstOutputLatencyMs
+                }
+              })
+              .catch(() => null),
+          (accountingError) => {
+            console.error('[ChatTurn] Failure usage accounting failed:', {
+              turnId: turn.id,
+              error: accountingError
+            })
+          }
+        )
         throw error
       }
     } catch (error: any) {
@@ -2262,6 +2275,11 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
           const message = await chatTurnService
             .updateAssistantDraft({
               messageId: assistantDraft.id,
+              ownership: {
+                turnId: turn.id,
+                runId: ownedRunId,
+                statuses: [CHAT_TURN_STATUS.FAILED]
+              },
               content: terminalTimeoutReason
                 ? "I couldn't start a response in time. Please retry your last message."
                 : "I couldn't start this response. Please retry your last message.",
@@ -2304,20 +2322,29 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
             firstOutputLatencyMs
           })
           .catch(() => null)
-        await prisma.llmUsage
-          .updateMany({
-            where: { turnId: turn.id, operation: 'chat_turn_start', errorType: 'IN_PROGRESS' },
-            data: {
-              success: false,
-              errorType: terminalTimeoutReason
-                ? String(terminalTimeoutReason).toUpperCase()
-                : 'FAILED',
-              errorMessage: reason,
-              durationMs: executionDurationMs,
-              ttft: firstOutputLatencyMs
-            }
-          })
-          .catch(() => null)
+        runChatMaintenance(
+          () =>
+            prisma.llmUsage
+              .updateMany({
+                where: { turnId: turn.id, operation: 'chat_turn_start', errorType: 'IN_PROGRESS' },
+                data: {
+                  success: false,
+                  errorType: terminalTimeoutReason
+                    ? String(terminalTimeoutReason).toUpperCase()
+                    : 'FAILED',
+                  errorMessage: reason,
+                  durationMs: executionDurationMs,
+                  ttft: firstOutputLatencyMs
+                }
+              })
+              .catch(() => null),
+          (accountingError) => {
+            console.error('[ChatTurn] Failure usage accounting failed:', {
+              turnId: turn.id,
+              error: accountingError
+            })
+          }
+        )
         await sendToUser(turn.userId, {
           type: 'chat_turn_status',
           roomId: turn.roomId,

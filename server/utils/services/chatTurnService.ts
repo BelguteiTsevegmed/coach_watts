@@ -5,6 +5,7 @@ import { expandStoredChatMessages, truncateMessages } from '../chat/history'
 import { shouldExcludeAssistantMessageFromHistory } from '../chat/message-state'
 import { getJsonObject } from '../prisma-json'
 import {
+  ACTIVE_CHAT_TURN_STATUSES,
   CHAT_TURN_EVENT_TYPE,
   CHAT_TURN_HEARTBEAT_TIMEOUT_MS,
   CHAT_TURN_TIMEOUT_REASON,
@@ -315,7 +316,7 @@ class ChatTurnService {
     }> = {}
   ) {
     return await prisma.chatTurn.updateMany({
-      where: { id: turnId, runId },
+      where: { id: turnId, runId, status: { in: ACTIVE_CHAT_TURN_STATUSES } },
       data: {
         status,
         lastHeartbeatAt: new Date(),
@@ -337,7 +338,8 @@ class ChatTurnService {
     return await prisma.chatTurn.updateMany({
       where: {
         id: turnId,
-        ...(runId ? { runId } : {})
+        ...(runId ? { runId } : {}),
+        status: { in: ACTIVE_CHAT_TURN_STATUSES }
       },
       data: {
         lastHeartbeatAt: new Date(),
@@ -355,7 +357,7 @@ class ChatTurnService {
     if (!turn || turn.runId !== runId) return { count: 0 }
 
     return await prisma.chatTurn.updateMany({
-      where: { id: turnId, runId },
+      where: { id: turnId, runId, status: { in: ACTIVE_CHAT_TURN_STATUSES } },
       data: {
         lastHeartbeatAt: new Date(),
         metadata: this.mergeTurnMetadata(turn as any, telemetry)
@@ -436,9 +438,21 @@ class ChatTurnService {
     messageId: string
     content: string
     metadata?: Prisma.InputJsonValue
+    ownership?: { turnId: string; runId: string; statuses?: ChatTurnStatus[] }
   }) {
     return await prisma.chatMessage.update({
-      where: { id: params.messageId },
+      where: {
+        id: params.messageId,
+        ...(params.ownership
+          ? {
+              turn: {
+                id: params.ownership.turnId,
+                runId: params.ownership.runId,
+                status: { in: params.ownership.statuses || ACTIVE_CHAT_TURN_STATUSES }
+              }
+            }
+          : {})
+      },
       data: {
         content: params.content || ' ',
         ...(params.metadata !== undefined ? { metadata: params.metadata } : {})

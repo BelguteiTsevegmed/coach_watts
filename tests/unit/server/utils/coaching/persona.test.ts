@@ -102,6 +102,26 @@ describe('independent coaching judgment', () => {
     expect(prompt).toContain('without claiming lived coaching experience')
   })
 
+  it.each(COACH_PERSONAS)(
+    'keeps %s advice consistent with personal readiness evidence',
+    (persona) => {
+      const prompt = chatPrompt(persona)
+
+      expect(prompt).toContain(
+        'resolved personal readiness facts, personal sensor trends and athlete reports together'
+      )
+      expect(prompt).toContain('Persistent sensor trends need subjective context')
+      expect(prompt).toContain('sensors alone do not justify an automatic session change')
+      expect(prompt).toContain(
+        'Poor athlete reports can justify reducing training even with usual sensors'
+      )
+      expect(prompt).toContain('Missing evidence is uncertainty, not clearance')
+      expect(prompt).toContain('TSB describes recorded load')
+      expect(prompt).not.toContain('Form −8 · slightly fatigued')
+      expect(prompt).not.toContain('a sustained HRV dip or high fatigue mean back off')
+    }
+  )
+
   it('retains the decision policy when a legacy or missing persona falls back to Supportive', () => {
     for (const persona of [null, 'old-custom-persona']) {
       expect(chatPrompt(persona)).toContain('**Supportive**')

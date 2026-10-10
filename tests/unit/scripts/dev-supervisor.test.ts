@@ -22,6 +22,10 @@ describe('development process supervision', () => {
     expect(getDevServices({ TASK_QUEUE_DRIVER: 'inline' })).toHaveLength(1)
     expect(getDevServices({ TRIGGER_SECRET_KEY: 'configured' })).toHaveLength(1)
     expect(getDevServices({})).toHaveLength(2)
+    expect(getDevServices({ TASK_QUEUE_DRIVER: 'invalid' })).toHaveLength(2)
+    expect(
+      getDevServices({ TASK_QUEUE_DRIVER: 'invalid', TRIGGER_SECRET_KEY: 'configured' })
+    ).toHaveLength(1)
   })
 
   it('restarts a crashed worker with backoff and cancels restarts on shutdown', () => {

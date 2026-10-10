@@ -38,6 +38,13 @@ vi.mock('../../../../../server/utils/training-metrics', () => ({
   formatTrainingContextForPrompt: vi.fn().mockReturnValue('Training summary')
 }))
 
+vi.mock('../../../../../server/utils/services/readinessContextService', () => ({
+  buildReadinessContext: vi.fn().mockResolvedValue({
+    context: { decision: 'unknown', reasons: [], conflicts: [] },
+    prompt: 'RESOLVED PERSONAL READINESS: fixture context'
+  })
+}))
+
 describe('assembled chat coaching policy', () => {
   beforeEach(() => {
     vi.clearAllMocks()
