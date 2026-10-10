@@ -20,6 +20,7 @@ vi.mock('../../../../../server/utils/db', () => ({
       findUnique: mocks.findUnique,
       updateMany: mocks.updateMany
     },
+    chatMessage: { update: mocks.messageUpdate },
     $transaction: mocks.transaction
   }
 }))
@@ -274,7 +275,11 @@ describe('chat turn restart recovery', () => {
     ).resolves.toEqual({ count: 0 })
 
     expect(mocks.updateMany).toHaveBeenCalledWith({
-      where: { id: 'turn-1', runId: 'run-current' },
+      where: {
+        id: 'turn-1',
+        runId: 'run-current',
+        status: { in: expect.arrayContaining(['RUNNING', 'STREAMING']) }
+      },
       data: { lastHeartbeatAt: expect.any(Date), status: 'RUNNING' }
     })
   })
@@ -294,7 +299,11 @@ describe('chat turn restart recovery', () => {
     ).resolves.toEqual({ count: 1 })
 
     expect(mocks.updateMany).toHaveBeenCalledWith({
-      where: { id: 'turn-1', runId: 'run-current' },
+      where: {
+        id: 'turn-1',
+        runId: 'run-current',
+        status: { in: expect.arrayContaining(['RUNNING', 'STREAMING']) }
+      },
       data: {
         lastHeartbeatAt: expect.any(Date),
         metadata: {
@@ -316,5 +325,41 @@ describe('chat turn restart recovery', () => {
     ).resolves.toEqual({ count: 0 })
 
     expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
+})
+
+describe('chat terminal state fencing', () => {
+  it('fences draft writes by current run and allowed state, including explicit terminal cleanup', async () => {
+    mocks.messageUpdate.mockImplementation(async ({ where }) => {
+      if (where.turn?.runId !== 'run-current' || where.turn.status.in.includes('FAILED'))
+        return { id: 'assistant-1' }
+      throw new Error('Draft no longer belongs to an active turn')
+    })
+    await expect(
+      chatTurnService.updateAssistantDraft({
+        messageId: 'assistant-1',
+        content: 'Late stream text',
+        ownership: { turnId: 'turn-1', runId: 'run-current' }
+      })
+    ).rejects.toThrow('no longer belongs')
+    await expect(
+      chatTurnService.updateAssistantDraft({
+        messageId: 'assistant-1',
+        content: 'Please retry',
+        ownership: { turnId: 'turn-1', runId: 'run-current', statuses: ['FAILED'] }
+      })
+    ).resolves.toEqual({ id: 'assistant-1' })
+  })
+
+  it('cannot complete or heartbeat a failed turn with the same run ID', async () => {
+    mocks.updateMany.mockImplementation(async ({ where }) => ({
+      count: where.status?.in?.includes('FAILED') === false ? 0 : 1
+    }))
+    await expect(
+      chatTurnService.updateStatusIfOwned('turn-1', 'run-current', 'COMPLETED')
+    ).resolves.toEqual({ count: 0 })
+    await expect(chatTurnService.heartbeat('turn-1', 'STREAMING', 'run-current')).resolves.toEqual({
+      count: 0
+    })
   })
 })

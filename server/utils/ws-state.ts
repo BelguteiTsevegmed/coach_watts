@@ -54,5 +54,8 @@ export function sendToUserLocal(userId: string, data: any) {
  */
 export async function sendToUser(userId: string, data: any) {
   sendToUserLocal(userId, data)
-  await publishRealtimeEvent(userId, data)
+  // Cross-process refresh hints must not block local chat chunks or turn completion.
+  void publishRealtimeEvent(userId, data).catch((error) => {
+    console.warn('[Realtime] Background publication failed:', error)
+  })
 }

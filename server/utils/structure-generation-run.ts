@@ -87,7 +87,7 @@ export async function markStructureGenerationRunRunning(
   runId: string,
   triggerRunId?: string | null
 ) {
-  await prisma.workoutStructureGenerationRun.updateMany({
+  const updated = await prisma.workoutStructureGenerationRun.updateMany({
     where: { id: runId, status: { in: ACTIVE_STATUSES } },
     data: {
       status: 'RUNNING',
@@ -95,6 +95,7 @@ export async function markStructureGenerationRunRunning(
       startedAt: new Date()
     }
   })
+  return updated.count > 0
 }
 
 export async function markStructureGenerationRunCompleted(runId: string) {
@@ -126,17 +127,21 @@ export async function markStructureGenerationRunFailed(runId: string, error: str
   })
 }
 
-/** Returns false when the run revision no longer matches the workout fence. */
+/** Only active runs at the current workout revision may execute. */
 export async function isStructureGenerationRunCurrent(runId: string): Promise<boolean> {
   const run = await prisma.workoutStructureGenerationRun.findUnique({
     where: { id: runId },
     select: {
+      status: true,
       generationRevision: true,
       plannedWorkout: { select: { generationRevision: true } }
     }
   })
   if (!run) return false
-  return run.generationRevision === run.plannedWorkout.generationRevision
+  return (
+    ACTIVE_STATUSES.includes(run.status as StructureGenerationRunStatus) &&
+    run.generationRevision === run.plannedWorkout.generationRevision
+  )
 }
 
 export async function attachTriggerRunId(runId: string, triggerRunId: string) {

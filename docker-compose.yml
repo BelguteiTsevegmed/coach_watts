@@ -1,9 +1,8 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
     container_name: watts-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: watts
       POSTGRES_PASSWORD: password
@@ -21,6 +20,7 @@ services:
   dragonfly:
     image: docker.dragonflydb.io/dragonflydb/dragonfly
     container_name: watts-dragonfly
+    restart: unless-stopped
     ulimits:
       memlock: -1
     command:
@@ -37,6 +37,12 @@ services:
       - '6380:6380'
     volumes:
       - dragonfly_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'REDISCLI_AUTH=dragonfly redis-cli ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   postgres_data:

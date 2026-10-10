@@ -33,8 +33,10 @@ export async function startStructureGenerationTask(
     return { stale: true }
   }
 
-  await markStructureGenerationRunRunning(payload.generationRunId, triggerRunId)
-  return { stale: false }
+  // Reconciliation may have terminated the run after the read above. Honor the
+  // conditional transition so a formerly queued job cannot revive that run.
+  const started = await markStructureGenerationRunRunning(payload.generationRunId, triggerRunId)
+  return { stale: !started }
 }
 
 export async function finishStructureGenerationTask(

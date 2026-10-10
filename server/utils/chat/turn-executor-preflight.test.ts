@@ -130,6 +130,23 @@ describe('chat preparation failures', () => {
     )
   })
 
+  it('fails at the deadline even when context preparation never resolves', async () => {
+    vi.useFakeTimers()
+    mocks.context.mockImplementationOnce(() => new Promise(() => {}))
+    let settled = false
+    const execution = executeChatTurn('turn-1', 'run-1').catch(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(60_001)
+    expect(settled).toBe(true)
+    await execution
+    expect(mocks.updateDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ isDraft: false, turnStatus: 'FAILED' })
+      })
+    )
+  })
+
   it('does not publish a failure after another runner takes ownership', async () => {
     mocks.context.mockRejectedValueOnce(new Error('Context unavailable'))
     mocks.updateTurn.mockResolvedValueOnce({ count: 0 })
