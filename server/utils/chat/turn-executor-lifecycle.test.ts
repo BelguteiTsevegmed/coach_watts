@@ -237,3 +237,65 @@ describe('chat turn lifecycle', () => {
     expect(mocks.updateDraft).toHaveBeenCalledTimes(writes)
   })
 })
+
+describe('persisted approvals at turn completion', () => {
+  const call = {
+    type: 'tool-call',
+    toolCallId: 'failed-call',
+    toolName: 'update_planned_workout',
+    input: { workout_id: 'friday' }
+  }
+
+  it('does not turn a failed call into permission UI after the model recovers', async () => {
+    mocks.stream.mockImplementation((options) => ({
+      consumeStream: async () =>
+        options.onEnd({
+          text: 'Friday is saved.',
+          usage: {},
+          toolCalls: [call],
+          toolResults: [],
+          steps: [
+            {
+              content: [
+                call,
+                { type: 'tool-error', toolCallId: call.toolCallId, error: 'write conflict' }
+              ]
+            }
+          ]
+        })
+    }))
+    await expect(executeChatTurn('turn-1', 'run-1')).resolves.toMatchObject({ success: true })
+    const completion = mocks.updateDraft.mock.calls.find(
+      ([input]) => input.metadata?.turnStatus === 'COMPLETED'
+    )
+    expect(completion?.[0].metadata.pendingApprovals).toEqual([])
+  })
+
+  it('persists a genuine SDK approval request without executing it', async () => {
+    mocks.stream.mockImplementation((options) => ({
+      consumeStream: async () =>
+        options.onEnd({
+          text: 'Please approve this change.',
+          usage: {},
+          toolCalls: [call],
+          toolResults: [],
+          steps: [
+            {
+              content: [
+                call,
+                { type: 'tool-approval-request', approvalId: 'sdk-approval', toolCall: call }
+              ]
+            }
+          ]
+        })
+    }))
+    await expect(executeChatTurn('turn-1', 'run-1')).resolves.toMatchObject({ success: true })
+    const completion = mocks.updateDraft.mock.calls.find(
+      ([input]) => input.metadata?.turnStatus === 'COMPLETED'
+    )
+    expect(completion?.[0].metadata.pendingApprovals).toEqual([
+      { toolCallId: call.toolCallId, toolName: call.toolName, args: call.input }
+    ])
+    expect(mocks.mutation).not.toHaveBeenCalled()
+  })
+})

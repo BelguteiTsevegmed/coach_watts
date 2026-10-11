@@ -10,6 +10,7 @@ vi.mock('../task-dispatcher', () => ({
 
 const {
   buildApprovedContinuationConfirmation,
+  collectPendingToolApprovals,
   buildEmptyResponseFallbackFromToolResults,
   buildReadRepairSystemInstruction,
   getHardcodedChatProviderOptions,
@@ -788,5 +789,57 @@ describe('chat room summary scheduling', () => {
     ).resolves.toBe(false)
 
     expect(dispatchTaskMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('collectPendingToolApprovals', () => {
+  const call = {
+    toolCallId: 'call-1',
+    toolName: 'create_planned_workout',
+    input: { date: '2026-10-16' }
+  }
+  const request = { type: 'tool-approval-request', approvalId: 'approval-1', toolCall: call }
+
+  it('does not invent an approval for an unexecuted or retried tool call', () => {
+    expect(
+      collectPendingToolApprovals([{ content: [{ type: 'tool-call', ...call }] }], [])
+    ).toEqual([])
+  })
+
+  it('retains only genuine SDK requests using the existing tool-call approval identifier', () => {
+    expect(collectPendingToolApprovals([{ content: [request] }], [])).toEqual([
+      { toolCallId: 'call-1', toolName: 'create_planned_workout', args: call.input }
+    ])
+  })
+
+  it('keeps requests from earlier steps and deduplicates repeated content', () => {
+    expect(
+      collectPendingToolApprovals(
+        [{ content: [request] }, { content: [request, { type: 'text', text: 'Please approve' }] }],
+        []
+      )
+    ).toHaveLength(1)
+  })
+
+  it('does not leave executed requests pending', () => {
+    expect(
+      collectPendingToolApprovals([{ content: [request] }], [{ toolCallId: 'call-1' }])
+    ).toEqual([])
+  })
+
+  it('does not persist malformed or invalid requests', () => {
+    expect(
+      collectPendingToolApprovals(
+        [
+          {
+            content: [
+              { ...request, toolCall: { ...call, invalid: true } },
+              { type: 'tool-approval-request' }
+            ]
+          }
+        ],
+        []
+      )
+    ).toEqual([])
   })
 })
