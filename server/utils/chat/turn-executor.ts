@@ -1648,12 +1648,19 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
           } as any)
         }
 
+        let streamError: Error | undefined
         const result = streamText({
           model: google(modelName),
           instructions: attemptSystemInstruction,
           messages: normalizedMessages,
           tools,
           abortSignal: executionAbortController.signal,
+          onError: ({ error }) => {
+            streamError = error instanceof Error ? error : new Error(String(error))
+            // SDK error events need not reject consumeStream. Release the wait so
+            // the durable failure handler updates the UI instead of leaving a draft.
+            finishResponse()
+          },
           experimental_repairToolCall: async ({ toolCall, error }) => {
             if (!NoSuchToolError.isInstance(error)) {
               return null
@@ -2088,7 +2095,6 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
           }
         })
 
-        let streamError: Error | undefined
         await waitForTurn(
           Promise.race([
             result.consumeStream({
@@ -2139,15 +2145,21 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
           (error?.name === 'AbortError' ? 'Turn aborted.' : error?.message || 'Chat turn failed.')
         const finishedAt = new Date()
         const executionDurationMs = Math.max(0, finishedAt.getTime() - startedAt.getTime())
-        const hiddenBecauseEmptyFailure = !hasVisibleAssistantArtifacts({
+        const emptyFailure = !hasVisibleAssistantArtifacts({
           assistantText,
           toolCalls: Array.from(currentTurnToolCalls.values()),
           toolResults: allToolResults
         })
 
+        const hiddenBecauseEmptyFailure = terminalStatus !== CHAT_TURN_STATUS.FAILED && emptyFailure
+        if (terminalStatus === CHAT_TURN_STATUS.FAILED && emptyFailure) {
+          assistantText = "I couldn't complete this response. Please retry your last message."
+        }
+
         currentPhase = isExplicitTimeout ? currentPhase : 'failed'
 
         await persistDraft(terminalStatus, true, {
+          isDraft: false,
           interrupted: terminalStatus === CHAT_TURN_STATUS.INTERRUPTED,
           failureReason: reason,
           timeoutReason: terminalTimeoutReason,

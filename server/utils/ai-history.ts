@@ -1,4 +1,4 @@
-import { convertToModelMessages } from 'ai'
+import { convertToModelMessages, toolModelMessageSchema } from 'ai'
 
 function toJsonSafe(value: any, seen: WeakSet<object> = new WeakSet()): any {
   if (value === null) return null
@@ -96,26 +96,26 @@ function buildCoreToolCallPart(
 }
 
 function normalizeToolResultPart(part: any) {
-  const rawOutput =
-    part?.result !== undefined
-      ? part.result
-      : part?.output?.value !== undefined
-        ? part.output.value
-        : part?.output !== undefined
-          ? part.output
-          : undefined
-
-  const output =
-    rawOutput && typeof rawOutput === 'object' && typeof rawOutput.type === 'string'
-      ? rawOutput
-      : typeof rawOutput === 'string'
-        ? { type: 'text', value: rawOutput }
-        : { type: 'json', value: rawOutput ?? null }
+  // `result` is a legacy raw tool return. `output` may already be an SDK
+  // envelope: never unwrap its value or mistake a domain `type` for that envelope.
+  const rawOutput = part?.result !== undefined ? part.result : part?.output
+  const wrapped =
+    part?.result === undefined &&
+    toolModelMessageSchema.safeParse({
+      role: 'tool',
+      content: [{ type: 'tool-result', toolCallId: 'check', toolName: 'check', output: rawOutput }]
+    }).success
+  const output = wrapped
+    ? rawOutput
+    : typeof rawOutput === 'string'
+      ? { type: 'text', value: rawOutput }
+      : { type: 'json', value: rawOutput ?? null }
 
   return {
     type: 'tool-result',
     toolCallId: part?.toolCallId,
     toolName: part?.toolName || part?.name || 'unknown',
+    ...(part?.providerOptions ? { providerOptions: part.providerOptions } : {}),
     output
   }
 }
@@ -205,20 +205,15 @@ export async function transformHistoryToCoreMessages(historyMessages: any[]) {
         )
         .map((p: any) => {
           const resolvedId = p.toolCallId || approvalIdMap.get(p.approvalId) || p.approvalId
-          return {
-            type: 'tool-result',
+          return normalizeToolResultPart({
+            ...p,
             toolCallId: resolvedId,
-            toolName: p.toolName || p.name || 'unknown',
-            output:
-              p.result !== undefined
-                ? typeof p.result === 'string'
-                  ? { type: 'text', value: p.result }
-                  : { type: 'json', value: p.result ?? null }
-                : {
-                    type: 'text',
-                    value: p.approved ? 'User confirmed action.' : 'User denied action.'
-                  }
-          }
+            ...(p.type === 'tool-approval-response' &&
+            p.result === undefined &&
+            p.output === undefined
+              ? { result: p.approved ? 'User confirmed action.' : 'User denied action.' }
+              : {})
+          })
         })
 
       if (results.length > 0) {

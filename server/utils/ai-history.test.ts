@@ -463,3 +463,75 @@ describe('transformHistoryToCoreMessages', () => {
     expect((toolMessage!.content as any[])[0].toolName).toBe('log_meal')
   })
 })
+
+describe('saved tool output envelopes', () => {
+  const workout = { success: true, type: 'Run', duration_minutes: 20 }
+  const assistant = {
+    id: 'assistant-read',
+    role: 'assistant',
+    parts: [
+      {
+        type: 'tool-get_planned_workout_details',
+        toolCallId: 'read-workout',
+        state: 'input-available',
+        input: { workout_id: 'workout-1' },
+        toolCall: { providerOptions: { google: { thoughtSignature: 'saved-signature' } } }
+      }
+    ]
+  }
+  it.each([
+    ['legacy raw result', { result: workout }, { type: 'json', value: workout }],
+    [
+      'modern json output',
+      { output: { type: 'json', value: workout } },
+      { type: 'json', value: workout }
+    ],
+    [
+      'modern text output',
+      { output: { type: 'text', value: 'Found workout' } },
+      { type: 'text', value: 'Found workout' }
+    ],
+    [
+      'modern error output',
+      { output: { type: 'error-json', value: { type: 'not-found' } } },
+      { type: 'error-json', value: { type: 'not-found' } }
+    ],
+    [
+      'denied output',
+      { output: { type: 'execution-denied', reason: 'Cancelled' } },
+      { type: 'execution-denied', reason: 'Cancelled' }
+    ],
+    ['raw output with domain type', { output: workout }, { type: 'json', value: workout }],
+    [
+      'legacy output-like domain result',
+      { result: { type: 'json', value: 20 } },
+      { type: 'json', value: { type: 'json', value: 20 } }
+    ]
+  ])('replays %s exactly once as valid ModelMessages', async (_name, payload, expected) => {
+    const { modelMessageSchema } = await import('ai')
+    const result = await transformHistoryToCoreMessages([
+      assistant,
+      {
+        role: 'tool',
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 'read-workout',
+            toolName: 'get_planned_workout_details',
+            ...payload
+          }
+        ]
+      },
+      { role: 'user', parts: [{ type: 'text', text: 'What should I do next week?' }] }
+    ])
+    expect(result.every((message) => modelMessageSchema.safeParse(message).success)).toBe(true)
+    expect(result.find((message) => message.role === 'tool').content[0].output).toEqual(expected)
+    expect(result[0].content[0].providerOptions.google.thoughtSignature).toBe('saved-signature')
+    const again = await transformHistoryToCoreMessages([
+      assistant,
+      result.find((message) => message.role === 'tool')
+    ])
+    expect(again.find((message) => message.role === 'tool').content[0].output).toEqual(expected)
+    expect(again.every((message) => modelMessageSchema.safeParse(message).success)).toBe(true)
+  })
+})
