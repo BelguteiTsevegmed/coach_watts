@@ -1,3 +1,4 @@
+import { resolveStructureTargeting } from '../../../../trigger/utils/structure-generation-targeting'
 import { getServerSession } from '../../../utils/session'
 import { prisma } from '../../../utils/db'
 import { sportSettingsRepository } from '../../../utils/repositories/sportSettingsRepository'
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, ftp: true }
+    select: { id: true, ftp: true, lthr: true }
   })
 
   if (!user) {
@@ -122,6 +123,8 @@ export default defineEventHandler(async (event) => {
     initialFeedback: llmUsage?.feedback,
     initialFeedbackText: llmUsage?.feedbackText,
     sportSettings,
+    generationTargetPolicy: resolveStructureTargeting(sportSettings, workout.type || '', null, user)
+      .targetPolicy,
     settingsStaleness,
     structureGenerationInFlight,
     latestStructureGenerationRun,

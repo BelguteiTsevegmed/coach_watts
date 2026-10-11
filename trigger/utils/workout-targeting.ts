@@ -111,8 +111,24 @@ function ensureMetricTarget(step: any, metric: TargetStepMetric, value: number) 
     return
   }
 
-  if (typeof step.rpe !== 'number') {
-    step.rpe = Math.min(10, Math.max(1, Math.round(value * 10)))
+  if (typeof step.rpe !== 'number' || !Number.isFinite(step.rpe)) {
+    // RPE is a 1-10 perceived-effort scale, not a percentage of a threshold.
+    const intent = normalizeIntent(step.intent) || defaultIntentForStepType(step.type)
+    const effortByIntent: Record<StepIntent, number> = {
+      warmup: 2,
+      cooldown: 2,
+      recovery: 2,
+      easy: 3,
+      endurance: 4,
+      tempo: 6,
+      threshold: 7,
+      vo2: 8,
+      anaerobic: 9,
+      sprint: 10,
+      drills: 3,
+      strides: 7
+    }
+    step.rpe = effortByIntent[intent]
   }
 }
 
@@ -302,6 +318,30 @@ export function applyStepIntentGuard(
   const intent = explicitIntent || defaultIntentForStepType(step?.type)
   step.intent = intent
 
+  // RPE uses its own 1-10 effort scale. Threshold fraction bands would turn
+  // an easy 3/10 into a different intent or raise a warmup 2/10 to 5/10.
+  // Keep the intended session, constraining contradictory effort on that scale.
+  if (step?.primaryTarget === 'rpe') {
+    const effortBands: Record<StepIntent, [number, number]> = {
+      warmup: [1, 3],
+      cooldown: [1, 3],
+      recovery: [1, 3],
+      easy: [2, 4],
+      endurance: [3, 5],
+      tempo: [5, 6],
+      threshold: [6, 8],
+      vo2: [8, 9],
+      anaerobic: [8, 10],
+      sprint: [9, 10],
+      drills: [1, 4],
+      strides: [6, 8]
+    }
+    ensureMetricTarget(step, 'rpe', 0)
+    const [min, max] = effortBands[intent]
+    step.rpe = clamp(step.rpe, min, max)
+    return
+  }
+
   const primary = (step?.primaryTarget || 'heartRate') as TargetStepMetric
   const preferredMetric: TargetStepMetric =
     primary === 'heartRate' || primary === 'power' || primary === 'pace' || primary === 'rpe'
@@ -452,6 +492,12 @@ export function formatCompactTargetingBlock(
   targetFormatPolicy: TargetFormatPolicy,
   priorityText: string
 ): string {
+  if (targetPolicy.primaryMetric === 'rpe') {
+    return `- **TARGETING**: primary=RPE, strict=${targetPolicy.strictPrimary ? 'yes' : 'no'}.
+- Use numeric RPE values on a 1-10 perceived-effort scale (easy conversational running is 3-4/10; warmup/cooldown 2/10).
+- Explain the talk test in plain language: easy means speaking comfortably in full sentences.
+- Do not prescribe HR, LTHR, power, pace, or sensor-derived zones when effort-only targeting is requested.`
+  }
   const primaryMetric = metricLabel(targetPolicy.primaryMetric)
   const fallbackOrder = targetPolicy.fallbackOrder.map(metricLabel).join(' > ')
   const steadyRangeRule = formatSteadyTargetStyleInstruction(targetPolicy)

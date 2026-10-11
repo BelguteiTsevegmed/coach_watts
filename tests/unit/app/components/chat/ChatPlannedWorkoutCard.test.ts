@@ -142,3 +142,36 @@ describe('ChatPlannedWorkoutCard strength structure detection', () => {
     wrapper.unmount()
   })
 })
+
+describe('effort-only chat card', () => {
+  beforeEach(() => vi.stubGlobal('$fetch', fetchMock))
+  afterEach(() => {
+    fetchMock.mockReset()
+    vi.unstubAllGlobals()
+  })
+
+  it('shows numeric RPE instead of a sensor chart, missing target, or HR warning', async () => {
+    fetchMock.mockResolvedValue({
+      workout: {
+        id: 'run-effort',
+        title: 'Easy run',
+        type: 'Run',
+        syncStatus: 'LOCAL_ONLY',
+        structuredWorkout: {
+          steps: [{ name: 'Easy run', durationSeconds: 1200, rpe: 3, primaryTarget: 'rpe' }]
+        }
+      },
+      sportSettings: { targetPolicy: { primaryMetric: 'heartRate' } },
+      generationTargetPolicy: { primaryMetric: 'rpe' }
+    })
+    const wrapper = mountCard({ workout_id: 'run-effort' })
+    await flushPromises()
+    await wrapper.find('button').trigger('click')
+    const showSteps = wrapper.findAll('button').find((button) => button.text() === 'Show Steps')!
+    await showSteps.trigger('click')
+    expect(wrapper.text()).toContain('RPE 3/10')
+    expect(wrapper.text()).not.toContain('Target settings warning')
+    expect(wrapper.find('[data-test="mini-chart"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
