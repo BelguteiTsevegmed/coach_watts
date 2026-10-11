@@ -271,3 +271,139 @@ it('normalizes global block week numbers before checking sport ceilings', async 
   )
   expect(() => normalizeGeneratedBlockWeeks([{ weekNumber: 1 }], 2, 5)).toThrow('week numbering')
 })
+
+describe('weekly load budgets', () => {
+  const run = (dayOfWeek: number, durationMinutes = 20, tssEstimate = 18) => ({
+    dayOfWeek,
+    type: 'Run',
+    durationMinutes,
+    tssEstimate
+  })
+  const starter = target(1, 60, { sportVolumeTargets: { run: 60 }, tssTarget: 50 })
+  it('rejects 54 TSS even though three 20-minute runs fit the duration budget', () => {
+    expect(
+      validateGeneratedBlockWeeks(
+        [{ weekNumber: 1, workouts: [run(3), run(5), run(0)] }],
+        [starter]
+      )
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'over_tss' })]))
+  })
+  it('shortens duration and its proportional dose together before the strict write guard', async () => {
+    const { assessTrainingPrescription } =
+      await import('../../../../../server/utils/training-prescription/assessment')
+    const result = clampGeneratedBlockWeeks(
+      [{ weekNumber: 1, workouts: [run(3), run(5), run(0)] }],
+      [starter]
+    )
+    const workouts = result.weeks[0]!.workouts!
+    expect(validateGeneratedBlockWeeks(result.weeks, [starter])).toEqual([])
+    expect(
+      workouts.every(
+        (w) =>
+          w.durationMinutes! < 20 && w.tssEstimate === Math.floor((18 * w.durationMinutes!) / 20)
+      )
+    ).toBe(true)
+    const assessment = assessTrainingPrescription(
+      {
+        capturedAt: '2026-10-11T10:00:00Z',
+        today: '2026-10-11',
+        timezone: 'UTC',
+        planned: [],
+        completed: [],
+        availability: [],
+        injuries: [],
+        weeks: [
+          {
+            start: '2026-10-19',
+            end: '2026-10-25',
+            volumeMinutes: 60,
+            sportMinutes: { run: 60 },
+            tss: 50
+          }
+        ]
+      },
+      workouts.map((w) => ({
+        date: w.dayOfWeek === 3 ? '2026-10-21' : w.dayOfWeek === 5 ? '2026-10-23' : '2026-10-25',
+        type: w.type,
+        durationSec: w.durationMinutes! * 60,
+        tss: w.tssEstimate,
+        hard: false
+      }))
+    )
+    expect(assessment.accepted).toBe(true)
+  })
+  it.each([20, 12])(
+    'retains feasible recovery sessions from %imin proposals instead of all rest',
+    (minutes) => {
+      const limits = target(1, 36, { sportVolumeTargets: { run: 36 }, tssTarget: 30 })
+      const result = clampGeneratedBlockWeeks(
+        [
+          {
+            weekNumber: 1,
+            workouts: [
+              run(3, minutes, minutes === 12 ? 10 : 18),
+              run(5, minutes, minutes === 12 ? 10 : 18),
+              run(0, minutes, minutes === 12 ? 10 : 18)
+            ]
+          }
+        ],
+        [limits]
+      )
+      const active = result.weeks[0]!.workouts!.filter((w) => w.type !== 'Rest')
+      expect(active).toHaveLength(2)
+      expect(active.every((w) => w.durationMinutes! >= 15)).toBe(true)
+      expect(validateGeneratedBlockWeeks(result.weeks, [limits])).toEqual([])
+    }
+  )
+  it('counts actual completed load once and deducts preserved anchors', async () => {
+    const { committedProgressionSessions } =
+      await import('../../../../../server/utils/plans/progression-policy')
+    const { remainingWeeklyTss } = await import('../../../../../server/utils/plans/block-volume')
+    const planned = [
+      {
+        id: 'linked',
+        date: new Date('2026-10-19Z'),
+        type: 'Run',
+        durationSec: 1200,
+        tss: 18,
+        completed: true
+      },
+      { id: 'anchor', date: new Date('2026-10-21Z'), type: 'Run', durationSec: 900, tss: 12 }
+    ]
+    const completed = [
+      {
+        plannedWorkoutId: 'linked',
+        date: new Date('2026-10-19T12:00Z'),
+        type: 'Run',
+        durationSec: 1000,
+        tss: 15
+      }
+    ]
+    const committed = committedProgressionSessions(planned, completed, ['anchor'])
+    expect(remainingWeeklyTss(50, committed)).toBe(23)
+    expect(remainingWeeklyTss(50, [{ type: 'Run', tss: null }])).toBeNull()
+    const limits = target(1, 60, {
+      sportVolumeTargets: { run: 60 },
+      tssTarget: remainingWeeklyTss(50, committed),
+      allowedDaysOfWeek: [5]
+    })
+    const result = clampGeneratedBlockWeeks(
+      [{ weekNumber: 1, workouts: [run(3, 100, 100), run(5, 30, 30)] }],
+      [limits]
+    )
+    expect(result.weeks[0]!.workouts![0]).toEqual(run(3, 100, 100))
+    expect(result.weeks[0]!.workouts![1]!.durationMinutes).toBeLessThanOrEqual(23)
+    expect(validateGeneratedBlockWeeks(result.weeks, [limits])).toEqual([])
+  })
+  it('treats zero remaining load as rest, and does not invent missing load', () => {
+    const zero = { ...starter, tssTarget: 0 }
+    const result = clampGeneratedBlockWeeks([{ weekNumber: 1, workouts: [run(3)] }], [zero])
+    expect(result.weeks[0]!.workouts![0]!.type).toBe('Rest')
+    expect(
+      validateGeneratedBlockWeeks(
+        [{ weekNumber: 1, workouts: [{ ...run(3), tssEstimate: undefined }] }],
+        [zero]
+      )
+    ).toEqual([])
+  })
+})

@@ -167,6 +167,33 @@ describe('generateWeeklyPlan task', () => {
       vi.mocked(prisma.plannedWorkout.createMany).mockResolvedValue({ count: 2 } as any)
     })
 
+    it('retries and shortens a duration-compliant week that exceeds its saved TSS ceiling', async () => {
+      const { generateStructuredAnalysis } = await import('../../../server/utils/gemini')
+      vi.mocked(prisma.trainingWeek.findUnique).mockResolvedValue({
+        ...trainingWeek,
+        volumeTargetMinutes: 60,
+        tssTarget: 50,
+        sportVolumeTargets: { run: 60 }
+      } as any)
+      vi.mocked(generateStructuredAnalysis).mockResolvedValue({
+        days: ['2026-03-18', '2026-03-20', '2026-03-22'].map((date) => ({
+          ...day(date, 20, 18),
+          workoutType: 'Run'
+        })),
+        totalTSS: 54,
+        weekSummary: 'Easy week'
+      } as any)
+      await runGenerateWeeklyPlan({ userId: 'user-1', trainingWeekId: 'week-1' })
+      expect(generateStructuredAnalysis).toHaveBeenCalledTimes(2)
+      const writes = vi.mocked(prisma.plannedWorkout.createMany).mock.calls[0]![0] as any
+      expect(writes.data).toHaveLength(3)
+      expect(writes.data.reduce((sum: number, w: any) => sum + w.tss, 0)).toBeLessThanOrEqual(50)
+      expect(
+        writes.data.every(
+          (w: any) => w.durationSec < 1200 && w.tss === Math.floor((18 * w.durationSec) / 1200)
+        )
+      ).toBe(true)
+    })
     it('retries once with corrective feedback when the generated week exceeds the volume budget', async () => {
       const { generateStructuredAnalysis } = await import('../../../server/utils/gemini')
       vi.mocked(generateStructuredAnalysis)

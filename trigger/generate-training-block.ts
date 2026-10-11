@@ -46,6 +46,7 @@ import { fetchOpenInjuries, formatInjuriesForPrompt } from '../server/utils/coac
 import { normalizeGeneratedWorkoutType } from '../server/utils/plans/workout-type'
 import {
   validateGeneratedBlockWeeks,
+  remainingWeeklyTss,
   normalizeGeneratedBlockWeeks,
   clampGeneratedBlockWeeks,
   formatViolationsFeedback,
@@ -217,36 +218,41 @@ export async function runGenerateTrainingBlock(payload: {
   const capturedProgression = block.weeks.some((w) => readSportVolumeTargets(w.sportVolumeTargets))
   const blockEnd = new Date(block.startDate)
   blockEnd.setUTCDate(blockEnd.getUTCDate() + block.durationWeeks * 7 - 1)
-  const [preservedPlanned, completedForBudget] = capturedProgression
-    ? await Promise.all([
-        prisma.plannedWorkout.findMany({
-          where: {
-            userId,
-            date: { gte: block.startDate, lte: blockEnd },
-            OR: [{ managedBy: 'USER' }, { completed: true }, { id: { in: anchorWorkoutIds || [] } }]
-          },
-          select: {
-            id: true,
-            date: true,
-            type: true,
-            durationSec: true,
-            managedBy: true,
-            completed: true
-          }
-        }),
-        prisma.workout.findMany({
-          where: {
-            userId,
-            isDuplicate: false,
-            date: {
-              gte: getStartOfLocalDateUTC(timezone, formatDateUTC(block.startDate)),
-              lte: getEndOfLocalDateUTC(timezone, formatDateUTC(blockEnd))
+  const [preservedPlanned, completedForBudget] =
+    capturedProgression || block.weeks.some((w) => w.tssTarget != null)
+      ? await Promise.all([
+          prisma.plannedWorkout.findMany({
+            where: {
+              userId,
+              date: { gte: block.startDate, lte: blockEnd }
+            },
+            select: {
+              id: true,
+              date: true,
+              type: true,
+              durationSec: true,
+              tss: true,
+              managedBy: true,
+              completed: true,
+              completionStatus: true,
+              modifiedLocally: true,
+              syncConflict: true,
+              rawJson: true
             }
-          },
-          select: { date: true, type: true, durationSec: true, plannedWorkoutId: true }
-        })
-      ])
-    : [[], []]
+          }),
+          prisma.workout.findMany({
+            where: {
+              userId,
+              isDuplicate: false,
+              date: {
+                gte: getStartOfLocalDateUTC(timezone, formatDateUTC(block.startDate)),
+                lte: getEndOfLocalDateUTC(timezone, formatDateUTC(blockEnd))
+              }
+            },
+            select: { date: true, type: true, durationSec: true, tss: true, plannedWorkoutId: true }
+          })
+        ])
+      : [[], []]
 
   // Fetch latest athlete profile
   const athleteProfileReport = await prisma.report.findFirst({
@@ -574,9 +580,13 @@ Return valid JSON matching the schema provided.`
   // 4.5 Validate the generated schedule against the wizard's weekly volume budgets.
   // One corrective retry; if the model still over-schedules, clamp deterministically
   // so a week can never persist at a multiple of the athlete's chosen volume. (CW-316)
-  const committedSessions = capturedProgression
-    ? committedProgressionSessions(preservedPlanned, completedForBudget, anchorWorkoutIds)
-    : anchoredWorkouts
+  const committedSessions =
+    capturedProgression || block.weeks.some((w) => w.tssTarget != null)
+      ? committedProgressionSessions(preservedPlanned, completedForBudget, [
+          ...(anchorWorkoutIds || []),
+          ...preservedPlanned.filter(isProtectedPrescriptionSession).map((w) => w.id)
+        ])
+      : anchoredWorkouts
   const protectedCalendarDays = new Set(
     committedSessions.map((w) => progressionSessionDay(w, timezone))
   )
@@ -594,6 +604,7 @@ Return valid JSON matching the schema provided.`
     return {
       weekNumber: schedule.weekNumber,
       ...budgets,
+      tssTarget: remainingWeeklyTss(original?.tssTarget, preserved),
       availability,
       isRecovery: original?.isRecovery,
       allowedDaysOfWeek: schedule.validDays
@@ -630,7 +641,7 @@ Return valid JSON matching the schema provided.`
 
   const remainingViolations = validateGeneratedBlockWeeks(
     result.weeks,
-    weekTargets.filter((target) => target.sportVolumeTargets)
+    weekTargets.filter((target) => target.sportVolumeTargets || target.tssTarget != null)
   )
   if (remainingViolations.length) throw new Error(formatViolationsFeedback(remainingViolations))
 
