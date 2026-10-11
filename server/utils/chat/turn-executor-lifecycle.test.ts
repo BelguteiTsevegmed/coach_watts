@@ -101,6 +101,52 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('chat turn lifecycle', () => {
+  it('fails promptly and broadcasts failure when the SDK emits a prompt validation error', async () => {
+    const error = new Error('Invalid prompt: The messages do not match the ModelMessage[] schema.')
+    mocks.stream.mockImplementation((options) => ({
+      consumeStream: async () => {
+        await options.onError?.({ error })
+      }
+    }))
+    await expect(executeChatTurn('turn-1', 'run-1')).rejects.toThrow('Invalid prompt')
+    const failedDraft = mocks.updateDraft.mock.calls
+      .map(([params]) => params)
+      .find((params) => params.metadata?.turnStatus === 'FAILED')
+    expect(failedDraft.content).toMatch(/retry/i)
+    expect(failedDraft.metadata).toMatchObject({
+      hiddenBecauseEmptyFailure: false,
+      hideUntilContent: false,
+      isDraft: false
+    })
+    expect(mocks.updateStatus).toHaveBeenCalledWith(
+      'turn-1',
+      'run-1',
+      'FAILED',
+      expect.objectContaining({ failureReason: error.message })
+    )
+    expect(mocks.send).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ type: 'chat_turn_status', reason: 'turn_failed', status: 'FAILED' })
+    )
+  })
+
+  it('settles an SDK error event even if stream consumption never closes', async () => {
+    const error = new Error('Invalid prompt')
+    mocks.stream.mockImplementation((options) => ({
+      consumeStream: async () => {
+        await options.onError?.({ error })
+        await new Promise(() => {})
+      }
+    }))
+    let settled = false
+    const execution = executeChatTurn('turn-1', 'run-1').catch((failure) => {
+      expect(failure).toBe(error)
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settled).toBe(true)
+    await execution
+  })
   it('releases a timed-out turn when failure accounting never resolves', async () => {
     mocks.updateUsage.mockImplementation(() => new Promise(() => {}))
     mocks.stream.mockImplementation(() => ({ consumeStream: () => new Promise(() => {}) }))
