@@ -56,6 +56,33 @@ const CHAT_TURN_SLOW_RESPONSE_LIMIT_MS = Number(
   process.env.CHAT_TURN_SLOW_RESPONSE_THRESHOLD_MS || CHAT_TURN_SLOW_RESPONSE_THRESHOLD_MS
 )
 
+/** Only explicit SDK approval requests are pending; failed/retried calls are not approvals. */
+export function collectPendingToolApprovals(
+  steps: ReadonlyArray<{ content?: ReadonlyArray<any> }> = [],
+  executedResults: ReadonlyArray<{ toolCallId?: string }>
+) {
+  const executedIds = new Set(executedResults.map((result) => result.toolCallId))
+  const pending = new Map<string, { toolCallId: string; toolName: string; args: any }>()
+
+  for (const step of steps) {
+    for (const part of step.content || []) {
+      if (part?.type !== 'tool-approval-request') continue
+      const call = part.toolCall
+      if (!call?.toolCallId || !call.toolName || call.invalid || executedIds.has(call.toolCallId)) {
+        continue
+      }
+      // The app's canonical approval/continuation protocol uses the tool call ID.
+      pending.set(call.toolCallId, {
+        toolCallId: call.toolCallId,
+        toolName: call.toolName,
+        args: call.input ?? call.args ?? {}
+      })
+    }
+  }
+
+  return Array.from(pending.values())
+}
+
 function createAbortError(message: string) {
   const error = new Error(message)
   error.name = 'AbortError'
@@ -1722,17 +1749,10 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
             currentPhase = 'completed'
             const hasMeaningfulText =
               typeof assistantText === 'string' && assistantText.trim().length > 0
-            const executedToolCallIds = new Set([
-              ...(finalStepResults || []).map((result: any) => result.toolCallId),
-              ...allToolResults.map((result: any) => result.toolCallId)
+            const pendingApprovals = collectPendingToolApprovals(event.steps, [
+              ...(finalStepResults || []),
+              ...allToolResults
             ])
-            const pendingApprovals = (finalCalls || [])
-              .filter((call: any) => !executedToolCallIds.has(call.toolCallId))
-              .map((call: any) => ({
-                toolCallId: call.toolCallId,
-                toolName: call.toolName,
-                args: call.args || call.input
-              }))
             const shouldFallbackForEmptyResponse =
               !hasMeaningfulText && pendingApprovals.length === 0
 
@@ -1804,13 +1824,13 @@ export async function executeChatTurn(turnId: string, expectedRunId?: string | n
             const finishedAt = new Date()
             const executionDurationMs = Math.max(0, finishedAt.getTime() - startedAt.getTime())
 
-            // Detect tool calls blocked by needsApproval: present in finalCalls but absent from results
+            // Persist only approval requests explicitly emitted by the SDK.
             await persistDraft(CHAT_TURN_STATUS.COMPLETED, true, {
               hideUntilContent: false,
               hiddenBecauseEmptyFailure: false,
               executionPhase: currentPhase,
               executionDurationMs,
-              ...(pendingApprovals.length > 0 ? { pendingApprovals } : {})
+              pendingApprovals
             })
 
             const completedUpdate = await chatTurnService.updateStatusIfOwned(
