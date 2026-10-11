@@ -32,6 +32,7 @@ export interface GeneratedBlockWeek {
 export interface WeekVolumeTarget {
   weekNumber: number
   volumeTargetMinutes: number | null
+  tssTarget?: number | null
   isRecovery?: boolean
   /** Exact ceilings for plans with captured sport progression; legacy targets keep tolerance. */
   sportVolumeTargets?: SportVolumeTargets | null
@@ -48,7 +49,7 @@ export interface WeekVolumeTarget {
 
 export interface BlockVolumeViolation {
   weekNumber: number
-  kind: 'over_volume' | 'invalid_duration' | 'over_sport_volume' | 'availability'
+  kind: 'over_volume' | 'invalid_duration' | 'over_sport_volume' | 'availability' | 'over_tss'
   message: string
 }
 
@@ -77,6 +78,27 @@ export function weekScheduledMinutes(week: GeneratedBlockWeek, target: WeekVolum
   return (week.workouts || [])
     .filter((w) => countsForWeek(w, target))
     .reduce((sum, w) => sum + (w.durationMinutes || 0), 0)
+}
+
+/** Unknown committed load remains unknown, matching the final prescription assessment. */
+export function remainingWeeklyTss(
+  target: number | null | undefined,
+  sessions: Array<{ type: string | null; tss?: number | null }>
+): number | null {
+  const active = sessions.filter((session) => session.type !== 'Rest')
+  if (
+    target == null ||
+    !Number.isFinite(target) ||
+    active.some((s) => s.tss == null || !Number.isFinite(s.tss))
+  )
+    return null
+  return Math.max(0, target - active.reduce((sum, s) => sum + Math.max(0, s.tss!), 0))
+}
+
+function scheduledTss(week: GeneratedBlockWeek, target: WeekVolumeTarget): number | null {
+  const active = (week.workouts || []).filter((w) => countsForWeek(w, target))
+  if (active.some((w) => w.tssEstimate == null || !Number.isFinite(w.tssEstimate))) return null
+  return active.reduce((sum, w) => sum + Math.max(0, w.tssEstimate!), 0)
 }
 
 function sessionCeiling(workout: GeneratedBlockWorkout, target: WeekVolumeTarget): number {
@@ -118,10 +140,30 @@ function clampProgressionWeek(
   week: GeneratedBlockWeek,
   target: WeekVolumeTarget
 ): GeneratedBlockWeek {
-  const budgets = { ...target.sportVolumeTargets }
+  // Bring short proposals up to a usable session before allocation. Their dose
+  // increases proportionally too; frequency may then need to decrease.
+  week = {
+    ...week,
+    workouts: (week.workouts || []).map((w) => {
+      const minutes = w.durationMinutes || 0
+      if (!countsForWeek(w, target) || minutes <= 0 || minutes >= MIN_WORKOUT_MINUTES) return w
+      return {
+        ...w,
+        durationMinutes: MIN_WORKOUT_MINUTES,
+        tssEstimate:
+          w.tssEstimate == null ? undefined : (w.tssEstimate * MIN_WORKOUT_MINUTES) / minutes
+      }
+    })
+  }
+  const budgets = target.sportVolumeTargets ? { ...target.sportVolumeTargets } : null
   let remaining = Math.max(0, target.volumeTargetMinutes ?? Infinity)
   const scheduled = weekScheduledMinutes(week, target)
-  const totalFactor = scheduled > remaining ? remaining / scheduled : 1
+  const dose = scheduledTss(week, target)
+  const tssFactor =
+    target.tssTarget != null && dose != null && dose > target.tssTarget
+      ? Math.max(0, target.tssTarget) / dose
+      : 1
+  const totalFactor = Math.min(tssFactor, scheduled > remaining ? remaining / scheduled : 1)
   const dayRemaining = new Map<number, number>()
   const sportTotals: SportVolumeTargets = {}
   for (const w of week.workouts || []) {
@@ -131,14 +173,15 @@ function clampProgressionWeek(
       (sportTotals[sport] || 0) +
       (Number.isFinite(w.durationMinutes) ? Math.max(0, w.durationMinutes!) : 0)
   }
-  return {
+  const result = {
     ...week,
     workouts: (week.workouts || []).map((w) => {
       if (!countsForWeek(w, target)) return w
       const sport = classifySportFamily(w.type)
       const original = Number.isFinite(w.durationMinutes) ? Math.max(0, w.durationMinutes!) : 0
-      const sportFactor =
-        (sportTotals[sport] || 0) > 0
+      const sportFactor = !budgets
+        ? 1
+        : (sportTotals[sport] || 0) > 0
           ? Math.min(1, (target.sportVolumeTargets?.[sport] || 0) / sportTotals[sport]!)
           : 0
       const availableToday = dayRemaining.get(w.dayOfWeek) ?? dayCeiling(w.dayOfWeek, target)
@@ -147,7 +190,7 @@ function clampProgressionWeek(
           original * Math.min(totalFactor, sportFactor),
           remaining,
           availableToday,
-          budgets[sport] || 0,
+          budgets ? budgets[sport] || 0 : Infinity,
           sessionCeiling(w, target),
           MAX_WORKOUT_MINUTES
         )
@@ -163,7 +206,7 @@ function clampProgressionWeek(
         }
       remaining -= minutes
       dayRemaining.set(w.dayOfWeek, availableToday - minutes)
-      budgets[sport] = (budgets[sport] || 0) - minutes
+      if (budgets) budgets[sport] = (budgets[sport] || 0) - minutes
       return {
         ...w,
         durationMinutes: minutes,
@@ -174,6 +217,33 @@ function clampProgressionWeek(
       }
     })
   }
+  // If equal proportional reductions make every session too short, reduce frequency
+  // first and retry the allocation. A 36-minute recovery week can fit two runs.
+  const candidates = (week.workouts || [])
+    .map((w, index) => ({ w, index }))
+    .filter(({ w }) => countsForWeek(w, target))
+  if (candidates.length > 1 && !result.workouts.some((w) => countsForWeek(w, target))) {
+    const dropIndex = candidates[candidates.length - 1]!.index
+    return clampProgressionWeek(
+      {
+        ...week,
+        workouts: week.workouts!.map((w, index) =>
+          index === dropIndex
+            ? {
+                ...w,
+                type: 'Rest',
+                title: 'Rest',
+                description: 'Rest to stay within weekly training budgets.',
+                durationMinutes: 0,
+                tssEstimate: 0
+              }
+            : w
+        )
+      },
+      target
+    )
+  }
+  return result
 }
 
 export function validateGeneratedBlockWeeks(
@@ -185,6 +255,15 @@ export function validateGeneratedBlockWeeks(
   for (const week of weeks) {
     const target = targets.find((t) => t.weekNumber === Number(week.weekNumber))
     if (!target) continue
+
+    const dose = scheduledTss(week, target)
+    if (target.tssTarget != null && dose != null && dose > target.tssTarget + 0.01) {
+      violations.push({
+        weekNumber: week.weekNumber,
+        kind: 'over_tss',
+        message: `Week ${week.weekNumber}: scheduled ${dose} TSS exceeds the remaining ${target.tssTarget} TSS ceiling. Shorten session durations and scale their load estimates proportionally; do not lower estimates without reducing training.`
+      })
+    }
 
     for (const workout of week.workouts || []) {
       if (!countsForWeek(workout, target)) continue
@@ -265,10 +344,10 @@ export function validateGeneratedBlockWeeks(
 
 export function formatViolationsFeedback(violations: BlockVolumeViolation[]): string {
   return [
-    'YOUR PREVIOUS RESPONSE WAS REJECTED FOR THE FOLLOWING VOLUME VIOLATIONS:',
+    'YOUR PREVIOUS RESPONSE WAS REJECTED FOR THE FOLLOWING TRAINING BUDGET VIOLATIONS:',
     ...violations.map((v) => `- ${v.message}`),
     '',
-    "Regenerate the FULL block fixing every violation. The weekly volume targets are hard budgets: the sum of workout durations in each week MUST stay within ±10% of that week's target. Availability slots are windows when the athlete CAN train — schedule only as many sessions as the volume budget allows, never one per slot per day."
+    "Regenerate the FULL block fixing every violation. Both duration and TSS ceilings must hold simultaneously. Reduce actual durations with proportional TSS estimates, never change TSS alone to fit. If minimum session length cannot fit at the proposed frequency, schedule fewer sessions, leaving the others as rest. The weekly volume targets are hard budgets: the sum of workout durations in each week MUST stay within ±10% of that week's target. Availability slots are windows when the athlete CAN train — schedule only as many sessions as the volume budget allows, never one per slot per day."
   ].join('\n')
 }
 
@@ -288,7 +367,7 @@ export function clampGeneratedBlockWeeks(
     const target = targets.find((t) => t.weekNumber === Number(week.weekNumber))
     if (!target) return week
 
-    if (readSportVolumeTargets(target.sportVolumeTargets)) {
+    if (readSportVolumeTargets(target.sportVolumeTargets) || target.tssTarget != null) {
       const clamped = clampProgressionWeek(week, target)
       if (JSON.stringify(clamped.workouts) !== JSON.stringify(week.workouts))
         adjustments.push(

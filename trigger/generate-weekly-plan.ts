@@ -61,6 +61,7 @@ import { autoUploadPlannedWorkoutToIntervalsIfEnabled } from '../server/utils/in
 import { normalizeGeneratedWorkoutType } from '../server/utils/plans/workout-type'
 import {
   validateGeneratedBlockWeeks,
+  remainingWeeklyTss,
   clampGeneratedBlockWeeks,
   formatViolationsFeedback,
   type GeneratedBlockWeek,
@@ -867,33 +868,37 @@ Retain the current block and week focus. Return actual replacement sessions, nev
       tssEstimate: d.targetTSS
     }))
   })
-  const [plannedForBudget, completedForBudget] =
-    sportVolumeTargets && fullContext
-      ? await Promise.all([
-          prisma.plannedWorkout.findMany({
-            where: { userId, date: { gte: fullContext.startDate, lte: fullContext.endDate } },
-            select: {
-              id: true,
-              date: true,
-              type: true,
-              durationSec: true,
-              managedBy: true,
-              completed: true
+  const [plannedForBudget, completedForBudget] = fullContext
+    ? await Promise.all([
+        prisma.plannedWorkout.findMany({
+          where: { userId, date: { gte: fullContext.startDate, lte: fullContext.endDate } },
+          select: {
+            id: true,
+            date: true,
+            type: true,
+            durationSec: true,
+            tss: true,
+            managedBy: true,
+            completed: true,
+            completionStatus: true,
+            modifiedLocally: true,
+            syncConflict: true,
+            rawJson: true
+          }
+        }),
+        prisma.workout.findMany({
+          where: {
+            userId,
+            isDuplicate: false,
+            date: {
+              gte: getStartOfLocalDateUTC(timezone, formatDateUTC(fullContext.startDate)),
+              lte: getEndOfLocalDateUTC(timezone, formatDateUTC(fullContext.endDate))
             }
-          }),
-          prisma.workout.findMany({
-            where: {
-              userId,
-              isDuplicate: false,
-              date: {
-                gte: getStartOfLocalDateUTC(timezone, formatDateUTC(fullContext.startDate)),
-                lte: getEndOfLocalDateUTC(timezone, formatDateUTC(fullContext.endDate))
-              }
-            },
-            select: { date: true, type: true, durationSec: true, plannedWorkoutId: true }
-          })
-        ])
-      : [[], []]
+          },
+          select: { date: true, type: true, durationSec: true, tss: true, plannedWorkoutId: true }
+        })
+      ])
+    : [[], []]
   // Implicit partial-week generation only replaces its requested date range.
   // Unfinished AI sessions elsewhere in the linked week also consume the budget.
   const outsideReplacementIds = trainingWeekId
@@ -901,10 +906,11 @@ Retain the current block and week focus. Return actual replacement sessions, nev
     : plannedForBudget
         .filter((w) => w.date < alignedWeekStart || w.date > alignedWeekEndUTC)
         .map((w) => w.id)
-  const preservedForBudget = sportVolumeTargets
+  const preservedForBudget = fullContext
     ? committedProgressionSessions(plannedForBudget, completedForBudget, [
         ...(anchorWorkoutIds || []),
-        ...outsideReplacementIds
+        ...outsideReplacementIds,
+        ...plannedForBudget.filter(isProtectedPrescriptionSession).map((w) => w.id)
       ])
     : anchoredWorkouts
   const budgets = remainingProgressionBudgets(
@@ -922,6 +928,7 @@ Retain the current block and week focus. Return actual replacement sessions, nev
     {
       weekNumber: 1,
       ...budgets,
+      tssTarget: remainingWeeklyTss(fullContext?.tssTarget, preservedForBudget),
       allowedDaysOfWeek: [0, 1, 2, 3, 4, 5, 6].filter((day) => !anchoredDays.has(day)),
       availability
     }
@@ -974,7 +981,7 @@ Retain the current block and week focus. Return actual replacement sessions, nev
 
   const residualViolations = validateGeneratedBlockWeeks(
     [daysToBlockWeek(planDays)],
-    weekTargets.filter((target) => target.sportVolumeTargets)
+    weekTargets.filter((target) => target.sportVolumeTargets || target.tssTarget != null)
   )
   if (residualViolations.length) throw new Error(formatViolationsFeedback(residualViolations))
 
