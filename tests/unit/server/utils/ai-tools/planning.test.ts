@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enqueuePlannedWorkoutStructureAdjustment } from '../../../../../server/utils/planned-workout-structure-trigger'
 import { planningTools } from '../../../../../server/utils/ai-tools/planning'
 import { plannedWorkoutRepository } from '../../../../../server/utils/repositories/plannedWorkoutRepository'
 import { sportSettingsRepository } from '../../../../../server/utils/repositories/sportSettingsRepository'
@@ -14,6 +15,14 @@ import {
   syncManualPlannedWorkoutStructureToIntervalsIfSynced
 } from '../../../../../server/utils/planned-workout-manual-structure-edit'
 import { publishPlannedWorkoutToIntervals } from '../../../../../server/utils/planned-workout-intervals-publish'
+
+vi.mock('../../../../../server/utils/quotas/engine', () => ({ checkQuota: vi.fn() }))
+vi.mock('../../../../../server/utils/planned-workout-structure-trigger', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../../../../server/utils/planned-workout-structure-trigger')
+  >('../../../../../server/utils/planned-workout-structure-trigger')
+  return { ...actual, enqueuePlannedWorkoutStructureAdjustment: vi.fn() }
+})
 
 vi.mock('../../../../../server/utils/planned-workout-intervals-publish', () => ({
   publishPlannedWorkoutToIntervals: vi.fn()
@@ -122,6 +131,57 @@ describe('planningTools', () => {
         cadence: { mode: 'rpm' }
       }
     } as any)
+  })
+
+  describe('effort-only adjustment', () => {
+    it('requires the model to explicitly choose a target override or preserve targets with null', () => {
+      const schema = tools.adjust_planned_workout.inputSchema as any
+      expect(schema.safeParse({ workout_id: 'pw-1', instructions: 'Talk test only' }).success).toBe(
+        false
+      )
+      expect(
+        schema.safeParse({
+          workout_id: 'pw-1',
+          instructions: 'Keep targets',
+          targeting_override: null
+        }).success
+      ).toBe(true)
+    })
+
+    it('passes the chosen effort-only policy to the worker rather than relying on prose', async () => {
+      vi.mocked(plannedWorkoutRepository.getById).mockResolvedValue({ id: 'pw-1' } as any)
+      vi.mocked(enqueuePlannedWorkoutStructureAdjustment).mockResolvedValue({
+        status: 'queued',
+        runId: 'run-1',
+        generationRunId: 'gen-1',
+        generationRevision: 1
+      })
+      const override = {
+        targetPolicy: {
+          primaryMetric: 'rpe' as const,
+          strictPrimary: true,
+          allowMixedTargetsPerStep: false
+        }
+      }
+      const result = await tools.adjust_planned_workout.execute(
+        {
+          workout_id: 'pw-1',
+          instructions: 'Remove HR and use RPE with the talk test only.',
+          targeting_override: override
+        },
+        { toolCallId: 'effort-1', messages: [] }
+      )
+      expect(result).toMatchObject({ success: true, workout_id: 'pw-1' })
+      expect(enqueuePlannedWorkoutStructureAdjustment).toHaveBeenCalledWith(
+        expect.objectContaining({
+          plannedWorkoutId: 'pw-1',
+          targetingOverride: override,
+          adjustments: expect.objectContaining({
+            feedback: 'Remove HR and use RPE with the talk test only.'
+          })
+        })
+      )
+    })
   })
 
   describe('get_planned_workout_structure', () => {

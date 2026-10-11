@@ -1419,9 +1419,12 @@ export const planningTools = (userId: string, timezone: string, aiSettings: AiSe
         ),
       duration_minutes: z.number().optional(),
       intensity: z.enum(['recovery', 'easy', 'moderate', 'hard', 'very_hard']).optional(),
-      targeting_override: targetingOverrideSchema.describe(
-        'Optional per-workout targeting override for this adjustment only (does not change profile defaults).'
-      )
+      targeting_override: targetingOverrideSchema
+        .unwrap()
+        .nullable()
+        .describe(
+          'Per-workout target selection. Use null only when the user is keeping existing targets. When the user requests a different metric you MUST set targetPolicy.primaryMetric and strictPrimary=true here; instructions alone do not change a strict profile policy. For no-watch, talk-test-only, or perceived-effort-only requests, use primaryMetric=rpe, strictPrimary=true, allowMixedTargetsPerStep=false. Does not change profile defaults.'
+        )
     }),
     needsApproval: async () => aiSettings.aiRequireToolApproval,
     execute: async ({

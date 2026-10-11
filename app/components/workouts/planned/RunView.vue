@@ -12,7 +12,7 @@
       <WorkoutDetailToolsMenu
         :editing="activeTab === 'edit'"
         :generating="generating"
-        :allow-edit="allowEdit"
+        :allow-edit="allowEdit && !effortProfile"
         edit-label="Edit intervals"
         @view="emit('view')"
         @adjust="emit('adjust')"
@@ -21,7 +21,10 @@
       />
     </div>
 
-    <div v-if="hasStructure" class="mb-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted">
+    <div
+      v-if="hasStructure && !effortProfile"
+      class="mb-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted"
+    >
       <span v-if="totalDistance > 0"
         >Estimated distance:
         <strong class="font-medium text-default"
@@ -39,7 +42,9 @@
     <!-- Structure Chart & Editor -->
     <div v-if="hasStructure" class="mb-6">
       <h4 class="text-sm font-semibold text-muted mb-3">Session profile</h4>
+      <WorkoutEffortProfile v-if="effortProfile" :structure="workout.structuredWorkout" />
       <WorkoutRunChart
+        v-else
         v-model:steps-tab="activeTab"
         :workout="workout"
         :user-ftp="userFtp"
@@ -62,6 +67,8 @@
 
 <script setup lang="ts">
   import WorkoutDetailToolsMenu from '~/components/workouts/WorkoutDetailToolsMenu.vue'
+  import WorkoutEffortProfile from '~/components/workouts/WorkoutEffortProfile.vue'
+  import { getWorkoutEffortProfile } from '#shared/workout-effort'
   import WorkoutRunChart from '~/components/workouts/WorkoutRunChart.vue'
   import {
     getWorkoutChartPreference,
@@ -86,6 +93,7 @@
     set: (val) => emit('update:stepsTab', val)
   })
 
+  const effortProfile = computed(() => getWorkoutEffortProfile(props.workout.structuredWorkout))
   const hasStructure = computed(() => !!props.workout.structuredWorkout?.steps?.length)
   const structureDescription = computed(() =>
     String(props.workout?.structuredWorkout?.description || props.workout?.description || '').trim()

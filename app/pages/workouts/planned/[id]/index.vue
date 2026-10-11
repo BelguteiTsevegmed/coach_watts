@@ -1392,6 +1392,7 @@
   import SwimView from '~/components/workouts/planned/SwimView.vue'
   import StrengthView from '~/components/workouts/planned/StrengthView.vue'
   import TriggerMonitorButton from '~/components/dashboard/TriggerMonitorButton.vue'
+  import { getWorkoutEffortProfile } from '#shared/workout-effort'
   import { compareStructuredWorkouts } from '#shared/workout-structure-diff'
   import { ACTIVE_STATUSES } from '~/utils/user-runs-client'
 
@@ -1451,6 +1452,7 @@
   const nutritionSettings = ref<any>(null)
   const workoutFuelingPlan = ref<any>(null)
   const sportSettings = ref<any>(null)
+  const generationTargetPolicy = ref<any>(null)
   const settingsStaleness = ref<any>(null)
   const structureGenerationInFlight = ref(false)
   const structureGenerationError = ref<string | null>(null)
@@ -1808,8 +1810,8 @@
       })
     }
 
-    // Edit Structure action
-    if (workout.value) {
+    // The physiological text editor cannot preserve effort-only prescriptions.
+    if (workout.value && !getWorkoutEffortProfile(workout.value.structuredWorkout)) {
       items.push({
         label: 'Edit Structure',
         icon: 'i-heroicons-pencil',
@@ -2083,6 +2085,31 @@
   })
 
   const workoutKpis = computed(() => {
+    const effortProfile = getWorkoutEffortProfile(workout.value?.structuredWorkout)
+    if (effortProfile) {
+      return [
+        {
+          label: 'Duration',
+          actual: formatDuration(displayDuration.value),
+          unit: '',
+          icon: 'i-heroicons-clock',
+          iconColor: 'text-primary-500',
+          status: 'Planned',
+          statusColor: 'text-primary-500',
+          detail: 'Planned session length'
+        },
+        {
+          label: 'Perceived effort',
+          actual: Number(effortProfile.averageRpe.toFixed(1)),
+          unit: '/10',
+          icon: 'i-heroicons-fire',
+          iconColor: 'text-green-500',
+          status: 'RPE',
+          statusColor: 'text-green-500',
+          detail: 'Average effort on the 1–10 scale'
+        }
+      ]
+    }
     const durationMin = Math.round(displayDuration.value / 60)
     const rawIntensity = workout.value?.workIntensity || 0
     const intensity = rawIntensity > 5 ? rawIntensity / 100 : rawIntensity
@@ -2503,6 +2530,7 @@
   }
 
   async function editStructure() {
+    if (getWorkoutEffortProfile(workout.value?.structuredWorkout)) return
     if (!workout.value) return
     structureText.value = ''
     showStructureModal.value = true
@@ -2611,6 +2639,7 @@
       initialFeedback.value = data.initialFeedback
       initialFeedbackText.value = data.initialFeedbackText
       sportSettings.value = data.sportSettings
+      generationTargetPolicy.value = data.generationTargetPolicy
       settingsStaleness.value = data.settingsStaleness
       structureGenerationInFlight.value = Boolean(data.structureGenerationInFlight)
       const generationRun = data.latestStructureGenerationRun
@@ -2893,7 +2922,9 @@
     if (!setting) return []
 
     const issues: string[] = []
-    const primaryMetric = setting?.targetPolicy?.primaryMetric || null
+    const primaryMetric =
+      generationTargetPolicy.value?.primaryMetric || setting?.targetPolicy?.primaryMetric || null
+    if (primaryMetric === 'rpe') return []
     const paceMode = setting?.targetFormatPolicy?.pace?.mode || null
     const hrMode = setting?.targetFormatPolicy?.heartRate?.mode || null
     const powerMode = setting?.targetFormatPolicy?.power?.mode || null

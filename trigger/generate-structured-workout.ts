@@ -872,7 +872,8 @@ export async function runGenerateStructuredWorkout(
       resolveStructureTargeting(
         sportSettings,
         workout.type || '',
-        payload?.targetingOverride || null
+        payload?.targetingOverride || null,
+        workout.user
       )
     logStage('loaded-sport-settings', {
       hasSettings: Boolean(sportSettings),
@@ -913,16 +914,9 @@ export async function runGenerateStructuredWorkout(
     logStage('loaded-recent-workouts', { count: recentWorkouts.length, contextProfile })
 
     // Resolve Metrics
-    const ftp =
-      sportSettings?.ftp || workout.user.ftp || (generatorMode === 'workout_families_v1' ? 0 : 250)
-    const lthr =
-      sportSettings?.lthr ||
-      workout.user.lthr ||
-      (generatorMode === 'workout_families_v1' ? 0 : 160)
-    const maxHr =
-      sportSettings?.maxHr ||
-      workout.user.maxHr ||
-      (generatorMode === 'workout_families_v1' ? 0 : 190)
+    const ftp = sportSettings?.ftp || workout.user.ftp || 0
+    const lthr = sportSettings?.lthr || workout.user.lthr || 0
+    const maxHr = sportSettings?.maxHr || workout.user.maxHr || 0
     const thresholdPace = sportSettings?.thresholdPace || 0
     const aiContextBlock = formatAiContextForStructureGen({
       aiContext: workout.user.aiContext,
@@ -1011,8 +1005,8 @@ DURATION: ${durationMinutes} minutes
 ${workout.trainingWeekId ? `HARD TIME LIMIT: ${workout.durationSec} seconds including all repetitions and recovery. Stay within this allocated session time; do not increase the weekly training dose.` : ''}
 INTENSITY: ${workout.workIntensity || 'Moderate'}
 DESCRIPTION: ${workout.description || 'No specific description'}
-USER FTP: ${ftp}W
-USER LTHR: ${lthr} bpm
+USER FTP: ${ftp ? `${ftp}W` : 'Unknown (do not estimate)'}
+USER LTHR: ${lthr ? `${lthr} bpm` : 'Unknown (do not estimate)'}
 TYPE: ${workout.type}
 PREFERRED LANGUAGE: ${language} (all text fields must use this language)
 

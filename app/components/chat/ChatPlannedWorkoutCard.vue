@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { computed, onUnmounted, ref, watch } from 'vue'
+  import { getWorkoutEffortProfile } from '#shared/workout-effort'
   import MiniWorkoutChart from '~/components/workouts/MiniWorkoutChart.vue'
   import WorkoutMessagesTimeline from '~/components/workouts/WorkoutMessagesTimeline.vue'
   import { hasRenderableStructure } from '~/utils/workout-structure'
@@ -47,6 +48,7 @@
 
   const liveWorkout = ref<any | null>(null)
   const liveSportSettings = ref<any | null>(null)
+  const liveGenerationTargetPolicy = ref<any | null>(null)
   const runStatus = ref<string | null>(null)
   const runError = ref<string | null>(null)
   const pollError = ref<string | null>(null)
@@ -169,6 +171,9 @@
     return null
   })
 
+  const effortProfile = computed(() =>
+    getWorkoutEffortProfile(plannedWorkout.value?.structuredWorkout)
+  )
   const hasVisualization = computed(() => {
     return hasRenderableStructure(plannedWorkout.value)
   })
@@ -319,10 +324,14 @@
 
   const generationWarningIssues = computed(() => {
     const settings = liveSportSettings.value
-    if (!settings) return []
+    if (!settings || effortProfile.value) return []
 
     const issues: string[] = []
-    const primaryMetric = settings?.targetPolicy?.primaryMetric || null
+    const primaryMetric =
+      liveGenerationTargetPolicy.value?.primaryMetric ||
+      settings?.targetPolicy?.primaryMetric ||
+      null
+    if (primaryMetric === 'rpe') return []
     const paceMode = settings?.targetFormatPolicy?.pace?.mode || null
     const hrMode = settings?.targetFormatPolicy?.heartRate?.mode || null
     const powerMode = settings?.targetFormatPolicy?.power?.mode || null
@@ -405,6 +414,7 @@
       const data = (await ($fetch as any)(`/api/workouts/planned/${workoutId.value}`)) as {
         workout?: any
         sportSettings?: any
+        generationTargetPolicy?: any
       }
       if (!cardActive) return
       const workout = data?.workout || data
@@ -414,6 +424,7 @@
       if (data?.sportSettings && typeof data.sportSettings === 'object') {
         liveSportSettings.value = data.sportSettings
       }
+      liveGenerationTargetPolicy.value = data?.generationTargetPolicy || null
       pollError.value = null
     } catch (error: any) {
       pollError.value = error?.data?.message || error?.message || 'Failed to refresh workout status'
@@ -543,6 +554,7 @@
   }
 
   const formatStepTarget = (step: any) => {
+    if (typeof step?.rpe === 'number' && Number.isFinite(step.rpe)) return `RPE ${step.rpe}/10`
     if (step?.power?.range) {
       return `${Math.round(step.power.range.start * 100)}-${Math.round(step.power.range.end * 100)}% FTP`
     }
@@ -628,7 +640,9 @@
           <span v-if="plannedWorkout?.durationSec">{{
             formatDuration(plannedWorkout?.durationSec)
           }}</span>
-          <span v-if="plannedWorkout?.tss">TSS {{ Math.round(plannedWorkout.tss) }}</span>
+          <span v-if="plannedWorkout?.tss && !effortProfile"
+            >TSS {{ Math.round(plannedWorkout.tss) }}</span
+          >
         </div>
         <div
           v-if="showStatusLine && (operationStatusText || isPolling)"
@@ -649,8 +663,11 @@
         </div>
       </div>
 
+      <span v-if="effortProfile" class="text-xs font-semibold text-muted whitespace-nowrap">
+        RPE {{ Number(effortProfile.averageRpe.toFixed(1)) }}/10
+      </span>
       <MiniWorkoutChart
-        v-if="hasVisualization"
+        v-if="hasVisualization && !effortProfile"
         :workout="plannedWorkout?.structuredWorkout"
         :preference="chartPreference"
         :show-cadence="true"

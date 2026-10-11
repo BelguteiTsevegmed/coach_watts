@@ -1,26 +1,43 @@
 import { resolveWorkoutTargeting, type WorkoutTargetingOverride } from './workout-targeting'
-import { toLegacyLoadPreference } from '../../server/utils/workout-target-policy'
 
 export function resolveStructureTargeting(
   sportSettings: any,
   workoutType: string,
-  override?: WorkoutTargetingOverride | null
+  override?: WorkoutTargetingOverride | null,
+  userMetrics: { ftp?: number | null; lthr?: number | null } = {}
 ) {
   const resolved = resolveWorkoutTargeting(sportSettings, override)
-  if (!workoutType.toLowerCase().includes('swim')) return resolved
-
-  // Imported sport profiles can inherit the cycling POWER_HR_PACE default.
-  // Swimming power is unsupported; use the next preferred swim metric.
-  const fallbackOrder = resolved.targetPolicy.fallbackOrder.filter((metric) => metric !== 'power')
-  const primaryMetric =
-    resolved.targetPolicy.primaryMetric === 'power'
-      ? fallbackOrder[0] || 'heartRate'
-      : resolved.targetPolicy.primaryMetric
-  const loadOrderTokens = resolved.loadOrderTokens.filter((token) => token !== 'POWER')
+  // A default profile is a preference, not evidence of measured physiology.
+  // Only offer percentage targets backed by a real personal reference. RPE is
+  // usable without a sensor and remains the final fallback.
+  const positive = (value: unknown) => Number.isFinite(Number(value)) && Number(value) > 0
+  const available = {
+    heartRate: positive(sportSettings?.lthr || userMetrics.lthr),
+    power:
+      !workoutType.toLowerCase().includes('swim') &&
+      positive(sportSettings?.ftp || userMetrics.ftp),
+    pace: positive(sportSettings?.thresholdPace),
+    rpe: true
+  }
+  const fallbackOrder = resolved.targetPolicy.fallbackOrder.filter((metric) => available[metric])
+  const primaryMetric = available[resolved.targetPolicy.primaryMetric]
+    ? resolved.targetPolicy.primaryMetric
+    : fallbackOrder[0] || 'rpe'
+  const loadOrderTokens = fallbackOrder.map((metric) =>
+    metric === 'heartRate' ? 'HR' : metric.toUpperCase()
+  )
   return {
     ...resolved,
-    targetPolicy: { ...resolved.targetPolicy, primaryMetric, fallbackOrder },
-    loadPreference: toLegacyLoadPreference(fallbackOrder),
+    targetPolicy: {
+      ...resolved.targetPolicy,
+      primaryMetric,
+      fallbackOrder,
+      // No sensor data: discard hallucinated secondary targets as well.
+      ...(fallbackOrder.length === 1 && primaryMetric === 'rpe'
+        ? { strictPrimary: true, allowMixedTargetsPerStep: false }
+        : {})
+    },
+    loadPreference: loadOrderTokens.join('_'),
     loadOrderTokens,
     priorityText: loadOrderTokens.join(' > ')
   }

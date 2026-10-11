@@ -836,7 +836,8 @@ export async function runAdjustStructuredWorkout(
       resolveStructureTargeting(
         sportSettings,
         workout.type || '',
-        payload?.targetingOverride || null
+        payload?.targetingOverride || null,
+        workout.user
       )
     logStage('loaded-sport-settings', {
       hasSettings: Boolean(sportSettings),
@@ -881,16 +882,9 @@ export async function runAdjustStructuredWorkout(
     logStage('loaded-recent-workouts', { count: recentWorkouts.length, contextProfile })
 
     // Resolve Metrics
-    const ftp =
-      sportSettings?.ftp || workout.user.ftp || (generatorMode === 'workout_families_v1' ? 0 : 250)
-    const lthr =
-      sportSettings?.lthr ||
-      workout.user.lthr ||
-      (generatorMode === 'workout_families_v1' ? 0 : 160)
-    const maxHr =
-      sportSettings?.maxHr ||
-      workout.user.maxHr ||
-      (generatorMode === 'workout_families_v1' ? 0 : 190)
+    const ftp = sportSettings?.ftp || workout.user.ftp || 0
+    const lthr = sportSettings?.lthr || workout.user.lthr || 0
+    const maxHr = sportSettings?.maxHr || workout.user.maxHr || 0
     const thresholdPace = sportSettings?.thresholdPace || 0
 
     const zoneDefinitions = buildCompactZoneDefinitions({
@@ -935,8 +929,8 @@ USER FEEDBACK / ADJUSTMENTS:
 USER PROFILE:
 - Age: ${userAge || 'Unknown'}
 - Sex: ${workout.user.sex || 'Unknown'}
-- FTP: ${ftp}W
-- LTHR: ${lthr} bpm
+- FTP: ${ftp ? `${ftp}W` : 'Unknown (do not estimate)'}
+- LTHR: ${lthr ? `${lthr} bpm` : 'Unknown (do not estimate)'}
 
 USER ZONES:
 ${zoneDefinitions}
